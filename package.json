@@ -1,0 +1,16 @@
+{
+  "name": "mitimaiti",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MitiMaiti - Where Sindhi Hearts Meet",
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:web": "cd web && npm run dev",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:web\"",
+    "build:web": "cd web && npm run build",
+    "build:backend": "cd backend && npm run build"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}

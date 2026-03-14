@@ -1,0 +1,88 @@
+{
+  "description": "Traditional Vedic astrology lookup tables for Ashtakoot Gun Milan",
+
+  "varna_map": [
+    3, 3, 2, 2, 1, 1, 0, 0, 3, 3,
+    2, 2, 1, 1, 0, 0, 3, 3, 2, 2,
+    1, 1, 0, 0, 3, 3, 2
+  ],
+  "varna_labels": ["Brahmin", "Kshatriya", "Vaishya", "Shudra"],
+  "varna_note": "Brahmin=0, Kshatriya=1, Vaishya=2, Shudra=3. Boy >= Girl = 1 pt",
+
+  "vashya_map": [
+    3, 0, 0, 3, 3, 0, 0, 0, 3,
+    3, 0, 0, 0, 1, 3, 3, 4, 4,
+    0, 0, 0, 0, 3, 3, 0, 0, 3
+  ],
+  "vashya_labels": ["Manav", "Vanchar", "Chatushpad", "Jalchar", "Keeta"],
+  "vashya_matrix": [
+    [2, 1, 1, 1, 1],
+    [0, 2, 1, 1, 0],
+    [0, 1, 2, 0, 1],
+    [1, 0, 1, 2, 1],
+    [0, 0, 0, 0, 2]
+  ],
+  "vashya_note": "5x5 matrix. Same type = 2 pts, compatible = 1 pt, enemy = 0 pts",
+
+  "yoni_map": [
+    0, 1, 2, 3, 3, 4, 5, 6, 5,
+    7, 7, 8, 9, 10, 9, 10, 11, 11,
+    4, 12, 12, 13, 0, 0, 1, 8, 1
+  ],
+  "yoni_labels": [
+    "Horse", "Elephant", "Sheep", "Serpent", "Dog", "Cat",
+    "Rat", "Cow", "Buffalo", "Tiger", "Deer", "Monkey",
+    "Mongoose", "Lion"
+  ],
+  "yoni_matrix": [
+    [4, 2, 2, 3, 2, 2, 2, 1, 1, 1, 3, 3, 2, 1],
+    [2, 4, 3, 3, 2, 2, 2, 2, 3, 1, 3, 3, 2, 0],
+    [2, 3, 4, 2, 1, 2, 1, 3, 3, 1, 2, 2, 2, 1],
+    [3, 3, 2, 4, 2, 1, 1, 1, 1, 2, 2, 2, 0, 2],
+    [2, 2, 1, 2, 4, 1, 1, 2, 2, 1, 1, 2, 2, 1],
+    [2, 2, 2, 1, 1, 4, 0, 2, 2, 1, 2, 2, 2, 1],
+    [2, 2, 1, 1, 1, 0, 4, 2, 2, 1, 2, 1, 2, 1],
+    [1, 2, 3, 1, 2, 2, 2, 4, 3, 0, 3, 2, 2, 1],
+    [1, 3, 3, 1, 2, 2, 2, 3, 4, 1, 2, 2, 2, 1],
+    [1, 1, 1, 2, 1, 1, 1, 0, 1, 4, 0, 1, 2, 1],
+    [3, 3, 2, 2, 1, 2, 2, 3, 2, 0, 4, 2, 2, 1],
+    [3, 3, 2, 2, 2, 2, 1, 2, 2, 1, 2, 4, 3, 2],
+    [2, 2, 2, 0, 2, 2, 2, 2, 2, 2, 2, 3, 4, 2],
+    [1, 0, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 2, 4]
+  ],
+  "yoni_note": "14x14 matrix. Same animal = 4, friendly = 3, neutral = 2, enemy = 1, arch-enemy = 0",
+
+  "rashi_lord_map": [2, 6, 3, 4, 0, 3, 6, 2, 5, 1, 1, 5],
+  "rashi_lord_labels": ["Sun", "Saturn", "Mars", "Mercury", "Moon", "Jupiter", "Venus"],
+  "graha_maitri_matrix": [
+    [5, 1, 5, 3, 5, 5, 1],
+    [1, 5, 0, 3, 1, 3, 5],
+    [5, 1, 5, 0, 5, 5, 3],
+    [3, 3, 0, 5, 1, 5, 3],
+    [5, 1, 5, 1, 5, 3, 0],
+    [5, 3, 5, 5, 3, 5, 1],
+    [1, 5, 3, 3, 0, 1, 5]
+  ],
+  "graha_maitri_note": "7x7 planetary lords. Best friend = 5, friend = 3, neutral = 1, enemy = 0",
+
+  "gana_map": [
+    0, 0, 2, 0, 0, 1, 0, 0, 2,
+    2, 1, 0, 0, 2, 0, 2, 0, 2,
+    2, 1, 0, 0, 2, 2, 1, 0, 0
+  ],
+  "gana_labels": ["Deva", "Manushya", "Rakshasa"],
+  "gana_matrix": [
+    [6, 6, 1],
+    [5, 6, 0],
+    [1, 0, 6]
+  ],
+  "gana_note": "3x3 matrix. Deva=0, Manushya=1, Rakshasa=2. Same gana best compatibility",
+
+  "nadi_map": [
+    0, 1, 2, 0, 1, 2, 0, 1, 2,
+    0, 1, 2, 0, 1, 2, 0, 1, 2,
+    0, 1, 2, 0, 1, 2, 0, 1, 2
+  ],
+  "nadi_labels": ["Aadi", "Madhya", "Antya"],
+  "nadi_note": "Same nadi = 0 pts (Nadi Dosha), different = 8 pts"
+}
