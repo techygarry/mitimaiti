@@ -7,8 +7,9 @@ export default function RootPage() {
   const router = useRouter();
 
   useEffect(() => {
+    const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
     const token = localStorage.getItem('admin_token');
-    if (token) {
+    if (isDemoMode || token) {
       router.replace('/dashboard');
     } else {
       router.replace('/login');

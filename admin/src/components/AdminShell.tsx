@@ -17,15 +17,18 @@ export default function AdminShell({ children }: AdminShellProps) {
   const [queueCount, setQueueCount] = useState(0);
   const [appealCount, setAppealCount] = useState(0);
 
+  // Demo mode: skip auth when backend is not available
+  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
+
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
+    if (!isDemoMode && !loading && !isAuthenticated) {
       router.replace('/login');
     }
-  }, [loading, isAuthenticated, router]);
+  }, [loading, isAuthenticated, isDemoMode, router]);
 
   // Fetch queue counts periodically
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isDemoMode && !isAuthenticated) return;
 
     const fetchCounts = async () => {
       try {
@@ -56,7 +59,7 @@ export default function AdminShell({ children }: AdminShellProps) {
     );
   }
 
-  if (!isAuthenticated) {
+  if (!isDemoMode && !isAuthenticated) {
     return null;
   }
 
