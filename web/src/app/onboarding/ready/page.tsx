@@ -5,9 +5,8 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import Button from '@/components/ui/Button';
 import ProgressBar from '@/components/ui/ProgressBar';
-import { MapPin, Sparkles } from 'lucide-react';
+import { MapPin, Sparkles, ChevronRight } from 'lucide-react';
 
-// Confetti colors
 const confettiColors = ['#B5336A', '#D4A853', '#E8A0BE', '#8A1A4A', '#FF6B9D', '#FFD700'];
 
 function ConfettiPiece({ index }: { index: number }) {
@@ -67,7 +66,7 @@ export default function ReadyPage() {
             transition={{ delay: 0.3 }}
             className="text-3xl font-bold text-charcoal mb-2 text-center"
           >
-            You&apos;re all set!
+            You&apos;re In!
           </motion.h1>
 
           <motion.p
@@ -76,7 +75,7 @@ export default function ReadyPage() {
             transition={{ delay: 0.4 }}
             className="text-textLight text-center mb-8"
           >
-            Welcome to the MitiMaiti community
+            Welcome to the MitiMaiti community, {name}!
           </motion.p>
 
           {/* Profile preview card */}
@@ -93,7 +92,6 @@ export default function ReadyPage() {
                   {name.charAt(0).toUpperCase()}
                 </span>
               </div>
-              {/* Sparkle decorations */}
               <Sparkles className="absolute top-4 right-4 w-5 h-5 text-gold animate-pulse-soft" />
               <Sparkles className="absolute bottom-6 left-4 w-4 h-4 text-white/50 animate-pulse-soft" />
             </div>
@@ -124,6 +122,29 @@ export default function ReadyPage() {
               </p>
             </div>
           </motion.div>
+
+          {/* Complete Sindhi Identity prompt */}
+          <motion.button
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.7 }}
+            onClick={() => router.push('/profile/edit')}
+            className="w-full mt-6 flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-2xl hover:bg-amber-100 transition-colors text-left"
+            aria-label="Complete your Sindhi Identity"
+          >
+            <div className="w-10 h-10 rounded-full bg-gold/20 flex items-center justify-center shrink-0">
+              <span className="text-lg">🕉</span>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-charcoal">
+                Complete your Sindhi Identity
+              </p>
+              <p className="text-xs text-textLight mt-0.5">
+                Add fluency, gotra, festivals for better cultural matching
+              </p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-textLight shrink-0" />
+          </motion.button>
         </div>
 
         {/* Bottom CTA */}
@@ -139,7 +160,7 @@ export default function ReadyPage() {
             onClick={() => router.push('/discover')}
             icon={<Sparkles className="w-5 h-5" />}
           >
-            Start Discovering
+            Go to Discover
           </Button>
         </motion.div>
       </div>

@@ -25,6 +25,9 @@ const config: Config = {
         cream: {
           DEFAULT: '#FFF8F0',
         },
+        border: {
+          DEFAULT: '#E8E0E4',
+        },
       },
       fontFamily: {
         sans: ['var(--font-inter)', 'Inter', 'system-ui', 'sans-serif'],

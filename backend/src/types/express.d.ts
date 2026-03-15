@@ -4,8 +4,6 @@ declare global {
   namespace Express {
     interface Request {
       user?: AuthUser;
-      validatedQuery?: any;
-      validatedParams?: any;
     }
   }
 }

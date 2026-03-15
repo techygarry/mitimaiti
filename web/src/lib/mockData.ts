@@ -1,7 +1,20 @@
-import { FeedCard, Match, Message, Like, Icebreaker, City } from '@/types';
+import { FeedCard, Match, Message, Like, Icebreaker, City, KundliTier } from '@/types';
 
 const avatarUrl = (seed: string) =>
   `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`;
+
+function getCulturalBadge(score: number): 'Excellent' | 'Good' | 'Fair' {
+  if (score >= 80) return 'Excellent';
+  if (score >= 60) return 'Good';
+  return 'Fair';
+}
+
+function getKundliTier(score: number): KundliTier {
+  if (score >= 28) return 'Ideal';
+  if (score >= 20) return 'Good';
+  if (score >= 14) return 'Fair';
+  return 'Low';
+}
 
 export const mockProfiles: FeedCard[] = [
   {
@@ -18,7 +31,6 @@ export const mockProfiles: FeedCard[] = [
       show_me: 'men',
       bio: 'Chai lover, book nerd, and proud Sindhi. Looking for someone who can match my energy at a Chaliha Sahib celebration and also enjoy a quiet Sunday morning.',
       verified: true,
-      premium: false,
       profile_completeness: 85,
       created_at: '2024-01-15',
       updated_at: '2024-03-10',
@@ -62,6 +74,12 @@ export const mockProfiles: FeedCard[] = [
       languages: ['Sindhi', 'Hindi', 'English'],
     },
     cultural_score: 92,
+    cultural_badge: 'Excellent',
+    cultural_breakdown: { fluency: 18, religion: 16, dietary: 14, festivals: 16, family_values: 14, generation: 14 },
+    kundli_score: 28,
+    kundli_tier: 'Ideal',
+    kundli_breakdown: { varna: 1, vashya: 2, tara: 3, yoni: 4, graha_maitri: 5, gana: 6, bhakut: 4, nadi: 3 },
+    common_interests: ['Travel', 'Cooking', 'Reading'],
     distance_km: 5,
     daily_prompt_answer: 'Today I am grateful for family video calls that bridge continents',
   },
@@ -79,7 +97,6 @@ export const mockProfiles: FeedCard[] = [
       show_me: 'women',
       bio: 'Software engineer by day, amateur musician by night. My nani says I need to find a good Sindhi girl, and honestly she is right.',
       verified: true,
-      premium: true,
       profile_completeness: 90,
       created_at: '2024-02-01',
       updated_at: '2024-03-08',
@@ -121,6 +138,12 @@ export const mockProfiles: FeedCard[] = [
       languages: ['Sindhi', 'Hindi', 'English', 'Marathi'],
     },
     cultural_score: 88,
+    cultural_badge: 'Excellent',
+    cultural_breakdown: { fluency: 14, religion: 16, dietary: 12, festivals: 16, family_values: 16, generation: 14 },
+    kundli_score: 24,
+    kundli_tier: 'Good',
+    kundli_breakdown: { varna: 1, vashya: 2, tara: 3, yoni: 3, graha_maitri: 5, gana: 4, bhakut: 3, nadi: 3 },
+    common_interests: ['Travel', 'Music', 'Fitness'],
     distance_km: 12,
   },
   {
@@ -137,7 +160,6 @@ export const mockProfiles: FeedCard[] = [
       show_me: 'men',
       bio: 'Doctor in training. Love exploring street food and hidden gems in every city. My Sindhi is rusty but my heart is 100% Sindhi.',
       verified: false,
-      premium: false,
       profile_completeness: 70,
       created_at: '2024-02-10',
       updated_at: '2024-03-05',
@@ -180,6 +202,11 @@ export const mockProfiles: FeedCard[] = [
       languages: ['Hindi', 'English', 'Gujarati'],
     },
     cultural_score: 65,
+    cultural_badge: 'Good',
+    cultural_breakdown: { fluency: 8, religion: 14, dietary: 12, festivals: 10, family_values: 12, generation: 9 },
+    kundli_score: 18,
+    kundli_tier: 'Fair',
+    common_interests: ['Travel', 'Food'],
     distance_km: 320,
   },
   {
@@ -196,7 +223,6 @@ export const mockProfiles: FeedCard[] = [
       show_me: 'women',
       bio: 'Finance guy in Dubai. Born and raised Sindhi. Looking for someone who values both tradition and ambition. Fluent in 4 languages including sarcasm.',
       verified: true,
-      premium: true,
       profile_completeness: 95,
       created_at: '2024-01-20',
       updated_at: '2024-03-12',
@@ -238,6 +264,12 @@ export const mockProfiles: FeedCard[] = [
       languages: ['Sindhi', 'Hindi', 'English', 'Arabic'],
     },
     cultural_score: 95,
+    cultural_badge: 'Excellent',
+    cultural_breakdown: { fluency: 18, religion: 16, dietary: 14, festivals: 17, family_values: 16, generation: 14 },
+    kundli_score: 30,
+    kundli_tier: 'Ideal',
+    kundli_breakdown: { varna: 1, vashya: 2, tara: 3, yoni: 4, graha_maitri: 5, gana: 6, bhakut: 5, nadi: 4 },
+    common_interests: ['Finance', 'Cricket', 'Travel'],
     distance_km: 1800,
   },
   {
@@ -254,7 +286,6 @@ export const mockProfiles: FeedCard[] = [
       show_me: 'men',
       bio: 'Third-gen Sindhi in London trying to learn the language one Bollywood song at a time. Artist and dreamer. Probably painting right now.',
       verified: false,
-      premium: false,
       profile_completeness: 60,
       created_at: '2024-02-20',
       updated_at: '2024-03-01',
@@ -293,6 +324,9 @@ export const mockProfiles: FeedCard[] = [
       languages: ['English', 'Hindi'],
     },
     cultural_score: 45,
+    cultural_badge: 'Fair',
+    cultural_breakdown: { fluency: 4, religion: 8, dietary: 8, festivals: 6, family_values: 10, generation: 9 },
+    common_interests: ['Art', 'Coffee'],
     distance_km: 7200,
   },
   {
@@ -309,7 +343,6 @@ export const mockProfiles: FeedCard[] = [
       show_me: 'women',
       bio: 'Family business + startup founder. My mom has been sending me rishtas since I turned 25, so I thought I would take matters into my own hands.',
       verified: true,
-      premium: false,
       profile_completeness: 80,
       created_at: '2024-01-05',
       updated_at: '2024-03-09',
@@ -352,6 +385,12 @@ export const mockProfiles: FeedCard[] = [
       languages: ['Sindhi', 'Hindi', 'English'],
     },
     cultural_score: 97,
+    cultural_badge: 'Excellent',
+    cultural_breakdown: { fluency: 18, religion: 16, dietary: 16, festivals: 17, family_values: 16, generation: 14 },
+    kundli_score: 32,
+    kundli_tier: 'Ideal',
+    kundli_breakdown: { varna: 1, vashya: 2, tara: 3, yoni: 4, graha_maitri: 5, gana: 6, bhakut: 6, nadi: 5 },
+    common_interests: ['Cricket', 'Gym', 'Movies'],
     distance_km: 3,
   },
   {
@@ -368,7 +407,6 @@ export const mockProfiles: FeedCard[] = [
       show_me: 'men',
       bio: 'Data scientist who loves dancing and biryani. Not sure what I am looking for yet, but I will know when I find it.',
       verified: true,
-      premium: false,
       profile_completeness: 75,
       created_at: '2024-02-15',
       updated_at: '2024-03-11',
@@ -408,6 +446,11 @@ export const mockProfiles: FeedCard[] = [
       languages: ['Sindhi', 'Hindi', 'English', 'Kannada'],
     },
     cultural_score: 78,
+    cultural_badge: 'Good',
+    cultural_breakdown: { fluency: 14, religion: 14, dietary: 10, festivals: 14, family_values: 14, generation: 12 },
+    kundli_score: 22,
+    kundli_tier: 'Good',
+    common_interests: ['Cooking', 'Dancing', 'Hiking'],
     distance_km: 900,
   },
   {
@@ -424,7 +467,6 @@ export const mockProfiles: FeedCard[] = [
       show_me: 'women',
       bio: 'CA by profession, foodie by passion. Looking for my partner in crime who appreciates both a good balance sheet and a great meal.',
       verified: true,
-      premium: true,
       profile_completeness: 88,
       created_at: '2024-01-10',
       updated_at: '2024-03-06',
@@ -467,6 +509,11 @@ export const mockProfiles: FeedCard[] = [
       languages: ['Sindhi', 'Hindi', 'English'],
     },
     cultural_score: 91,
+    cultural_badge: 'Excellent',
+    cultural_breakdown: { fluency: 18, religion: 16, dietary: 13, festivals: 16, family_values: 14, generation: 14 },
+    kundli_score: 26,
+    kundli_tier: 'Good',
+    common_interests: ['Food', 'Movies', 'Gym'],
     distance_km: 8,
   },
   {
@@ -483,7 +530,6 @@ export const mockProfiles: FeedCard[] = [
       show_me: 'men',
       bio: 'Law student at NLU. My grandparents have the best love story and I want mine to be just as epic. Loves debating, reading, and biryani.',
       verified: false,
-      premium: false,
       profile_completeness: 65,
       created_at: '2024-03-01',
       updated_at: '2024-03-10',
@@ -522,6 +568,11 @@ export const mockProfiles: FeedCard[] = [
       languages: ['Sindhi', 'Hindi', 'English', 'Punjabi'],
     },
     cultural_score: 72,
+    cultural_badge: 'Good',
+    cultural_breakdown: { fluency: 14, religion: 14, dietary: 12, festivals: 12, family_values: 12, generation: 8 },
+    kundli_score: 16,
+    kundli_tier: 'Fair',
+    common_interests: ['Reading', 'Music'],
     distance_km: 1400,
   },
   {
@@ -538,7 +589,6 @@ export const mockProfiles: FeedCard[] = [
       show_me: 'women',
       bio: 'Doctor, vegetarian, and can recite the entire Chalisa from memory. Looking for someone who shares my values and can tolerate my bad PJs.',
       verified: true,
-      premium: false,
       profile_completeness: 82,
       created_at: '2024-01-25',
       updated_at: '2024-03-07',
@@ -583,9 +633,21 @@ export const mockProfiles: FeedCard[] = [
       languages: ['Sindhi', 'Hindi', 'English', 'Gujarati'],
     },
     cultural_score: 98,
+    cultural_badge: 'Excellent',
+    cultural_breakdown: { fluency: 18, religion: 16, dietary: 16, festivals: 18, family_values: 16, generation: 14 },
+    kundli_score: 34,
+    kundli_tier: 'Ideal',
+    kundli_breakdown: { varna: 1, vashya: 2, tara: 3, yoni: 4, graha_maitri: 5, gana: 6, bhakut: 7, nadi: 6 },
+    common_interests: ['Gym', 'Cricket', 'Cooking'],
     distance_km: 315,
   },
 ];
+
+const futureDate = (hoursFromNow: number) => {
+  const d = new Date();
+  d.setHours(d.getHours() + hoursFromNow);
+  return d.toISOString();
+};
 
 export const mockMatches: Match[] = [
   {
@@ -604,7 +666,11 @@ export const mockMatches: Match[] = [
     },
     unread_count: 2,
     is_online: true,
-    reply_deadline: '2024-03-14T10:15:00Z',
+    first_msg_by: 'me',
+    first_msg_locked: false,
+    is_dissolved: false,
+    extended_once: false,
+    expires_at: futureDate(36),
   },
   {
     id: 'm2',
@@ -622,6 +688,23 @@ export const mockMatches: Match[] = [
     },
     unread_count: 0,
     is_online: false,
+    first_msg_by: 'me',
+    first_msg_locked: true,
+    is_dissolved: false,
+    extended_once: false,
+    expires_at: futureDate(3),
+  },
+  {
+    id: 'm3',
+    user: mockProfiles[2].user,
+    photos: mockProfiles[2].photos,
+    matched_at: new Date().toISOString(),
+    unread_count: 0,
+    is_online: true,
+    first_msg_locked: false,
+    is_dissolved: false,
+    extended_once: false,
+    expires_at: futureDate(48),
   },
 ];
 
@@ -637,15 +720,14 @@ export const mockLikes: Like[] = [
     id: 'l2',
     from_user: mockProfiles[3].user,
     from_photos: mockProfiles[3].photos,
-    type: 'super_like',
+    type: 'like',
     created_at: '2024-03-11T20:00:00Z',
   },
   {
     id: 'l3',
     from_user: mockProfiles[5].user,
     from_photos: mockProfiles[5].photos,
-    type: 'comment',
-    comment: 'Love your take on dal pakwan! We should debate this over chai sometime.',
+    type: 'like',
     created_at: '2024-03-10T15:00:00Z',
   },
 ];
@@ -739,6 +821,11 @@ export const cities: City[] = [
   { name: 'Surat', country: 'India', display: 'Surat, India' },
   { name: 'Vadodara', country: 'India', display: 'Vadodara, India' },
   { name: 'Nagpur', country: 'India', display: 'Nagpur, India' },
+  { name: 'Lucknow', country: 'India', display: 'Lucknow, India' },
+  { name: 'Chandigarh', country: 'India', display: 'Chandigarh, India' },
+  { name: 'Bhopal', country: 'India', display: 'Bhopal, India' },
+  { name: 'Thane', country: 'India', display: 'Thane, India' },
+  { name: 'Rajkot', country: 'India', display: 'Rajkot, India' },
   { name: 'Dubai', country: 'UAE', display: 'Dubai, UAE' },
   { name: 'Abu Dhabi', country: 'UAE', display: 'Abu Dhabi, UAE' },
   { name: 'London', country: 'UK', display: 'London, UK' },

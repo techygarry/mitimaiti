@@ -9,48 +9,42 @@ import { AuthenticatedRequest, ReportReason, ReportPriority } from '../types';
 
 const router = Router();
 
-// ─── Schemas ────────────────────────────────────────────────────────────────────
+// ─── Constants ──────────────────────────────────────────────────────────────
+
+const AUTO_HIDE_THRESHOLD = 5;
+
+// ─── Schemas ────────────────────────────────────────────────────────────────
 
 const reportSchema = z.object({
-  reportedUserId: z.string().uuid('Invalid user ID'),
-  reason: z.enum([
-    'fake_profile',
-    'inappropriate_content',
-    'harassment',
-    'spam',
-    'underage',
-    'other',
-  ]),
-  description: z.string().max(1000).optional(),
-  evidenceUrls: z.array(z.string().url()).max(5).optional(),
+  reportedId: z.string().uuid('Invalid user ID'),
+  reason: z.enum(['fake', 'harassment', 'spam', 'photos', 'underage', 'safety'] as const),
+  details: z.string().max(1000, 'Details must be 1000 characters or less').optional(),
 });
 
 const blockSchema = z.object({
-  action: z.enum(['block', 'unblock', 'sync_contacts']),
-  targetId: z.string().uuid('Invalid user ID').optional(),
-  phoneNumbers: z.array(z.string()).optional(),
+  blockedId: z.string().uuid('Invalid user ID'),
 });
 
 const appealSchema = z.object({
   strikeId: z.string().uuid('Invalid strike ID'),
-  reason: z.string().min(10).max(1000, 'Appeal must be between 10 and 1000 characters'),
+  text: z.string().min(10, 'Appeal text must be at least 10 characters').max(1000, 'Appeal text must be 1000 characters or less'),
 });
 
-// ─── Auto-priority mapping ─────────────────────────────────────────────────────
+// ─── Auto-priority mapping ─────────────────────────────────────────────────
 
 function computeReportPriority(reason: ReportReason): ReportPriority {
   const priorityMap: Record<ReportReason, ReportPriority> = {
-    underage: 'critical',
-    harassment: 'high',
-    fake_profile: 'medium',
-    inappropriate_content: 'medium',
-    spam: 'low',
-    other: 'low',
+    underage: 'P0',
+    safety: 'P0',
+    harassment: 'P1',
+    fake: 'P2',
+    spam: 'P2',
+    photos: 'P2',
   };
   return priorityMap[reason];
 }
 
-// ─── POST /v1/safety/report ─────────────────────────────────────────────────────
+// ─── POST /v1/safety/report ─────────────────────────────────────────────────
 
 router.post(
   '/report',
@@ -59,31 +53,31 @@ router.post(
   validate(reportSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const user = (req as AuthenticatedRequest).user;
-    const { reportedUserId, reason, description, evidenceUrls } = req.body;
+    const { reportedId, reason, details } = req.body;
 
     // Cannot report yourself
-    if (reportedUserId === user.id) {
+    if (reportedId === user.id) {
       throw new AppError(400, 'Cannot report yourself', 'SELF_REPORT');
     }
 
     // Check target exists
     const { data: target } = await supabase
       .from('users')
-      .select('id, is_active')
-      .eq('id', reportedUserId)
+      .select('id, is_active, is_hidden')
+      .eq('id', reportedId)
       .single();
 
     if (!target) {
       throw new AppError(404, 'Reported user not found', 'USER_NOT_FOUND');
     }
 
-    // Check for duplicate recent report
+    // Check for duplicate recent report (within 1 hour)
     const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
     const { data: recentReport } = await supabase
       .from('reports')
       .select('id')
       .eq('reporter_id', user.id)
-      .eq('reported_user_id', reportedUserId)
+      .eq('reported_id', reportedId)
       .gte('created_at', oneHourAgo)
       .limit(1)
       .maybeSingle();
@@ -91,7 +85,7 @@ router.post(
     if (recentReport) {
       throw new AppError(
         400,
-        'You have already reported this user recently',
+        'You have already reported this user recently. Please wait before reporting again.',
         'DUPLICATE_REPORT'
       );
     }
@@ -99,64 +93,45 @@ router.post(
     const priority = computeReportPriority(reason);
 
     // Create report
-    const { data: report, error } = await supabase
+    const { data: report, error: reportError } = await supabase
       .from('reports')
       .insert({
         reporter_id: user.id,
-        reported_user_id: reportedUserId,
+        reported_id: reportedId,
         reason,
-        description: description || null,
+        details: details || null,
         priority,
         status: 'pending',
-        evidence_urls: evidenceUrls || [],
       })
       .select()
       .single();
 
-    if (error) {
+    if (reportError) {
       throw new AppError(500, 'Failed to create report', 'REPORT_FAILED');
     }
 
-    // Auto-block the reported user for the reporter's safety
-    const { data: existingBlock } = await supabase
-      .from('blocks')
-      .select('id')
-      .eq('blocker_id', user.id)
-      .eq('blocked_id', reportedUserId)
-      .limit(1)
-      .maybeSingle();
-
-    if (!existingBlock) {
-      await supabase.from('blocks').insert({
-        blocker_id: user.id,
-        blocked_id: reportedUserId,
-      });
-    }
-
-    // For critical reports, flag for immediate review
-    if (priority === 'critical') {
+    // Log critical reports immediately
+    if (priority === 'P0') {
       console.warn(
-        `[Safety] CRITICAL REPORT: ${report.id} - Reason: ${reason} - Reporter: ${user.id} - Target: ${reportedUserId}`
+        `[Safety] P0 CRITICAL REPORT: ${report.id} - Reason: ${reason} - Reporter: ${user.id} - Target: ${reportedId}`
       );
     }
 
-    // Check if this user has been reported multiple times recently
-    const oneDayAgo = new Date(Date.now() - 86400000).toISOString();
-    const { count: recentReportCount } = await supabase
+    // Check total report count on this user (all time)
+    const { count: totalReportCount } = await supabase
       .from('reports')
       .select('*', { count: 'exact', head: true })
-      .eq('reported_user_id', reportedUserId)
-      .gte('created_at', oneDayAgo);
+      .eq('reported_id', reportedId);
 
-    // Auto-suspend if 5+ reports in 24 hours
-    if (recentReportCount && recentReportCount >= 5) {
+    // Auto-hide if 5+ reports on this user
+    if (totalReportCount && totalReportCount >= AUTO_HIDE_THRESHOLD && !target.is_hidden) {
       await supabase
         .from('users')
-        .update({ is_suspended: true })
-        .eq('id', reportedUserId);
+        .update({ is_hidden: true })
+        .eq('id', reportedId);
 
       console.warn(
-        `[Safety] AUTO-SUSPEND: User ${reportedUserId} received ${recentReportCount} reports in 24 hours`
+        `[Safety] AUTO-HIDE: User ${reportedId} received ${totalReportCount} total reports, setting is_hidden=true`
       );
     }
 
@@ -172,7 +147,7 @@ router.post(
   })
 );
 
-// ─── POST /v1/safety/block ──────────────────────────────────────────────────────
+// ─── POST /v1/safety/block ──────────────────────────────────────────────────
 
 router.post(
   '/block',
@@ -180,123 +155,89 @@ router.post(
   validate(blockSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const user = (req as AuthenticatedRequest).user;
-    const { action, targetId, phoneNumbers } = req.body;
+    const { blockedId } = req.body;
 
-    switch (action) {
-      case 'block': {
-        if (!targetId) {
-          throw new AppError(400, 'targetId is required for blocking', 'TARGET_REQUIRED');
-        }
-
-        if (targetId === user.id) {
-          throw new AppError(400, 'Cannot block yourself', 'SELF_BLOCK');
-        }
-
-        // Check if already blocked
-        const { data: existing } = await supabase
-          .from('blocks')
-          .select('id')
-          .eq('blocker_id', user.id)
-          .eq('blocked_id', targetId)
-          .limit(1)
-          .maybeSingle();
-
-        if (existing) {
-          throw new AppError(400, 'User is already blocked', 'ALREADY_BLOCKED');
-        }
-
-        await supabase.from('blocks').insert({
-          blocker_id: user.id,
-          blocked_id: targetId,
-        });
-
-        // Unmatch if there's an active match
-        await supabase
-          .from('matches')
-          .update({ status: 'unmatched' })
-          .or(
-            `and(user_a_id.eq.${user.id},user_b_id.eq.${targetId}),and(user_a_id.eq.${targetId},user_b_id.eq.${user.id})`
-          )
-          .eq('status', 'active');
-
-        res.json({
-          success: true,
-          message: 'User blocked successfully',
-        });
-        break;
-      }
-
-      case 'unblock': {
-        if (!targetId) {
-          throw new AppError(400, 'targetId is required for unblocking', 'TARGET_REQUIRED');
-        }
-
-        const { error } = await supabase
-          .from('blocks')
-          .delete()
-          .eq('blocker_id', user.id)
-          .eq('blocked_id', targetId);
-
-        if (error) {
-          throw new AppError(500, 'Failed to unblock user', 'UNBLOCK_FAILED');
-        }
-
-        res.json({
-          success: true,
-          message: 'User unblocked successfully',
-        });
-        break;
-      }
-
-      case 'sync_contacts': {
-        if (!phoneNumbers || phoneNumbers.length === 0) {
-          throw new AppError(400, 'phoneNumbers array is required', 'PHONES_REQUIRED');
-        }
-
-        // Find users with these phone numbers and auto-block
-        const { data: contactUsers } = await supabase
-          .from('users')
-          .select('id, phone')
-          .in('phone', phoneNumbers)
-          .neq('id', user.id);
-
-        let blockedCount = 0;
-
-        for (const contact of contactUsers || []) {
-          const { data: existing } = await supabase
-            .from('blocks')
-            .select('id')
-            .eq('blocker_id', user.id)
-            .eq('blocked_id', contact.id)
-            .limit(1)
-            .maybeSingle();
-
-          if (!existing) {
-            await supabase.from('blocks').insert({
-              blocker_id: user.id,
-              blocked_id: contact.id,
-            });
-            blockedCount++;
-          }
-        }
-
-        res.json({
-          success: true,
-          data: {
-            contactsFound: contactUsers?.length || 0,
-            newBlocksCreated: blockedCount,
-          },
-        });
-        break;
-      }
-
-      default:
-        throw new AppError(400, 'Invalid action', 'INVALID_ACTION');
+    // Cannot block yourself
+    if (blockedId === user.id) {
+      throw new AppError(400, 'Cannot block yourself', 'SELF_BLOCK');
     }
+
+    // Verify target exists
+    const { data: targetUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', blockedId)
+      .single();
+
+    if (!targetUser) {
+      throw new AppError(404, 'User not found', 'USER_NOT_FOUND');
+    }
+
+    // Check if already blocked (either direction)
+    const { data: existingBlock } = await supabase
+      .from('blocked_users')
+      .select('id')
+      .or(
+        `and(blocker_id.eq.${user.id},blocked_id.eq.${blockedId}),and(blocker_id.eq.${blockedId},blocked_id.eq.${user.id})`
+      )
+      .limit(1)
+      .maybeSingle();
+
+    if (existingBlock) {
+      throw new AppError(400, 'Block already exists between these users', 'ALREADY_BLOCKED');
+    }
+
+    // Insert blocks in both directions for bidirectional invisibility
+    const { error: blockError } = await supabase
+      .from('blocked_users')
+      .insert([
+        { blocker_id: user.id, blocked_id: blockedId },
+        { blocker_id: blockedId, blocked_id: user.id },
+      ]);
+
+    if (blockError) {
+      throw new AppError(500, 'Failed to block user', 'BLOCK_FAILED');
+    }
+
+    // Dissolve any active match between them
+    const { data: activeMatches } = await supabase
+      .from('matches')
+      .select('id')
+      .or(
+        `and(user_a_id.eq.${user.id},user_b_id.eq.${blockedId}),and(user_a_id.eq.${blockedId},user_b_id.eq.${user.id})`
+      )
+      .eq('status', 'active');
+
+    if (activeMatches && activeMatches.length > 0) {
+      const matchIds = activeMatches.map((m: any) => m.id);
+
+      await supabase
+        .from('matches')
+        .update({
+          status: 'dissolved',
+          is_dissolved: true,
+          dissolved_at: new Date().toISOString(),
+          dissolved_reason: 'blocked',
+        })
+        .in('id', matchIds);
+
+      console.log(
+        `[Safety] Dissolved ${matchIds.length} active match(es) between ${user.id} and ${blockedId}`
+      );
+    }
+
+    res.json({
+      success: true,
+      message: 'User blocked successfully. They will no longer appear in your feed or conversations.',
+      data: {
+        blockedId,
+        matchesDissolved: activeMatches?.length || 0,
+      },
+    });
   })
 );
 
-// ─── GET /v1/safety/health ──────────────────────────────────────────────────────
+// ─── GET /v1/safety/health ──────────────────────────────────────────────────
 
 router.get(
   '/health',
@@ -304,68 +245,66 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const user = (req as AuthenticatedRequest).user;
 
-    // Get account status
-    const { data: userData } = await supabase
-      .from('users')
-      .select(
-        'is_active, is_suspended, is_banned, ban_expires, strikes, is_verified'
-      )
-      .eq('id', user.id)
+    // Get user safety record
+    const { data: safetyRecord } = await supabase
+      .from('user_safety')
+      .select('*')
+      .eq('user_id', user.id)
       .single();
 
-    // Get block counts
-    const { count: blockedByYou } = await supabase
-      .from('blocks')
-      .select('*', { count: 'exact', head: true })
-      .eq('blocker_id', user.id);
-
-    const { count: blockedByOthers } = await supabase
-      .from('blocks')
-      .select('*', { count: 'exact', head: true })
-      .eq('blocked_id', user.id);
-
-    // Get active strikes
+    // Get strikes with their appeal status
     const { data: strikes } = await supabase
       .from('strikes')
-      .select('id, reason, status, created_at, expires_at')
+      .select('id, reason, severity, is_appealed, appeal_status, created_at, expires_at')
       .eq('user_id', user.id)
-      .eq('status', 'active')
       .order('created_at', { ascending: false });
 
-    // Get pending reports by this user
-    const { count: pendingReports } = await supabase
-      .from('reports')
-      .select('*', { count: 'exact', head: true })
-      .eq('reporter_id', user.id)
-      .eq('status', 'pending');
+    // Count active (non-expired, non-overturned) strikes
+    const now = new Date();
+    const activeStrikes = (strikes || []).filter((s: any) => {
+      const isExpired = s.expires_at && new Date(s.expires_at) < now;
+      const isOverturned = s.appeal_status === 'overturned';
+      return !isExpired && !isOverturned;
+    });
+
+    // Get appeal status for any pending appeals
+    const pendingAppeals = (strikes || []).filter(
+      (s: any) => s.is_appealed && s.appeal_status === 'pending'
+    );
 
     res.json({
       success: true,
       data: {
-        accountStatus: {
-          isActive: userData?.is_active || false,
-          isSuspended: userData?.is_suspended || false,
-          isBanned: userData?.is_banned || false,
-          banExpires: userData?.ban_expires || null,
-          isVerified: userData?.is_verified || false,
+        strikeCount: activeStrikes.length,
+        totalStrikesEver: strikes?.length || 0,
+        suspension: {
+          isSuspended: safetyRecord?.is_suspended || false,
+          suspensionUntil: safetyRecord?.suspension_until || null,
+          isPermanentlyBanned: safetyRecord?.is_permanently_banned || false,
         },
-        strikes: {
-          total: userData?.strikes || 0,
-          active: strikes || [],
-        },
-        blocks: {
-          blockedByYou: blockedByYou || 0,
-          blockedByOthers: blockedByOthers || 0,
-        },
-        reports: {
-          pendingByYou: pendingReports || 0,
+        strikes: (strikes || []).map((s: any) => ({
+          id: s.id,
+          reason: s.reason,
+          severity: s.severity,
+          isAppealed: s.is_appealed || false,
+          appealStatus: s.appeal_status || null,
+          isExpired: s.expires_at ? new Date(s.expires_at) < now : false,
+          createdAt: s.created_at,
+          expiresAt: s.expires_at,
+        })),
+        appeals: {
+          pendingCount: pendingAppeals.length,
+          pending: pendingAppeals.map((s: any) => ({
+            strikeId: s.id,
+            reason: s.reason,
+          })),
         },
       },
     });
   })
 );
 
-// ─── POST /v1/safety/appeal ─────────────────────────────────────────────────────
+// ─── POST /v1/safety/appeal ─────────────────────────────────────────────────
 
 router.post(
   '/appeal',
@@ -374,47 +313,45 @@ router.post(
   validate(appealSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const user = (req as AuthenticatedRequest).user;
-    const { strikeId, reason } = req.body;
+    const { strikeId, text } = req.body;
 
-    // Find the strike
-    const { data: strike, error } = await supabase
+    // Find the strike and verify ownership
+    const { data: strike, error: strikeError } = await supabase
       .from('strikes')
       .select('*')
       .eq('id', strikeId)
       .eq('user_id', user.id)
       .single();
 
-    if (error || !strike) {
+    if (strikeError || !strike) {
       throw new AppError(404, 'Strike not found', 'STRIKE_NOT_FOUND');
     }
 
-    if (strike.status !== 'active') {
+    // Check if strike is still active (not expired)
+    if (strike.expires_at && new Date(strike.expires_at) < new Date()) {
       throw new AppError(
         400,
-        `Cannot appeal a strike with status: ${strike.status}`,
-        'STRIKE_NOT_APPEALABLE'
+        'This strike has already expired and cannot be appealed',
+        'STRIKE_EXPIRED'
       );
     }
 
-    // Check if already appealed
-    const { data: existingAppeal } = await supabase
-      .from('appeals')
-      .select('id')
-      .eq('strike_id', strikeId)
-      .limit(1)
-      .maybeSingle();
-
-    if (existingAppeal) {
-      throw new AppError(400, 'This strike has already been appealed', 'ALREADY_APPEALED');
+    // Only 1 appeal per strike
+    if (strike.is_appealed) {
+      throw new AppError(
+        400,
+        'This strike has already been appealed. Only one appeal is allowed per strike.',
+        'ALREADY_APPEALED'
+      );
     }
 
-    // Create appeal
+    // Create the appeal
     const { data: appeal, error: appealError } = await supabase
       .from('appeals')
       .insert({
         strike_id: strikeId,
         user_id: user.id,
-        reason,
+        text,
         status: 'pending',
       })
       .select()
@@ -424,19 +361,26 @@ router.post(
       throw new AppError(500, 'Failed to submit appeal', 'APPEAL_FAILED');
     }
 
-    // Update strike status
-    await supabase
+    // Mark the strike as appealed
+    const { error: updateError } = await supabase
       .from('strikes')
-      .update({ status: 'appealed' })
+      .update({
+        is_appealed: true,
+        appeal_status: 'pending',
+      })
       .eq('id', strikeId);
+
+    if (updateError) {
+      throw new AppError(500, 'Failed to update strike appeal status', 'STRIKE_UPDATE_FAILED');
+    }
 
     res.status(201).json({
       success: true,
       data: {
         appealId: appeal.id,
+        strikeId,
         status: 'pending',
-        message:
-          'Your appeal has been submitted and will be reviewed within 24-48 hours.',
+        message: 'Your appeal has been submitted and will be reviewed within 24-48 hours.',
       },
     });
   })

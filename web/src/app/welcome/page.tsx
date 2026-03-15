@@ -79,26 +79,12 @@ export default function WelcomePage() {
           <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-20">
             {/* Left - Text content & CTAs */}
             <div className="flex-1 text-center lg:text-left">
-              {/* Logo */}
-              <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.6, ease: 'easeOut' }}
-                className="mb-8 inline-block"
-              >
-                <div className="w-20 h-20 bg-white/15 rounded-3xl backdrop-blur-sm flex items-center justify-center border border-white/20">
-                  <span className="text-3xl font-bold text-white tracking-tight">
-                    Mm
-                  </span>
-                </div>
-              </motion.div>
-
-              {/* App Name */}
+              {/* Text Logo */}
               <motion.h1
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2, duration: 0.6 }}
-                className="text-5xl lg:text-6xl font-bold text-white mb-4 tracking-tight"
+                className="text-5xl lg:text-7xl font-bold text-white mb-4 tracking-tight"
               >
                 MitiMaiti
               </motion.h1>
@@ -135,6 +121,7 @@ export default function WelcomePage() {
                   <Button
                     size="lg"
                     className="bg-white text-rose hover:bg-white/90 active:bg-white/80 shadow-lg text-lg font-bold px-10"
+                    aria-label="Get started with MitiMaiti"
                   >
                     Get Started
                   </Button>
@@ -144,6 +131,7 @@ export default function WelcomePage() {
                     size="lg"
                     variant="outline"
                     className="border-white/30 text-white hover:bg-white/10 text-lg px-10"
+                    aria-label="Sign in to your account"
                   >
                     Sign In
                   </Button>
@@ -309,79 +297,6 @@ export default function WelcomePage() {
         </div>
       </section>
 
-      {/* Cultural Compatibility Section */}
-      <section className="py-24 bg-cream">
-        <div className="max-w-5xl mx-auto px-6">
-          <div className="flex flex-col lg:flex-row items-center gap-12">
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              className="flex-1"
-            >
-              <h2 className="text-3xl lg:text-4xl font-bold text-charcoal mb-6">
-                Cultural Compatibility{' '}
-                <span className="text-rose">Scoring</span>
-              </h2>
-              <p className="text-textLight text-lg mb-6 leading-relaxed">
-                We go beyond surface-level matching. Our algorithm considers your Sindhi fluency,
-                family values, dietary preferences, festivals you celebrate, and more to find someone
-                who truly understands your world.
-              </p>
-              <div className="space-y-4">
-                {[
-                  'Sindhi language fluency matching',
-                  'Religious and spiritual alignment',
-                  'Family involvement preferences',
-                  'Dietary and lifestyle compatibility',
-                  'Festival and cultural traditions',
-                ].map((item, i) => (
-                  <motion.div
-                    key={item}
-                    initial={{ opacity: 0, x: -10 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: i * 0.1 }}
-                    className="flex items-center gap-3"
-                  >
-                    <div className="w-6 h-6 rounded-full bg-rose/10 flex items-center justify-center shrink-0">
-                      <div className="w-2 h-2 rounded-full bg-rose" />
-                    </div>
-                    <span className="text-charcoal">{item}</span>
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              className="flex-1 flex justify-center"
-            >
-              <div className="w-64 h-64 relative">
-                <svg viewBox="0 0 200 200" className="w-full h-full">
-                  <circle
-                    cx="100" cy="100" r="90"
-                    fill="none" stroke="#E8A0BE" strokeWidth="8" opacity="0.3"
-                  />
-                  <circle
-                    cx="100" cy="100" r="90"
-                    fill="none" stroke="#B5336A" strokeWidth="8"
-                    strokeLinecap="round"
-                    strokeDasharray="481 565"
-                    transform="rotate(-90 100 100)"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-5xl font-bold text-rose">85%</span>
-                  <span className="text-sm text-textLight mt-1">Average Match Score</span>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        </div>
-      </section>
-
       {/* CTA Section */}
       <section className="py-24 gradient-rose relative overflow-hidden">
         <div className="absolute top-10 -left-20 w-60 h-60 bg-white/5 rounded-full blur-2xl" />
@@ -416,7 +331,7 @@ export default function WelcomePage() {
                 size="lg"
                 className="bg-white text-rose hover:bg-white/90 shadow-lg text-lg font-bold px-12"
               >
-                Get Started Free
+                Get Started
               </Button>
             </Link>
           </motion.div>

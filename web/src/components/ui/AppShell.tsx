@@ -12,7 +12,6 @@ import {
   Settings,
   Bell,
   Users,
-  Crown,
 } from 'lucide-react';
 
 const mainNavItems = [
@@ -28,7 +27,6 @@ const sidebarItems = [
   { href: '/inbox?tab=matches', label: 'Matches', icon: MessageCircle },
   { href: '/profile', label: 'My Profile', icon: User },
   { href: '/family', label: 'Family Mode', icon: Users },
-  { href: '/premium', label: 'Premium', icon: Crown },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -36,7 +34,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   const isActive = (href: string) => {
-    if (href.includes('?')) return false; // handle query params separately
+    if (href.includes('?')) return false;
     return pathname.startsWith(href);
   };
 
@@ -46,7 +44,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           {/* Logo */}
-          <Link href="/discover" className="flex items-center gap-2">
+          <Link href="/discover" className="flex items-center gap-2" aria-label="MitiMaiti home">
             <div className="w-9 h-9 rounded-xl gradient-rose flex items-center justify-center">
               <span className="text-sm font-bold text-white">Mm</span>
             </div>
@@ -56,7 +54,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </Link>
 
           {/* Center Nav - Desktop */}
-          <nav className="hidden md:flex items-center gap-1">
+          <nav className="hidden md:flex items-center gap-1" aria-label="Main navigation">
             {mainNavItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);
@@ -64,8 +62,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <Link
                   key={item.href}
                   href={item.href}
+                  aria-label={item.label}
+                  aria-current={active ? 'page' : undefined}
                   className={clsx(
-                    'relative flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200',
+                    'relative flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 touch-target',
                     active
                       ? 'text-rose bg-rose/5'
                       : 'text-textLight hover:text-textMain hover:bg-gray-50'
@@ -92,22 +92,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
           {/* Right Actions */}
           <div className="flex items-center gap-2">
-            <button className="p-2 rounded-xl hover:bg-gray-50 transition-colors relative">
+            <button
+              className="p-2 rounded-xl hover:bg-gray-50 transition-colors relative touch-target"
+              aria-label="Notifications"
+            >
               <Bell className="w-5 h-5 text-textLight" />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose rounded-full" />
             </button>
             <Link
               href="/settings"
-              className="p-2 rounded-xl hover:bg-gray-50 transition-colors"
+              className="p-2 rounded-xl hover:bg-gray-50 transition-colors touch-target"
+              aria-label="Settings"
             >
               <Settings className="w-5 h-5 text-textLight" />
-            </Link>
-            <Link
-              href="/premium"
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-gold to-amber-500 text-white text-sm font-semibold hover:opacity-90 transition-opacity"
-            >
-              <Crown className="w-4 h-4" />
-              Premium
             </Link>
           </div>
         </div>
@@ -117,7 +114,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <div className="max-w-7xl mx-auto flex">
         {/* Sidebar - Large screens */}
         <aside className="hidden lg:block w-64 shrink-0 sticky top-16 h-[calc(100vh-4rem)] border-r border-gray-100 bg-white/50">
-          <nav className="p-4 space-y-1">
+          <nav className="p-4 space-y-1" aria-label="Sidebar navigation">
             {sidebarItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);
@@ -125,8 +122,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <Link
                   key={item.label}
                   href={item.href}
+                  aria-label={item.label}
+                  aria-current={active ? 'page' : undefined}
                   className={clsx(
-                    'flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200',
+                    'flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 touch-target',
                     active
                       ? 'text-rose bg-rose/5 shadow-sm'
                       : 'text-textLight hover:text-textMain hover:bg-gray-50'
@@ -147,7 +146,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Mobile Bottom Nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 safe-bottom z-40">
+      <nav
+        className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 safe-bottom z-40"
+        aria-label="Mobile navigation"
+      >
         <div className="flex items-center justify-around px-2 py-2">
           {mainNavItems.map((item) => {
             const active = isActive(item.href);
@@ -156,8 +158,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
+                aria-label={item.label}
+                aria-current={active ? 'page' : undefined}
                 className={clsx(
-                  'relative flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl transition-colors duration-200',
+                  'relative flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl transition-colors duration-200 touch-target',
                   active ? 'text-rose' : 'text-textLight hover:text-textMain'
                 )}
               >

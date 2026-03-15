@@ -1,9 +1,10 @@
 import cron from 'node-cron';
 import { supabase } from './config/supabase';
 import { redis } from './config/redis';
-import { flushBatchedLikes, sendTemplateNotification } from './services/notifications';
+import { sendPush, flushBatchedLikes } from './services/notifications';
+import { emitToUser } from './socket';
 
-// ─── Every 5 minutes: Flush batched like notifications ──────────────────────────
+// ─── Every 5 minutes: Batch likes push ──────────────────────────────────────
 
 const batchLikesJob = cron.schedule('*/5 * * * *', async () => {
   try {
@@ -14,122 +15,202 @@ const batchLikesJob = cron.schedule('*/5 * * * *', async () => {
   }
 });
 
-// ─── Every 15 minutes: Match expiry check ───────────────────────────────────────
+// ─── Every 15 minutes: Match expiry ─────────────────────────────────────────
+// Dissolve matches where first_msg_at + 24h passed with no reply.
+// Delete like rows. Push dissolution notification.
+// Also send expiry_warning at 4h remaining.
 
 const matchExpiryJob = cron.schedule('*/15 * * * *', async () => {
   try {
-    console.log('[Cron] Checking for expiring matches...');
+    const now = new Date();
+    const nowISO = now.toISOString();
 
-    // Notify about matches expiring in 24 hours
-    const in24Hours = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-    const now = new Date().toISOString();
+    // ── Phase 1: Expiry warnings (4 hours remaining) ─────────────────────
+    // Matches where first_msg_at exists and first_msg_at + 20h < now < first_msg_at + 24h
+    const fourHoursFromNow = new Date(now.getTime() + 4 * 60 * 60 * 1000).toISOString();
+    const twentyHoursAgo = new Date(now.getTime() - 20 * 60 * 60 * 1000).toISOString();
 
-    const { data: expiringMatches } = await supabase
+    const { data: warningMatches } = await supabase
       .from('matches')
-      .select('id, user_a_id, user_b_id, expires_at')
+      .select('id, user_a_id, user_b_id, first_msg_by, first_msg_at')
       .eq('status', 'active')
-      .not('expires_at', 'is', null)
-      .lte('expires_at', in24Hours)
-      .gt('expires_at', now);
+      .not('first_msg_at', 'is', null)
+      .lte('first_msg_at', twentyHoursAgo);
 
-    for (const match of expiringMatches || []) {
-      // Check if we already notified (prevent duplicate notifications)
-      const notifKey = `match_expiry_notif:${match.id}`;
-      const alreadyNotified = await redis.get(notifKey);
-      if (alreadyNotified) continue;
+    for (const match of warningMatches || []) {
+      // Check if we already sent a warning
+      const warningKey = `expiry_warn:${match.id}`;
+      const alreadyWarned = await redis.get(warningKey);
+      if (alreadyWarned) continue;
 
-      // Notify both users
-      const { data: userABasic } = await supabase
-        .from('basic_profiles')
-        .select('display_name')
-        .eq('user_id', match.user_a_id)
-        .single();
+      // Check if the first message has been replied to
+      const receiverId = match.first_msg_by === match.user_a_id
+        ? match.user_b_id
+        : match.user_a_id;
 
-      const { data: userBBasic } = await supabase
-        .from('basic_profiles')
-        .select('display_name')
-        .eq('user_id', match.user_b_id)
-        .single();
+      const { count: replyCount } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('match_id', match.id)
+        .eq('sender_id', receiverId);
 
-      await Promise.all([
-        sendTemplateNotification('match_expiring', match.user_a_id, {
-          name: userBBasic?.display_name || 'your match',
-        }),
-        sendTemplateNotification('match_expiring', match.user_b_id, {
-          name: userABasic?.display_name || 'your match',
-        }),
-      ]);
+      // Only warn if no reply yet (match is at risk of expiring)
+      if (!replyCount || replyCount === 0) {
+        // Fetch names for notification
+        const [{ data: userABasic }, { data: userBBasic }] = await Promise.all([
+          supabase.from('basic_profiles').select('display_name').eq('user_id', match.user_a_id).single(),
+          supabase.from('basic_profiles').select('display_name').eq('user_id', match.user_b_id).single(),
+        ]);
 
-      // Mark as notified (24 hour TTL)
-      await redis.set(notifKey, '1', 'EX', 86400);
+        await Promise.all([
+          sendPush(match.user_a_id, 'expiry_warning', {
+            name: userBBasic?.display_name || 'your match',
+            matchId: match.id,
+          }),
+          sendPush(match.user_b_id, 'expiry_warning', {
+            name: userABasic?.display_name || 'your match',
+            matchId: match.id,
+          }),
+        ]);
+
+        await redis.set(warningKey, '1', 'EX', 86400);
+      }
     }
 
-    // Expire matches that have passed their expiry date
+    // ── Phase 2: Dissolve expired matches ────────────────────────────────
+    // Matches where first_msg_at + 24h has passed with no reply
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+
     const { data: expiredMatches } = await supabase
+      .from('matches')
+      .select('id, user_a_id, user_b_id, first_msg_by, first_msg_at')
+      .eq('status', 'active')
+      .not('first_msg_at', 'is', null)
+      .lte('first_msg_at', twentyFourHoursAgo);
+
+    for (const match of expiredMatches || []) {
+      // Check if receiver has replied
+      const receiverId = match.first_msg_by === match.user_a_id
+        ? match.user_b_id
+        : match.user_a_id;
+
+      const { count: replyCount } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('match_id', match.id)
+        .eq('sender_id', receiverId);
+
+      // Only dissolve if no reply
+      if (!replyCount || replyCount === 0) {
+        // Dissolve the match
+        await supabase
+          .from('matches')
+          .update({
+            status: 'dissolved',
+            dissolved_at: nowISO,
+            dissolution_reason: 'expired_no_reply',
+          })
+          .eq('id', match.id);
+
+        // Delete the like rows that created this match
+        await supabase
+          .from('actions')
+          .delete()
+          .or(`actor_id.eq.${match.user_a_id},actor_id.eq.${match.user_b_id}`)
+          .or(`target_id.eq.${match.user_a_id},target_id.eq.${match.user_b_id}`)
+          .eq('kind', 'like');
+
+        // Fetch names for notification
+        const [{ data: userABasic }, { data: userBBasic }] = await Promise.all([
+          supabase.from('basic_profiles').select('display_name').eq('user_id', match.user_a_id).single(),
+          supabase.from('basic_profiles').select('display_name').eq('user_id', match.user_b_id).single(),
+        ]);
+
+        // Push dissolution notification
+        await Promise.all([
+          sendPush(match.user_a_id, 'match_dissolved', {
+            name: userBBasic?.display_name || 'your match',
+            matchId: match.id,
+          }),
+          sendPush(match.user_b_id, 'match_dissolved', {
+            name: userABasic?.display_name || 'your match',
+            matchId: match.id,
+          }),
+        ]);
+
+        // Clean up Redis expiry warning key
+        await redis.del(`expiry_warn:${match.id}`);
+
+        console.log(`[Cron] Dissolved expired match ${match.id}`);
+      }
+    }
+
+    // ── Phase 3: Also dissolve matches with no first message after 48h ───
+    const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString();
+
+    const { data: staleMatches } = await supabase
       .from('matches')
       .select('id, user_a_id, user_b_id')
       .eq('status', 'active')
-      .not('expires_at', 'is', null)
-      .lte('expires_at', now);
+      .is('first_msg_at', null)
+      .lte('created_at', fortyEightHoursAgo);
 
-    for (const match of expiredMatches || []) {
+    for (const match of staleMatches || []) {
       await supabase
         .from('matches')
-        .update({ status: 'expired' })
+        .update({
+          status: 'dissolved',
+          dissolved_at: nowISO,
+          dissolution_reason: 'expired_no_message',
+        })
         .eq('id', match.id);
 
-      // Notify both users
-      await Promise.all([
-        sendTemplateNotification('match_expired', match.user_a_id),
-        sendTemplateNotification('match_expired', match.user_b_id),
-      ]);
+      await supabase
+        .from('actions')
+        .delete()
+        .or(`actor_id.eq.${match.user_a_id},actor_id.eq.${match.user_b_id}`)
+        .or(`target_id.eq.${match.user_a_id},target_id.eq.${match.user_b_id}`)
+        .eq('kind', 'like');
+
+      console.log(`[Cron] Dissolved stale match ${match.id} (no first message)`);
     }
 
-    const expiringCount = expiringMatches?.length || 0;
+    const warningCount = warningMatches?.length || 0;
     const expiredCount = expiredMatches?.length || 0;
-    if (expiringCount > 0 || expiredCount > 0) {
-      console.log(`[Cron] Match expiry: ${expiringCount} expiring soon, ${expiredCount} expired`);
+    const staleCount = staleMatches?.length || 0;
+
+    if (warningCount > 0 || expiredCount > 0 || staleCount > 0) {
+      console.log(
+        `[Cron] Match expiry: ${warningCount} warned, ${expiredCount} expired, ${staleCount} stale`
+      );
     }
   } catch (err) {
     console.error('[Cron] Match expiry error:', err);
   }
 });
 
-// ─── Hourly: Passport reset ─────────────────────────────────────────────────────
+// ─── Hourly: Passport expiry + ban lift ─────────────────────────────────────
 
-const passportResetJob = cron.schedule('0 * * * *', async () => {
+const hourlyMaintenanceJob = cron.schedule('0 * * * *', async () => {
   try {
-    console.log('[Cron] Resetting expired passports...');
+    const nowISO = new Date().toISOString();
 
-    const now = new Date().toISOString();
-
-    const { data: expired, error } = await supabase
+    // ── Passport expiry: reset expired passports ─────────────────────────
+    const { data: expiredPassports } = await supabase
       .from('user_privileges')
       .update({
         passport_city: null,
         passport_expires: null,
       })
       .not('passport_expires', 'is', null)
-      .lte('passport_expires', now)
+      .lte('passport_expires', nowISO)
       .select('user_id');
 
-    if (expired && expired.length > 0) {
-      console.log(`[Cron] Reset ${expired.length} expired passports`);
+    if (expiredPassports && expiredPassports.length > 0) {
+      console.log(`[Cron] Reset ${expiredPassports.length} expired passports`);
     }
-  } catch (err) {
-    console.error('[Cron] Passport reset error:', err);
-  }
-});
 
-// ─── Hourly: Ban lift ───────────────────────────────────────────────────────────
-
-const banLiftJob = cron.schedule('5 * * * *', async () => {
-  try {
-    console.log('[Cron] Checking for ban lifts...');
-
-    const now = new Date().toISOString();
-
-    // Lift suspensions
+    // ── Ban lift: lift time-based suspensions ────────────────────────────
     const { data: unsuspended } = await supabase
       .from('users')
       .update({
@@ -138,7 +219,7 @@ const banLiftJob = cron.schedule('5 * * * *', async () => {
       })
       .eq('is_suspended', true)
       .not('ban_expires', 'is', null)
-      .lte('ban_expires', now)
+      .lte('ban_expires', nowISO)
       .select('id');
 
     // Lift temporary bans
@@ -151,8 +232,18 @@ const banLiftJob = cron.schedule('5 * * * *', async () => {
       })
       .eq('is_banned', true)
       .not('ban_expires', 'is', null)
-      .lte('ban_expires', now)
+      .lte('ban_expires', nowISO)
       .select('id');
+
+    // Also update user_safety table
+    if (unsuspended && unsuspended.length > 0) {
+      for (const user of unsuspended) {
+        await supabase
+          .from('user_safety')
+          .update({ is_suspended: false, suspension_until: null })
+          .eq('user_id', user.id);
+      }
+    }
 
     const totalLifted = (unsuspended?.length || 0) + (unbanned?.length || 0);
     if (totalLifted > 0) {
@@ -161,199 +252,172 @@ const banLiftJob = cron.schedule('5 * * * *', async () => {
       );
     }
   } catch (err) {
-    console.error('[Cron] Ban lift error:', err);
+    console.error('[Cron] Hourly maintenance error:', err);
   }
 });
 
-// ─── Hourly: Premium expiry ─────────────────────────────────────────────────────
-
-const premiumExpiryJob = cron.schedule('10 * * * *', async () => {
-  try {
-    console.log('[Cron] Checking premium expiry...');
-
-    const now = new Date().toISOString();
-
-    // Notify about premiums expiring in 3 days
-    const in3Days = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
-
-    const { data: expiringSoon } = await supabase
-      .from('users')
-      .select('id, plan, plan_expires')
-      .neq('plan', 'free')
-      .not('plan_expires', 'is', null)
-      .lte('plan_expires', in3Days)
-      .gt('plan_expires', now);
-
-    for (const user of expiringSoon || []) {
-      const daysLeft = Math.ceil(
-        (new Date(user.plan_expires!).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-      );
-
-      const notifKey = `premium_expiry_notif:${user.id}`;
-      const alreadyNotified = await redis.get(notifKey);
-      if (!alreadyNotified) {
-        await sendTemplateNotification('premium_expiring', user.id, {
-          days: daysLeft.toString(),
-        });
-        await redis.set(notifKey, '1', 'EX', 86400);
-      }
-    }
-
-    // Expire premium plans
-    const { data: expired } = await supabase
-      .from('users')
-      .select('id')
-      .neq('plan', 'free')
-      .not('plan_expires', 'is', null)
-      .lte('plan_expires', now);
-
-    for (const user of expired || []) {
-      // Check if auto-renew is on
-      const { data: subscription } = await supabase
-        .from('subscriptions')
-        .select('auto_renew')
-        .eq('user_id', user.id)
-        .eq('status', 'active')
-        .order('expires_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (subscription?.auto_renew) {
-        // In production, trigger renewal charge
-        console.log(`[Cron] Auto-renewal pending for user ${user.id}`);
-        continue;
-      }
-
-      // Downgrade to free
-      await supabase
-        .from('users')
-        .update({ plan: 'free', plan_expires: null })
-        .eq('id', user.id);
-
-      // Reset privileges to free tier
-      await supabase
-        .from('user_privileges')
-        .update({
-          daily_likes: 10,
-          daily_super_likes: 1,
-          daily_rewinds: 0,
-          daily_comments: 3,
-        })
-        .eq('user_id', user.id);
-
-      // Update subscription status
-      await supabase
-        .from('subscriptions')
-        .update({ status: 'expired' })
-        .eq('user_id', user.id)
-        .eq('status', 'active');
-
-      await sendTemplateNotification('premium_expired', user.id);
-    }
-
-    if ((expired?.length || 0) > 0) {
-      console.log(`[Cron] Expired ${expired!.length} premium plans`);
-    }
-  } catch (err) {
-    console.error('[Cron] Premium expiry error:', err);
-  }
-});
-
-// ─── Daily midnight: Reset daily limits + daily prompt ──────────────────────────
+// ─── Midnight: Counter reset ────────────────────────────────────────────────
+// Reset likes_used_today, rewinds_used_today in user_privileges
 
 const dailyResetJob = cron.schedule('0 0 * * *', async () => {
   try {
-    console.log('[Cron] Resetting daily limits...');
+    console.log('[Cron] Resetting daily counters...');
 
     // Reset all users' daily usage counters
     const { error } = await supabase
       .from('user_privileges')
       .update({
-        likes_used: 0,
-        super_likes_used: 0,
-        rewinds_used: 0,
-        comments_used: 0,
+        likes_used_today: 0,
+        rewinds_used_today: 0,
         last_reset_at: new Date().toISOString(),
       })
       .neq('user_id', '00000000-0000-0000-0000-000000000000'); // Match all rows
 
     if (error) {
-      console.error('[Cron] Daily limits reset error:', error.message);
+      console.error('[Cron] Daily counter reset error:', error.message);
     } else {
-      console.log('[Cron] Daily limits reset complete');
+      console.log('[Cron] Daily counters reset complete');
     }
 
-    // Clear daily notification counters from Redis
+    // Clear daily notification throttle keys from Redis
     let cursor = '0';
     do {
       const [newCursor, keys] = await redis.scan(
         cursor,
         'MATCH',
-        'notif_daily:*',
+        'notif:*',
         'COUNT',
         500
       );
       cursor = newCursor;
       if (keys.length > 0) {
-        await redis.del(...keys);
+        // Only delete keys matching notif:{userId}:{date} pattern
+        const dateKeys = keys.filter((k) => /^notif:[^:]+:\d{4}-\d{2}-\d{2}$/.test(k));
+        if (dateKeys.length > 0) {
+          await redis.del(...dateKeys);
+        }
       }
     } while (cursor !== '0');
-
-    // Activate daily prompt for today
-    const today = new Date().toISOString().split('T')[0];
-    const { data: todayPrompt } = await supabase
-      .from('daily_prompts')
-      .select('id, question')
-      .eq('date', today)
-      .eq('is_active', true)
-      .limit(1)
-      .maybeSingle();
-
-    if (todayPrompt) {
-      console.log(`[Cron] Today's prompt: "${todayPrompt.question}"`);
-    } else {
-      console.log('[Cron] No daily prompt set for today');
-    }
   } catch (err) {
     console.error('[Cron] Daily reset error:', err);
   }
 });
 
-// ─── Daily 3AM: Hard delete expired accounts + clean old notifications ──────────
+// ─── Midnight: Daily prompt auto-pick ───────────────────────────────────────
+// Auto-pick next prompt unless admin override
+
+const dailyPromptJob = cron.schedule('0 0 * * *', async () => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+
+    // Check if admin has already set an override for today
+    const { data: existingPrompt } = await supabase
+      .from('daily_prompts')
+      .select('id')
+      .eq('date', today)
+      .eq('is_override', true)
+      .maybeSingle();
+
+    if (existingPrompt) {
+      console.log('[Cron] Admin override prompt exists for today, skipping auto-pick');
+      return;
+    }
+
+    // Deactivate yesterday's prompt
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    await supabase
+      .from('daily_prompts')
+      .update({ is_active: false })
+      .eq('date', yesterday);
+
+    // Check if a prompt is already scheduled for today
+    const { data: scheduledPrompt } = await supabase
+      .from('daily_prompts')
+      .select('id, question')
+      .eq('date', today)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (scheduledPrompt) {
+      console.log(`[Cron] Today's prompt already set: "${scheduledPrompt.question}"`);
+      return;
+    }
+
+    // Auto-pick: Get the next unused prompt from the pool
+    const { data: nextPrompt } = await supabase
+      .from('prompt_pool')
+      .select('id, question, category')
+      .eq('used', false)
+      .order('sort_order', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (nextPrompt) {
+      // Activate this prompt for today
+      await supabase.from('daily_prompts').insert({
+        question: nextPrompt.question,
+        category: nextPrompt.category,
+        date: today,
+        is_active: true,
+        is_override: false,
+      });
+
+      // Mark it as used in the pool
+      await supabase
+        .from('prompt_pool')
+        .update({ used: true })
+        .eq('id', nextPrompt.id);
+
+      console.log(`[Cron] Auto-picked today's prompt: "${nextPrompt.question}"`);
+    } else {
+      console.warn('[Cron] No unused prompts in pool. Reset the pool or add more.');
+    }
+  } catch (err) {
+    console.error('[Cron] Daily prompt error:', err);
+  }
+});
+
+// ─── 3 AM: Deletion + cleanup ───────────────────────────────────────────────
+// Process 30-day delete queue, remove expired data
 
 const cleanupJob = cron.schedule('0 3 * * *', async () => {
   try {
-    console.log('[Cron] Running daily cleanup...');
+    console.log('[Cron] Running 3 AM cleanup...');
 
-    const now = new Date().toISOString();
+    const nowISO = new Date().toISOString();
 
-    // Hard delete accounts scheduled for deletion that are past their 30-day grace period
+    // ── Hard-delete accounts past 30-day grace period ────────────────────
     const { data: expiredAccounts } = await supabase
       .from('users')
       .select('id, auth_id')
       .not('delete_scheduled_at', 'is', null)
-      .lte('delete_scheduled_at', now);
+      .lte('delete_scheduled_at', nowISO);
 
     for (const account of expiredAccounts || []) {
-      console.log(`[Cron] Hard deleting user ${account.id}`);
-
-      // Delete user data from all tables
       const userId = account.id;
+      console.log(`[Cron] Hard deleting user ${userId}`);
 
+      // Delete user data from all tables in parallel
       await Promise.all([
         supabase.from('basic_profiles').delete().eq('user_id', userId),
         supabase.from('sindhi_profiles').delete().eq('user_id', userId),
         supabase.from('chatti_profiles').delete().eq('user_id', userId),
+        supabase.from('user_sindhi').delete().eq('user_id', userId),
+        supabase.from('user_chatti').delete().eq('user_id', userId),
         supabase.from('personality_profiles').delete().eq('user_id', userId),
         supabase.from('photos').delete().eq('user_id', userId),
         supabase.from('user_settings').delete().eq('user_id', userId),
         supabase.from('user_privileges').delete().eq('user_id', userId),
+        supabase.from('user_safety').delete().eq('user_id', userId),
+        supabase.from('user_fcm_tokens').delete().eq('user_id', userId),
         supabase.from('actions').delete().eq('actor_id', userId),
         supabase.from('blocks').delete().or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`),
         supabase.from('family_members').delete().or(`user_id.eq.${userId},family_account_id.eq.${userId}`),
         supabase.from('family_invites').delete().eq('user_id', userId),
         supabase.from('prompt_answers').delete().eq('user_id', userId),
-        supabase.from('notifications').delete().eq('user_id', userId),
+        supabase.from('notif_log').delete().eq('user_id', userId),
+        supabase.from('reports').delete().eq('reporter_id', userId),
+        supabase.from('strikes').delete().eq('user_id', userId),
       ]);
 
       // Delete messages from matches this user was in
@@ -366,7 +430,10 @@ const cleanupJob = cron.schedule('0 3 * * *', async () => {
         await supabase.from('messages').delete().eq('match_id', match.id);
       }
 
-      await supabase.from('matches').delete().or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`);
+      await supabase
+        .from('matches')
+        .delete()
+        .or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`);
 
       // Delete storage files
       const { data: storageList } = await supabase.storage
@@ -389,7 +456,7 @@ const cleanupJob = cron.schedule('0 3 * * *', async () => {
       // Clean up Redis
       await redis.del(
         `last_active:${userId}`,
-        `presence:${userId}`,
+        `online:${userId}`,
         `jwt_blacklist:${account.auth_id}`
       );
     }
@@ -398,24 +465,17 @@ const cleanupJob = cron.schedule('0 3 * * *', async () => {
       console.log(`[Cron] Hard deleted ${expiredAccounts!.length} accounts`);
     }
 
-    // Clean old notifications (older than 90 days)
+    // ── Clean old notification logs (older than 90 days) ─────────────────
     const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
-    const { error: notifCleanError } = await supabase
-      .from('notifications')
-      .delete()
-      .lte('created_at', ninetyDaysAgo);
+    await supabase.from('notif_log').delete().lte('sent_at', ninetyDaysAgo);
 
-    if (notifCleanError) {
-      console.error('[Cron] Notification cleanup error:', notifCleanError.message);
-    }
-
-    // Clean expired strikes
+    // ── Clean expired strikes ────────────────────────────────────────────
     const { data: expiredStrikes } = await supabase
       .from('strikes')
       .select('id, user_id')
       .eq('status', 'active')
       .not('expires_at', 'is', null)
-      .lte('expires_at', now);
+      .lte('expires_at', nowISO);
 
     for (const strike of expiredStrikes || []) {
       await supabase
@@ -428,22 +488,36 @@ const cleanupJob = cron.schedule('0 3 * * *', async () => {
       console.log(`[Cron] Expired ${expiredStrikes!.length} strikes`);
     }
 
-    console.log('[Cron] Daily cleanup complete');
+    // ── Clean expired Redis keys (batch cleanup) ─────────────────────────
+    // Redis TTLs handle most cleanup, but we also purge stale conversation cooldowns
+    let cursor = '0';
+    do {
+      const [newCursor, keys] = await redis.scan(
+        cursor,
+        'MATCH',
+        'notif_conv:*',
+        'COUNT',
+        200
+      );
+      cursor = newCursor;
+      // These have TTLs, so we just let them expire naturally
+    } while (cursor !== '0');
+
+    console.log('[Cron] 3 AM cleanup complete');
   } catch (err) {
-    console.error('[Cron] Daily cleanup error:', err);
+    console.error('[Cron] Cleanup error:', err);
   }
 });
 
-// ─── Start/Stop Functions ───────────────────────────────────────────────────────
+// ─── Start/Stop Functions ───────────────────────────────────────────────────
 
 export function startCronJobs(): void {
   console.log('[Cron] Starting cron jobs...');
   batchLikesJob.start();
   matchExpiryJob.start();
-  passportResetJob.start();
-  banLiftJob.start();
-  premiumExpiryJob.start();
+  hourlyMaintenanceJob.start();
   dailyResetJob.start();
+  dailyPromptJob.start();
   cleanupJob.start();
   console.log('[Cron] All cron jobs started');
 }
@@ -452,10 +526,9 @@ export function stopCronJobs(): void {
   console.log('[Cron] Stopping cron jobs...');
   batchLikesJob.stop();
   matchExpiryJob.stop();
-  passportResetJob.stop();
-  banLiftJob.stop();
-  premiumExpiryJob.stop();
+  hourlyMaintenanceJob.stop();
   dailyResetJob.stop();
+  dailyPromptJob.stop();
   cleanupJob.stop();
   console.log('[Cron] All cron jobs stopped');
 }

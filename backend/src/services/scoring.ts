@@ -1,109 +1,103 @@
 import { redis } from '../config/redis';
 import { supabase } from '../config/supabase';
+import { AppError } from '../utils/errors';
 import {
   CulturalScoreResult,
   CulturalBadge,
-  ChattiProfileRow,
-  SindhiProfileRow,
-  BasicProfileRow,
+  CulturalBreakdown,
+  FamilyInvolvement,
+  SindhiFluency,
+  Dietary,
+  Intent,
 } from '../types';
 
-const CACHE_TTL_SECONDS = 3600; // 1 hour
+// ─── Constants ───────────────────────────────────────────────────────────────
 
-/**
- * Build a canonical cache key so score(A,B) === score(B,A).
- */
+const CACHE_TTL_SECONDS = 3600; // 1 hour
+const CACHE_PREFIX = 'pair';
+
+// ─── Cache Key (canonical ordering — lower UUID first) ───────────────────────
+
 function cacheKey(idA: string, idB: string): string {
   const [first, second] = idA < idB ? [idA, idB] : [idB, idA];
-  return `cultural_score:${first}:${second}`;
+  return `${CACHE_PREFIX}:${first}:${second}`;
 }
 
-// ─── Dimension Scorers ─────────────────────────────────────────────────────────
+// ─── DB Row Shapes ───────────────────────────────────────────────────────────
 
-/**
- * Family Values (max 25 pts)
- * Same family_values = 25, adjacent = 15, opposite = 5
- */
-function scoreFamilyValues(
-  a: ChattiProfileRow | null,
-  b: ChattiProfileRow | null
-): number {
-  if (!a || !b) return 0;
-
-  const values = ['traditional', 'moderate', 'liberal'] as const;
-  const idxA = values.indexOf(a.family_values);
-  const idxB = values.indexOf(b.family_values);
-
-  if (idxA === -1 || idxB === -1) return 0;
-
-  const diff = Math.abs(idxA - idxB);
-  if (diff === 0) return 25;
-  if (diff === 1) return 15;
-  return 5;
+interface UserSindhiRow {
+  user_id: string;
+  family_involvement: FamilyInvolvement;
+  fluency: SindhiFluency;
+  festivals: string[];
+  dietary: Dietary;
+  generation: number; // 1 = immigrant, 2 = second-gen, 3 = third-gen, etc.
 }
 
-/**
- * Language (max 20 pts)
- * Considers mother tongue match, dialect, and fluency level.
- */
-function scoreLanguage(
-  a: SindhiProfileRow | null,
-  b: SindhiProfileRow | null
-): number {
+interface UserRow {
+  id: string;
+  intent: Intent;
+}
+
+interface UserData {
+  sindhi: UserSindhiRow | null;
+  user: UserRow | null;
+}
+
+// ─── Dimension 1: Family Values (max 25) ─────────────────────────────────────
+
+function scoreFamilyValues(a: FamilyInvolvement | null, b: FamilyInvolvement | null): number {
   if (!a || !b) return 0;
 
-  let score = 0;
+  // Both 'very involved' = 25
+  if (a === 'very' && b === 'very') return 25;
 
-  // Mother tongue match (8 pts)
-  if (
-    a.mother_tongue &&
-    b.mother_tongue &&
-    a.mother_tongue.toLowerCase() === b.mother_tongue.toLowerCase()
-  ) {
-    score += 8;
+  // One 'moderate' (other is 'very' or 'moderate') = 15
+  if (a === 'moderate' || b === 'moderate') return 15;
+
+  // One 'independent' = 10
+  if (a === 'independent' || b === 'independent') return 10;
+
+  return 0;
+}
+
+// ─── Dimension 2: Language (max 20) ──────────────────────────────────────────
+
+function scoreLanguage(a: SindhiFluency | null, b: SindhiFluency | null): number {
+  if (!a || !b) return 0;
+
+  // Both native = 20
+  if (a === 'native' && b === 'native') return 20;
+
+  // Both fluent = 16
+  if (a === 'fluent' && b === 'fluent') return 16;
+
+  // Both native or fluent (mixed) = 18
+  const highFluency: SindhiFluency[] = ['native', 'fluent'];
+  if (highFluency.includes(a) && highFluency.includes(b)) return 18;
+
+  // One basic (other is native/fluent) = 8
+  if (a === 'basic' || b === 'basic') {
+    const other = a === 'basic' ? b : a;
+    if (highFluency.includes(other)) return 8;
+    // Both basic
+    if (other === 'basic') return 8;
+    return 4;
   }
 
-  // Dialect match (6 pts)
-  if (
-    a.sindhi_dialect &&
-    b.sindhi_dialect &&
-    a.sindhi_dialect.toLowerCase() === b.sindhi_dialect.toLowerCase()
-  ) {
-    score += 6;
-  }
+  // Neither speaks Sindhi = 0
+  if (a === 'none' || b === 'none') return 0;
 
-  // Fluency compatibility (6 pts)
-  const fluencyLevels: Record<string, number> = {
-    native: 5,
-    fluent: 4,
-    conversational: 3,
-    basic: 2,
-    learning: 1,
-  };
-
-  const flA = fluencyLevels[a.sindhi_fluency] || 0;
-  const flB = fluencyLevels[b.sindhi_fluency] || 0;
-  const fluencyDiff = Math.abs(flA - flB);
-
-  if (fluencyDiff === 0) score += 6;
-  else if (fluencyDiff === 1) score += 4;
-  else if (fluencyDiff === 2) score += 2;
-
-  return Math.min(score, 20);
+  return 0;
 }
 
-/**
- * Festivals (max 20 pts)
- * Jaccard similarity of festivals_celebrated arrays.
- */
-function scoreFestivals(
-  a: ChattiProfileRow | null,
-  b: ChattiProfileRow | null
-): number {
+// ─── Dimension 3: Festivals (max 20) — Jaccard similarity ───────────────────
+
+function scoreFestivals(a: string[] | null, b: string[] | null): number {
   if (!a || !b) return 0;
 
-  const setA = new Set((a.festivals_celebrated || []).map((f) => f.toLowerCase()));
-  const setB = new Set((b.festivals_celebrated || []).map((f) => f.toLowerCase()));
+  const setA = new Set(a.map((f) => f.toLowerCase().trim()));
+  const setB = new Set(b.map((f) => f.toLowerCase().trim()));
 
   if (setA.size === 0 && setB.size === 0) return 0;
   if (setA.size === 0 || setB.size === 0) return 0;
@@ -120,186 +114,179 @@ function scoreFestivals(
   return Math.round(jaccard * 20);
 }
 
-/**
- * Food (max 15 pts)
- * Food preference match (10 pts) + cuisine overlap (5 pts).
- */
-function scoreFood(
-  a: ChattiProfileRow | null,
-  b: ChattiProfileRow | null
-): number {
+// ─── Dimension 4: Food / Dietary (max 15) ───────────────────────────────────
+
+function scoreFood(a: Dietary | null, b: Dietary | null): number {
   if (!a || !b) return 0;
 
-  let score = 0;
+  // Same dietary = 15
+  if (a === b) return 15;
 
-  // Food preference compatibility
-  if (a.food_preference === b.food_preference) {
-    score += 10;
-  } else {
-    // Partial compatibility matrix
-    const compatible: Record<string, string[]> = {
-      vegetarian: ['vegan', 'jain'],
-      vegan: ['vegetarian', 'jain'],
-      jain: ['vegetarian', 'vegan'],
-      non_vegetarian: [],
-    };
-    if (compatible[a.food_preference]?.includes(b.food_preference)) {
-      score += 5;
-    }
-  }
-
-  // Cuisine preferences overlap
-  const cuisineA = new Set((a.cuisine_preferences || []).map((c) => c.toLowerCase()));
-  const cuisineB = new Set((b.cuisine_preferences || []).map((c) => c.toLowerCase()));
-
-  if (cuisineA.size > 0 && cuisineB.size > 0) {
-    let overlap = 0;
-    for (const item of cuisineA) {
-      if (cuisineB.has(item)) overlap++;
-    }
-    const maxOverlap = Math.min(cuisineA.size, cuisineB.size);
-    if (maxOverlap > 0) {
-      score += Math.round((overlap / maxOverlap) * 5);
-    }
-  }
-
-  return Math.min(score, 15);
-}
-
-/**
- * Diaspora (max 10 pts)
- * Same country = 10, same family origin country = 7, both diaspora = 4
- */
-function scoreDiaspora(
-  aBasic: BasicProfileRow | null,
-  bBasic: BasicProfileRow | null,
-  aSindhi: SindhiProfileRow | null,
-  bSindhi: SindhiProfileRow | null
-): number {
-  if (!aBasic || !bBasic) return 0;
-
-  // Same current country
-  if (
-    aBasic.country &&
-    bBasic.country &&
-    aBasic.country.toLowerCase() === bBasic.country.toLowerCase()
-  ) {
-    return 10;
-  }
-
-  // Same family origin country
-  if (
-    aSindhi?.family_origin_country &&
-    bSindhi?.family_origin_country &&
-    aSindhi.family_origin_country.toLowerCase() ===
-      bSindhi.family_origin_country.toLowerCase()
-  ) {
-    return 7;
-  }
-
-  // Both in diaspora (outside India/Pakistan)
-  const nonDiaspora = ['india', 'pakistan'];
-  const aIsDiaspora =
-    aBasic.country && !nonDiaspora.includes(aBasic.country.toLowerCase());
-  const bIsDiaspora =
-    bBasic.country && !nonDiaspora.includes(bBasic.country.toLowerCase());
-
-  if (aIsDiaspora && bIsDiaspora) return 4;
-
-  return 0;
-}
-
-/**
- * Intent (max 10 pts)
- * Same intent = 10, compatible intents = 5
- */
-function scoreIntent(
-  a: BasicProfileRow | null,
-  b: BasicProfileRow | null
-): number {
-  if (!a || !b) return 0;
-
-  if (a.intent === b.intent) return 10;
-
-  // Partial compatibility
-  const compatible: Record<string, string[]> = {
-    marriage: ['dating'],
-    dating: ['marriage', 'friendship'],
-    friendship: ['dating', 'networking'],
-    networking: ['friendship'],
+  // Compatible pairs = 10
+  const compatiblePairs: Record<string, string[]> = {
+    veg: ['jain', 'vegan'],
+    jain: ['veg', 'vegan'],
+    vegan: ['veg', 'jain'],
+    'non-veg': [],
   };
 
-  if (compatible[a.intent]?.includes(b.intent)) return 5;
+  if (compatiblePairs[a]?.includes(b)) return 10;
 
-  return 0;
+  // Veg + non-veg = 5
+  const vegTypes: Dietary[] = ['veg', 'vegan', 'jain'];
+  const aIsVeg = vegTypes.includes(a);
+  const bIsVeg = vegTypes.includes(b);
+  if ((aIsVeg && !bIsVeg) || (!aIsVeg && bIsVeg)) return 5;
+
+  return 5;
 }
 
-// ─── Main Scoring Function ─────────────────────────────────────────────────────
+// ─── Dimension 5: Diaspora Generation (max 10) ──────────────────────────────
 
-interface UserProfiles {
-  basic: BasicProfileRow | null;
-  sindhi: SindhiProfileRow | null;
-  chatti: ChattiProfileRow | null;
+function scoreDiaspora(a: number | null, b: number | null): number {
+  if (a == null || b == null) return 0;
+
+  const diff = Math.abs(a - b);
+
+  // Same generation = 10
+  if (diff === 0) return 10;
+
+  // +/- 1 generation = 6
+  if (diff === 1) return 6;
+
+  // +/- 2 or more = 2
+  return 2;
 }
 
-async function fetchUserProfiles(userId: string): Promise<UserProfiles> {
-  const [basicRes, sindhiRes, chattiRes] = await Promise.all([
-    supabase.from('basic_profiles').select('*').eq('user_id', userId).single(),
-    supabase.from('sindhi_profiles').select('*').eq('user_id', userId).single(),
-    supabase.from('chatti_profiles').select('*').eq('user_id', userId).single(),
+// ─── Dimension 6: Intent Match (max 10) ──────────────────────────────────────
+
+function scoreIntent(a: Intent | null, b: Intent | null): number {
+  if (!a || !b) return 0;
+
+  // Both marriage = 10
+  if (a === 'marriage' && b === 'marriage') return 10;
+
+  // Both same intent = 10
+  if (a === b) return 10;
+
+  // Open + any = 7
+  if (a === 'open' || b === 'open') return 7;
+
+  // Casual + marriage = 2
+  if (
+    (a === 'casual' && b === 'marriage') ||
+    (a === 'marriage' && b === 'casual')
+  ) {
+    return 2;
+  }
+
+  return 5;
+}
+
+// ─── Badge Assignment ────────────────────────────────────────────────────────
+
+function assignBadge(total: number): CulturalBadge {
+  if (total >= 85) return 'gold';
+  if (total >= 65) return 'green';
+  if (total >= 40) return 'orange';
+  return 'none';
+}
+
+// ─── Data Fetching ───────────────────────────────────────────────────────────
+
+async function fetchUserData(userId: string): Promise<UserData> {
+  const [sindhiRes, userRes] = await Promise.all([
+    supabase
+      .from('user_sindhi')
+      .select('user_id, family_involvement, fluency, festivals, dietary, generation')
+      .eq('user_id', userId)
+      .single(),
+    supabase
+      .from('users')
+      .select('id, intent')
+      .eq('id', userId)
+      .single(),
   ]);
 
   return {
-    basic: (basicRes.data as BasicProfileRow) || null,
-    sindhi: (sindhiRes.data as SindhiProfileRow) || null,
-    chatti: (chattiRes.data as ChattiProfileRow) || null,
+    sindhi: (sindhiRes.data as UserSindhiRow) || null,
+    user: (userRes.data as UserRow) || null,
   };
 }
+
+// ─── Core Scoring Function ───────────────────────────────────────────────────
 
 /**
  * Compute the cultural compatibility score between two users.
- * Returns a total score out of 100 with breakdown and badge.
+ *
+ * 100-point scale across 6 dimensions:
+ *   - Family Values (25): user_sindhi.family_involvement
+ *   - Language (20): user_sindhi.fluency
+ *   - Festivals (20): Jaccard similarity of user_sindhi.festivals
+ *   - Food (15): user_sindhi.dietary
+ *   - Diaspora Generation (10): user_sindhi.generation
+ *   - Intent Match (10): users.intent
  */
-export function computeCulturalScore(
-  profilesA: UserProfiles,
-  profilesB: UserProfiles
-): CulturalScoreResult {
-  const familyValues = scoreFamilyValues(profilesA.chatti, profilesB.chatti);
-  const language = scoreLanguage(profilesA.sindhi, profilesB.sindhi);
-  const festivals = scoreFestivals(profilesA.chatti, profilesB.chatti);
-  const food = scoreFood(profilesA.chatti, profilesB.chatti);
-  const diaspora = scoreDiaspora(
-    profilesA.basic,
-    profilesB.basic,
-    profilesA.sindhi,
-    profilesB.sindhi
+export async function computeCulturalScore(
+  userAId: string,
+  userBId: string
+): Promise<CulturalScoreResult> {
+  const [dataA, dataB] = await Promise.all([
+    fetchUserData(userAId),
+    fetchUserData(userBId),
+  ]);
+
+  const family_values = scoreFamilyValues(
+    dataA.sindhi?.family_involvement ?? null,
+    dataB.sindhi?.family_involvement ?? null
   );
-  const intent = scoreIntent(profilesA.basic, profilesB.basic);
 
-  const total = familyValues + language + festivals + food + diaspora + intent;
+  const language = scoreLanguage(
+    dataA.sindhi?.fluency ?? null,
+    dataB.sindhi?.fluency ?? null
+  );
 
-  let badge: CulturalBadge = 'none';
-  if (total >= 95) badge = 'gold';
-  else if (total >= 80) badge = 'green';
-  else if (total >= 60) badge = 'orange';
+  const festivals = scoreFestivals(
+    dataA.sindhi?.festivals ?? null,
+    dataB.sindhi?.festivals ?? null
+  );
 
-  return {
-    total,
-    badge,
-    breakdown: {
-      familyValues,
-      language,
-      festivals,
-      food,
-      diaspora,
-      intent,
-    },
+  const food = scoreFood(
+    dataA.sindhi?.dietary ?? null,
+    dataB.sindhi?.dietary ?? null
+  );
+
+  const diaspora = scoreDiaspora(
+    dataA.sindhi?.generation ?? null,
+    dataB.sindhi?.generation ?? null
+  );
+
+  const intent = scoreIntent(
+    dataA.user?.intent ?? null,
+    dataB.user?.intent ?? null
+  );
+
+  const total = family_values + language + festivals + food + diaspora + intent;
+  const badge = assignBadge(total);
+
+  const breakdown: CulturalBreakdown = {
+    family_values,
+    language,
+    festivals,
+    food,
+    diaspora,
+    intent,
   };
+
+  return { total, badge, breakdown };
 }
+
+// ─── Cached Entry Point ──────────────────────────────────────────────────────
 
 /**
  * Get cultural score with Redis caching.
- * Cache key uses canonical ID ordering so (A,B) == (B,A).
+ * Cache key uses canonical ID ordering so score(A,B) === score(B,A).
+ * TTL: 1 hour.
  */
 export async function getCulturalScore(
   idA: string,
@@ -307,37 +294,39 @@ export async function getCulturalScore(
 ): Promise<CulturalScoreResult> {
   const key = cacheKey(idA, idB);
 
-  // Try cache first
-  const cached = await redis.get(key);
-  if (cached) {
-    return JSON.parse(cached) as CulturalScoreResult;
+  // Try cache
+  try {
+    const cached = await redis.get(key);
+    if (cached) {
+      return JSON.parse(cached) as CulturalScoreResult;
+    }
+  } catch (err) {
+    console.error('[Scoring] Redis read error, computing fresh:', err);
   }
 
-  // Fetch profiles and compute
-  const [profilesA, profilesB] = await Promise.all([
-    fetchUserProfiles(idA),
-    fetchUserProfiles(idB),
-  ]);
+  // Compute
+  const result = await computeCulturalScore(idA, idB);
 
-  const result = computeCulturalScore(profilesA, profilesB);
-
-  // Cache the result
-  await redis.set(key, JSON.stringify(result), 'EX', CACHE_TTL_SECONDS);
+  // Store in cache
+  try {
+    await redis.set(key, JSON.stringify(result), 'EX', CACHE_TTL_SECONDS);
+  } catch (err) {
+    console.error('[Scoring] Redis write error:', err);
+  }
 
   return result;
 }
 
 /**
- * Invalidate cached score when either user updates their profile.
+ * Invalidate cached cultural score when a user updates their profile.
  */
 export async function invalidateCulturalScoreCache(userId: string): Promise<void> {
-  // Scan for all keys containing this user's ID
   let cursor = '0';
   do {
     const [newCursor, keys] = await redis.scan(
       cursor,
       'MATCH',
-      `cultural_score:*${userId}*`,
+      `${CACHE_PREFIX}:*${userId}*`,
       'COUNT',
       100
     );

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
@@ -44,6 +44,7 @@ function SelectField({
             showToast.success('Saved');
           }}
           className="w-full appearance-none bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-charcoal focus:border-rose focus:ring-2 focus:ring-rose-light outline-none transition-all pr-10"
+          aria-label={label}
         >
           <option value="">Select...</option>
           {options.map((opt) => (
@@ -157,17 +158,6 @@ function BasicsTab() {
           { value: 'not_sure', label: 'Not sure yet' },
         ]}
       />
-      <SelectField
-        label="Exercise"
-        value={basics.exercise}
-        onChange={(v) => update('exercise', v)}
-        options={[
-          { value: 'daily', label: 'Daily' },
-          { value: 'often', label: 'Often' },
-          { value: 'sometimes', label: 'Sometimes' },
-          { value: 'never', label: 'Never' },
-        ]}
-      />
     </div>
   );
 }
@@ -245,17 +235,6 @@ function SindhiTab() {
           { value: 'jain', label: 'Jain' },
         ]}
       />
-      <SelectField
-        label="Family Involvement"
-        value={sindhi.family_involvement}
-        onChange={(v) => update('family_involvement', v)}
-        options={[
-          { value: 'very_involved', label: 'Very Involved' },
-          { value: 'somewhat', label: 'Somewhat' },
-          { value: 'minimal', label: 'Minimal' },
-          { value: 'independent', label: 'Independent' },
-        ]}
-      />
     </div>
   );
 }
@@ -268,6 +247,7 @@ function ChattiTab() {
     place_of_birth: '',
     nakshatra: '',
     rashi: '',
+    manglik: '',
   });
 
   const update = (key: string, value: string) => {
@@ -278,102 +258,56 @@ function ChattiTab() {
     <div className="p-6 space-y-1">
       <Card variant="filled" padding="md" className="mb-4">
         <p className="text-sm text-textLight">
-          Chatti details are used for Kundli matching and are only shared with premium members.
+          Chatti details are used for Kundli matching. They help match you with compatible partners based on traditional astrological calculations.
         </p>
       </Card>
       <div className="mb-4">
-        <Input
-          label="Chatti Name"
-          placeholder="Enter your chatti name"
-          value={chatti.chatti_name}
-          onChange={(e) => update('chatti_name', e.target.value)}
-          onBlur={() => chatti.chatti_name && showToast.success('Saved')}
-        />
+        <Input label="Chatti Name" placeholder="Enter your chatti name" value={chatti.chatti_name} onChange={(e) => update('chatti_name', e.target.value)} onBlur={() => chatti.chatti_name && showToast.success('Saved')} />
       </div>
       <div className="mb-4">
-        <Input
-          label="Chatti Date of Birth"
-          type="date"
-          value={chatti.chatti_dob}
-          onChange={(e) => {
-            update('chatti_dob', e.target.value);
-            showToast.success('Saved');
-          }}
-        />
+        <Input label="Chatti Date of Birth" type="date" value={chatti.chatti_dob} onChange={(e) => { update('chatti_dob', e.target.value); showToast.success('Saved'); }} />
       </div>
       <div className="mb-4">
-        <Input
-          label="Time of Birth"
-          type="time"
-          value={chatti.time_of_birth}
-          onChange={(e) => {
-            update('time_of_birth', e.target.value);
-            showToast.success('Saved');
-          }}
-        />
+        <Input label="Time of Birth" type="time" value={chatti.time_of_birth} onChange={(e) => { update('time_of_birth', e.target.value); showToast.success('Saved'); }} />
       </div>
       <div className="mb-4">
-        <Input
-          label="Place of Birth"
-          placeholder="e.g., Mumbai, India"
-          value={chatti.place_of_birth}
-          onChange={(e) => update('place_of_birth', e.target.value)}
-          onBlur={() => chatti.place_of_birth && showToast.success('Saved')}
-        />
+        <Input label="Place of Birth" placeholder="e.g., Mumbai, India" value={chatti.place_of_birth} onChange={(e) => update('place_of_birth', e.target.value)} onBlur={() => chatti.place_of_birth && showToast.success('Saved')} />
       </div>
-      <SelectField
-        label="Nakshatra"
-        value={chatti.nakshatra}
-        onChange={(v) => update('nakshatra', v)}
-        options={[
-          { value: 'ashwini', label: 'Ashwini' },
-          { value: 'bharani', label: 'Bharani' },
-          { value: 'krittika', label: 'Krittika' },
-          { value: 'rohini', label: 'Rohini' },
-          { value: 'mrigashira', label: 'Mrigashira' },
-          { value: 'ardra', label: 'Ardra' },
-          { value: 'punarvasu', label: 'Punarvasu' },
-          { value: 'pushya', label: 'Pushya' },
-          { value: 'ashlesha', label: 'Ashlesha' },
-          { value: 'magha', label: 'Magha' },
-          { value: 'purva_phalguni', label: 'Purva Phalguni' },
-          { value: 'uttara_phalguni', label: 'Uttara Phalguni' },
-          { value: 'hasta', label: 'Hasta' },
-          { value: 'chitra', label: 'Chitra' },
-          { value: 'swati', label: 'Swati' },
-          { value: 'vishakha', label: 'Vishakha' },
-          { value: 'anuradha', label: 'Anuradha' },
-          { value: 'jyeshtha', label: 'Jyeshtha' },
-          { value: 'mula', label: 'Mula' },
-          { value: 'purva_ashadha', label: 'Purva Ashadha' },
-          { value: 'uttara_ashadha', label: 'Uttara Ashadha' },
-          { value: 'shravana', label: 'Shravana' },
-          { value: 'dhanishta', label: 'Dhanishta' },
-          { value: 'shatabhisha', label: 'Shatabhisha' },
-          { value: 'purva_bhadrapada', label: 'Purva Bhadrapada' },
-          { value: 'uttara_bhadrapada', label: 'Uttara Bhadrapada' },
-          { value: 'revati', label: 'Revati' },
-        ]}
-      />
-      <SelectField
-        label="Rashi"
-        value={chatti.rashi}
-        onChange={(v) => update('rashi', v)}
-        options={[
-          { value: 'mesh', label: 'Mesh (Aries)' },
-          { value: 'vrishabh', label: 'Vrishabh (Taurus)' },
-          { value: 'mithun', label: 'Mithun (Gemini)' },
-          { value: 'kark', label: 'Kark (Cancer)' },
-          { value: 'sinh', label: 'Sinh (Leo)' },
-          { value: 'kanya', label: 'Kanya (Virgo)' },
-          { value: 'tula', label: 'Tula (Libra)' },
-          { value: 'vrishchik', label: 'Vrishchik (Scorpio)' },
-          { value: 'dhanu', label: 'Dhanu (Sagittarius)' },
-          { value: 'makar', label: 'Makar (Capricorn)' },
-          { value: 'kumbh', label: 'Kumbh (Aquarius)' },
-          { value: 'meen', label: 'Meen (Pisces)' },
-        ]}
-      />
+      <SelectField label="Nakshatra" value={chatti.nakshatra} onChange={(v) => update('nakshatra', v)} options={[
+        { value: 'ashwini', label: 'Ashwini' }, { value: 'bharani', label: 'Bharani' }, { value: 'krittika', label: 'Krittika' }, { value: 'rohini', label: 'Rohini' }, { value: 'mrigashira', label: 'Mrigashira' }, { value: 'ardra', label: 'Ardra' }, { value: 'punarvasu', label: 'Punarvasu' }, { value: 'pushya', label: 'Pushya' }, { value: 'ashlesha', label: 'Ashlesha' }, { value: 'magha', label: 'Magha' }, { value: 'purva_phalguni', label: 'Purva Phalguni' }, { value: 'uttara_phalguni', label: 'Uttara Phalguni' }, { value: 'hasta', label: 'Hasta' }, { value: 'chitra', label: 'Chitra' }, { value: 'swati', label: 'Swati' }, { value: 'vishakha', label: 'Vishakha' }, { value: 'anuradha', label: 'Anuradha' }, { value: 'jyeshtha', label: 'Jyeshtha' }, { value: 'mula', label: 'Mula' }, { value: 'purva_ashadha', label: 'Purva Ashadha' }, { value: 'uttara_ashadha', label: 'Uttara Ashadha' }, { value: 'shravana', label: 'Shravana' }, { value: 'dhanishta', label: 'Dhanishta' }, { value: 'shatabhisha', label: 'Shatabhisha' }, { value: 'purva_bhadrapada', label: 'Purva Bhadrapada' }, { value: 'uttara_bhadrapada', label: 'Uttara Bhadrapada' }, { value: 'revati', label: 'Revati' },
+      ]} />
+      <SelectField label="Rashi" value={chatti.rashi} onChange={(v) => update('rashi', v)} options={[
+        { value: 'mesh', label: 'Mesh (Aries)' }, { value: 'vrishabh', label: 'Vrishabh (Taurus)' }, { value: 'mithun', label: 'Mithun (Gemini)' }, { value: 'kark', label: 'Kark (Cancer)' }, { value: 'sinh', label: 'Sinh (Leo)' }, { value: 'kanya', label: 'Kanya (Virgo)' }, { value: 'tula', label: 'Tula (Libra)' }, { value: 'vrishchik', label: 'Vrishchik (Scorpio)' }, { value: 'dhanu', label: 'Dhanu (Sagittarius)' }, { value: 'makar', label: 'Makar (Capricorn)' }, { value: 'kumbh', label: 'Kumbh (Aquarius)' }, { value: 'meen', label: 'Meen (Pisces)' },
+      ]} />
+      <SelectField label="Manglik" value={chatti.manglik} onChange={(v) => update('manglik', v)} options={[
+        { value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'partial', label: 'Partial (Anshik)' }, { value: 'not_sure', label: 'Not sure' },
+      ]} />
+    </div>
+  );
+}
+
+function CultureTab() {
+  const [culture, setCulture] = useState({
+    mother_tongue: '',
+    community_org: '',
+    cultural_events: '',
+  });
+
+  const update = (key: string, value: string) => {
+    setCulture((prev) => ({ ...prev, [key]: value }));
+  };
+
+  return (
+    <div className="p-6 space-y-4">
+      <div>
+        <Input label="Mother Tongue" placeholder="e.g., Sindhi, Hindi" value={culture.mother_tongue} onChange={(e) => update('mother_tongue', e.target.value)} onBlur={() => culture.mother_tongue && showToast.success('Saved')} />
+      </div>
+      <div>
+        <Input label="Community Organization" placeholder="e.g., Sindhi Panchayat, SWAS" value={culture.community_org} onChange={(e) => update('community_org', e.target.value)} onBlur={() => culture.community_org && showToast.success('Saved')} helperText="Any Sindhi community group you belong to" />
+      </div>
+      <div>
+        <Input label="Cultural Events" placeholder="e.g., Chaliha Sahib, Thadri, Jhulelal" value={culture.cultural_events} onChange={(e) => update('cultural_events', e.target.value)} onBlur={() => culture.cultural_events && showToast.success('Saved')} helperText="Comma-separated festivals and events you celebrate" />
+      </div>
     </div>
   );
 }
@@ -407,11 +341,8 @@ function PersonalityTab() {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Bio */}
       <div>
-        <label className="block text-sm font-medium text-textMain mb-1.5">
-          Bio
-        </label>
+        <label className="block text-sm font-medium text-textMain mb-1.5">Bio</label>
         <textarea
           value={bio}
           onChange={(e) => setBio(e.target.value)}
@@ -420,94 +351,48 @@ function PersonalityTab() {
           maxLength={500}
           rows={4}
           className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-charcoal placeholder:text-textLight/50 focus:border-rose focus:ring-2 focus:ring-rose-light outline-none transition-all resize-none"
+          aria-label="Bio"
         />
         <p className="text-xs text-textLight mt-1">{bio.length}/500</p>
       </div>
 
-      {/* Prompts */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <label className="text-sm font-medium text-textMain">
-            Prompts ({prompts.length}/3)
-          </label>
+          <label className="text-sm font-medium text-textMain">Prompts ({prompts.length}/3)</label>
           {prompts.length < 3 && (
-            <button
-              onClick={() => setAddingPrompt(true)}
-              className="text-sm font-semibold text-rose"
-            >
-              + Add
-            </button>
+            <button onClick={() => setAddingPrompt(true)} className="text-sm font-semibold text-rose" aria-label="Add prompt">+ Add</button>
           )}
         </div>
-
         {prompts.map((prompt, i) => (
           <Card key={i} variant="filled" padding="md" className="mb-2">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs font-semibold text-rose uppercase tracking-wide mb-1">
-                  {prompt.question}
-                </p>
+                <p className="text-xs font-semibold text-rose uppercase tracking-wide mb-1">{prompt.question}</p>
                 <p className="text-textMain text-sm">{prompt.answer}</p>
               </div>
-              <button
-                onClick={() => {
-                  setPrompts((prev) => prev.filter((_, idx) => idx !== i));
-                  showToast.success('Prompt removed');
-                }}
-                className="text-textLight hover:text-red-500 transition-colors ml-2"
-              >
+              <button onClick={() => { setPrompts((prev) => prev.filter((_, idx) => idx !== i)); showToast.success('Prompt removed'); }} className="text-textLight hover:text-red-500 transition-colors ml-2 touch-target" aria-label="Remove prompt">
                 <X className="w-4 h-4" />
               </button>
             </div>
           </Card>
         ))}
-
         {addingPrompt && (
           <Card variant="outlined" padding="md" className="mt-2">
-            <select
-              value={selectedPrompt}
-              onChange={(e) => setSelectedPrompt(e.target.value)}
-              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-charcoal mb-2 outline-none focus:border-rose"
-            >
+            <select value={selectedPrompt} onChange={(e) => setSelectedPrompt(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-charcoal mb-2 outline-none focus:border-rose" aria-label="Choose a prompt">
               <option value="">Choose a prompt...</option>
-              {promptOptions.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
+              {promptOptions.map((p) => (<option key={p} value={p}>{p}</option>))}
             </select>
-            <textarea
-              value={promptAnswer}
-              onChange={(e) => setPromptAnswer(e.target.value)}
-              placeholder="Your answer..."
-              rows={3}
-              maxLength={200}
-              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-charcoal placeholder:text-textLight/50 outline-none focus:border-rose resize-none mb-2"
-            />
+            <textarea value={promptAnswer} onChange={(e) => setPromptAnswer(e.target.value)} placeholder="Your answer..." rows={3} maxLength={200} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-charcoal placeholder:text-textLight/50 outline-none focus:border-rose resize-none mb-2" aria-label="Prompt answer" />
             <div className="flex gap-2">
-              <button
-                onClick={() => setAddingPrompt(false)}
-                className="flex-1 py-2 text-sm font-medium text-textLight bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={addPrompt}
-                disabled={!selectedPrompt || !promptAnswer.trim()}
-                className="flex-1 py-2 text-sm font-medium text-white bg-rose rounded-xl hover:bg-rose-dark transition-colors disabled:opacity-50"
-              >
-                Add
-              </button>
+              <button onClick={() => setAddingPrompt(false)} className="flex-1 py-2 text-sm font-medium text-textLight bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors touch-target">Cancel</button>
+              <button onClick={addPrompt} disabled={!selectedPrompt || !promptAnswer.trim()} className="flex-1 py-2 text-sm font-medium text-white bg-rose rounded-xl hover:bg-rose-dark transition-colors disabled:opacity-50 touch-target">Add</button>
             </div>
           </Card>
         )}
       </div>
 
-      {/* Interests */}
       <div>
-        <label className="block text-sm font-medium text-textMain mb-3">
-          Interests ({selectedInterests.length}/10)
-        </label>
+        <label className="block text-sm font-medium text-textMain mb-3">Interests ({selectedInterests.length}/10)</label>
         <div className="flex flex-wrap gap-2">
           {interestOptions.map((interest) => {
             const isSelected = selectedInterests.includes(interest);
@@ -515,11 +400,10 @@ function PersonalityTab() {
               <button
                 key={interest}
                 onClick={() => toggleInterest(interest)}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${
-                  isSelected
-                    ? 'bg-rose text-white border-rose'
-                    : 'bg-white text-textMain border-gray-200 hover:border-rose-light'
+                className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all touch-target ${
+                  isSelected ? 'bg-rose text-white border-rose' : 'bg-white text-textMain border-gray-200 hover:border-rose-light'
                 }`}
+                aria-pressed={isSelected}
               >
                 {interest}
                 {isSelected && <Check className="w-3.5 h-3.5 inline ml-1" />}
@@ -529,14 +413,12 @@ function PersonalityTab() {
         </div>
       </div>
 
-      {/* Languages */}
       <div>
-        <Input
-          label="Languages (comma-separated)"
-          placeholder="e.g., Sindhi, Hindi, English"
-          helperText="List the languages you speak"
-          onBlur={() => showToast.success('Saved')}
-        />
+        <Input label="Languages (comma-separated)" placeholder="e.g., Sindhi, Hindi, English" helperText="List the languages you speak" onBlur={() => showToast.success('Saved')} />
+      </div>
+
+      <div>
+        <Input label="Voice Intro URL" placeholder="Upload a voice introduction" helperText="Optional: add a short voice intro to your profile" onBlur={() => showToast.success('Saved')} />
       </div>
     </div>
   );
@@ -551,35 +433,26 @@ export default function EditProfilePage() {
     <AppShell>
       <div className="p-6">
         <div className="max-w-5xl mx-auto">
-          {/* Header */}
           <div className="flex items-center gap-4 mb-6">
-            <button
-              onClick={() => router.back()}
-              className="p-2 rounded-full hover:bg-gray-100 transition-colors"
-            >
+            <button onClick={() => router.back()} className="p-2 rounded-full hover:bg-gray-100 transition-colors touch-target" aria-label="Go back">
               <ArrowLeft className="w-5 h-5 text-charcoal" />
             </button>
             <h1 className="text-2xl font-bold text-charcoal">Edit Profile</h1>
           </div>
 
-          {/* Two-column layout: left = photos, right = tabbed form */}
           <div className="flex flex-col lg:flex-row gap-8">
             {/* Left Column - Photo Grid */}
             <div className="lg:w-96 shrink-0">
               <div className="bg-white rounded-2xl shadow-card p-6 sticky top-24">
                 <h2 className="font-semibold text-charcoal mb-4">Photos</h2>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                />
+                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" />
                 <div className="grid grid-cols-3 gap-3">
                   {Array.from({ length: 6 }).map((_, i) => (
                     <button
                       key={i}
                       onClick={() => fileInputRef.current?.click()}
-                      className="aspect-[3/4] rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 flex flex-col items-center justify-center hover:border-rose hover:bg-rose/5 transition-all"
+                      className="aspect-[3/4] rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 flex flex-col items-center justify-center hover:border-rose hover:bg-rose/5 transition-all touch-target"
+                      aria-label={i === 0 ? 'Upload main photo' : `Upload photo ${i + 1}`}
                     >
                       {i === 0 ? (
                         <>
@@ -604,19 +477,18 @@ export default function EditProfilePage() {
             {/* Right Column - Tabbed Form */}
             <div className="flex-1">
               <div className="bg-white rounded-2xl shadow-card overflow-hidden">
-                {/* Tab navigation */}
                 <Tabs
                   tabs={[
-                    { id: 'basics', label: 'Basics' },
-                    { id: 'sindhi', label: 'Sindhi' },
-                    { id: 'chatti', label: 'Chatti' },
-                    { id: 'personality', label: 'Me' },
+                    { id: 'basics', label: 'My Basics' },
+                    { id: 'sindhi', label: 'Sindhi Identity' },
+                    { id: 'chatti', label: 'My Chatti' },
+                    { id: 'culture', label: 'My Culture' },
+                    { id: 'personality', label: 'Personality' },
                   ]}
                   activeTab={activeTab}
                   onChange={setActiveTab}
                 />
 
-                {/* Tab content */}
                 <motion.div
                   key={activeTab}
                   initial={{ opacity: 0, y: 10 }}
@@ -626,6 +498,7 @@ export default function EditProfilePage() {
                   {activeTab === 'basics' && <BasicsTab />}
                   {activeTab === 'sindhi' && <SindhiTab />}
                   {activeTab === 'chatti' && <ChattiTab />}
+                  {activeTab === 'culture' && <CultureTab />}
                   {activeTab === 'personality' && <PersonalityTab />}
                 </motion.div>
               </div>

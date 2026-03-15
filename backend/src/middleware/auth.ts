@@ -2,18 +2,14 @@ import { Request, Response, NextFunction } from 'express';
 import { supabase } from '../config/supabase';
 import { redis } from '../config/redis';
 import { AppError } from '../utils/errors';
-import { AuthenticatedRequest, AuthUser, UserRow } from '../types';
+import { AuthenticatedRequest, AuthUser } from '../types';
 
-const LAST_ACTIVE_DEBOUNCE_MS = 5 * 60 * 1000; // 5 minutes
+const LAST_ACTIVE_DEBOUNCE_MS = 5 * 60 * 1000;
 
 /**
  * Authentication middleware.
- * - Extracts Bearer token from Authorization header
- * - Verifies the token with Supabase Auth
- * - Checks the Redis JWT blacklist
- * - Looks up the user in PostgreSQL by auth_id
- * - Attaches req.user with essential fields
- * - Debounced update of last_active_at
+ * Verifies Supabase JWT, checks Redis blacklist, loads user.
+ * NO plan/premium checks — every user is equal.
  */
 export async function authenticate(
   req: Request,
@@ -27,7 +23,6 @@ export async function authenticate(
   }
 
   const token = authHeader.slice(7);
-
   if (!token) {
     throw new AppError(401, 'Authorization token is empty', 'AUTH_EMPTY');
   }
@@ -43,15 +38,20 @@ export async function authenticate(
   }
 
   // Check Redis blacklist
-  const blacklisted = await redis.get(`jwt_blacklist:${authUser.id}`);
-  if (blacklisted) {
-    throw new AppError(401, 'Token has been revoked', 'AUTH_REVOKED');
+  try {
+    const blacklisted = await redis.get(`jwt_blacklist:${authUser.id}`);
+    if (blacklisted) {
+      throw new AppError(401, 'Token has been revoked', 'AUTH_REVOKED');
+    }
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    // Redis down — continue without blacklist check
   }
 
   // Lookup user in PostgreSQL
   const { data: dbUser, error: dbError } = await supabase
     .from('users')
-    .select('id, auth_id, plan, plan_expires, account_type, phone, is_active, is_suspended, is_banned')
+    .select('id, auth_id, phone, is_banned, is_hidden')
     .eq('auth_id', authUser.id)
     .single();
 
@@ -59,48 +59,53 @@ export async function authenticate(
     throw new AppError(404, 'User account not found', 'USER_NOT_FOUND');
   }
 
-  const user = dbUser as UserRow & { plan_expires: string | null };
-
-  if (!user.is_active) {
-    throw new AppError(403, 'Account is deactivated', 'ACCOUNT_INACTIVE');
-  }
-
-  if (user.is_banned) {
+  if (dbUser.is_banned) {
     throw new AppError(403, 'Account is banned', 'ACCOUNT_BANNED');
   }
 
-  if (user.is_suspended) {
-    throw new AppError(403, 'Account is suspended', 'ACCOUNT_SUSPENDED');
+  // Check suspension from user_safety
+  const { data: safety } = await supabase
+    .from('user_safety')
+    .select('is_suspended, suspension_until, is_permanently_banned')
+    .eq('user_id', dbUser.id)
+    .single();
+
+  if (safety?.is_permanently_banned) {
+    throw new AppError(403, 'Account is permanently banned', 'ACCOUNT_BANNED');
+  }
+
+  if (safety?.is_suspended && safety.suspension_until) {
+    const suspendedUntil = new Date(safety.suspension_until);
+    if (suspendedUntil > new Date()) {
+      throw new AppError(403, `Account is suspended until ${suspendedUntil.toISOString()}`, 'ACCOUNT_SUSPENDED');
+    }
   }
 
   // Attach user to request
   const reqUser: AuthUser = {
-    id: user.id,
-    authId: user.auth_id,
-    plan: user.plan,
-    accountType: user.account_type,
-    phone: user.phone,
+    id: dbUser.id,
+    authId: dbUser.auth_id,
+    phone: dbUser.phone,
   };
 
   (req as AuthenticatedRequest).user = reqUser;
 
-  // Debounced last_active_at update
-  const lastActiveKey = `last_active:${user.id}`;
-  const lastUpdate = await redis.get(lastActiveKey);
-  const now = Date.now();
+  // Debounced last_active update
+  try {
+    const lastActiveKey = `last_active:${dbUser.id}`;
+    const lastUpdate = await redis.get(lastActiveKey);
+    const now = Date.now();
 
-  if (!lastUpdate || now - parseInt(lastUpdate, 10) > LAST_ACTIVE_DEBOUNCE_MS) {
-    // Fire and forget - don't block the request
-    redis.set(lastActiveKey, now.toString(), 'EX', 600).catch(() => {});
-    supabase
-      .from('users')
-      .update({ last_active_at: new Date().toISOString() })
-      .eq('id', user.id)
-      .then(({ error: updateErr }) => {
-        if (updateErr) {
-          console.error('[Auth] Failed to update last_active_at:', updateErr.message);
-        }
-      });
+    if (!lastUpdate || now - parseInt(lastUpdate, 10) > LAST_ACTIVE_DEBOUNCE_MS) {
+      redis.set(lastActiveKey, now.toString(), 'EX', 600).catch(() => {});
+      supabase
+        .from('users')
+        .update({ last_active: new Date().toISOString() })
+        .eq('id', dbUser.id)
+        .then(() => {});
+    }
+  } catch {
+    // Non-critical
   }
 
   next();
@@ -108,6 +113,7 @@ export async function authenticate(
 
 /**
  * Admin-only middleware. Must be used after authenticate.
+ * Checks for admin role via a simple admin_users check or user metadata.
  */
 export async function requireAdmin(
   req: Request,
@@ -116,23 +122,16 @@ export async function requireAdmin(
 ): Promise<void> {
   const user = (req as AuthenticatedRequest).user;
 
-  const { data: adminCheck } = await supabase
-    .from('users')
-    .select('account_type')
-    .eq('id', user.id)
-    .single();
+  // Check Supabase auth metadata for admin role
+  const { data: authData } = await supabase.auth.admin.getUserById(user.authId);
 
-  // Check for admin role in a separate admin table or special account type
-  const { data: adminRole } = await supabase
-    .from('admin_roles')
-    .select('role')
-    .eq('user_id', user.id)
-    .single();
+  const isAdmin = authData?.user?.app_metadata?.role === 'admin';
 
-  if (!adminRole) {
+  if (!isAdmin) {
     throw new AppError(403, 'Admin access required', 'ADMIN_REQUIRED');
   }
 
+  user.role = 'admin';
   next();
 }
 

@@ -1,9 +1,53 @@
+# Dependencies
 node_modules/
+
+# Build outputs
 .next/
 dist/
+build/
+out/
+
+# Environment
 .env
 .env.local
+.env.production.local
+.env.development.local
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Logs
 *.log
+npm-debug.log*
+
+# Testing
 coverage/
+
+# Turborepo
 .turbo/
+
+# Flutter
+mobile/.dart_tool/
+mobile/build/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.packages
+mobile/ios/Pods/
+mobile/ios/.symlinks/
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/*.iml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Secrets — never commit
+*.pem
+*.key
+google-services.json
+GoogleService-Info.plist
+firebase_service_account.json

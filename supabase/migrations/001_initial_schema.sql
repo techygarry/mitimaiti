@@ -1,47 +1,34 @@
 -- ============================================================================
--- MitiMaiti - Initial Schema Migration
--- Sindhi Community Matrimony / Dating App
+-- MitiMaiti - Complete Database Schema
+-- Sindhi Community Dating App — 100% Free, No Premium
 -- ============================================================================
 
--- ---------------------------------------------------------------------------
--- Extensions
--- ---------------------------------------------------------------------------
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ---------------------------------------------------------------------------
 -- USERS TABLE (master record)
+-- NO subscription/plan fields. Every user is equal.
 -- ---------------------------------------------------------------------------
 CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   auth_id UUID UNIQUE,
   phone TEXT UNIQUE NOT NULL,
-  account_type TEXT DEFAULT 'user' CHECK (account_type IN ('user','family')),
   first_name TEXT,
-  birthday DATE,
-  gender TEXT CHECK (gender IN ('m','w','nb')),
+  dob DATE,
+  gender TEXT CHECK (gender IN ('man','woman','non-binary')),
   city TEXT,
-  country TEXT,
   intent TEXT CHECK (intent IN ('casual','open','marriage')),
   show_me TEXT CHECK (show_me IN ('men','women','everyone')),
-  bio TEXT CHECK (char_length(bio) <= 500),
   is_verified BOOLEAN DEFAULT false,
   verified_at TIMESTAMPTZ,
-  verification_expires TIMESTAMPTZ,
-  plan TEXT DEFAULT 'free' CHECK (plan IN ('free','premium')),
-  plan_expires TIMESTAMPTZ,
-  plan_auto_renew BOOLEAN DEFAULT false,
-  plan_via TEXT,
-  plan_region TEXT,
   profile_completeness INT DEFAULT 0,
-  last_active_at TIMESTAMPTZ DEFAULT now(),
+  last_active TIMESTAMPTZ DEFAULT now(),
   needs_onboarding BOOLEAN DEFAULT true,
   onboarding_step INT DEFAULT 0,
   is_banned BOOLEAN DEFAULT false,
   is_hidden BOOLEAN DEFAULT false,
   is_snoozed BOOLEAN DEFAULT false,
-  show_in_discovery BOOLEAN DEFAULT true,
-  incognito BOOLEAN DEFAULT false,
-  lang TEXT DEFAULT 'en' CHECK (lang IN ('en','hi','sd')),
+  snooze_until TIMESTAMPTZ,
   daily_prompt_answer TEXT,
   daily_prompt_answered_at TIMESTAMPTZ,
   deletion_requested BOOLEAN DEFAULT false,
@@ -50,29 +37,30 @@ CREATE TABLE users (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE INDEX idx_users_discovery ON users (gender, city, birthday, plan)
-  WHERE is_banned = false AND show_in_discovery = true AND is_hidden = false AND is_snoozed = false;
-CREATE INDEX idx_users_last_active ON users (last_active_at DESC);
+CREATE INDEX idx_users_discovery ON users (gender, city, dob)
+  WHERE is_banned = false AND is_hidden = false AND is_snoozed = false;
+CREATE INDEX idx_users_last_active ON users (last_active DESC);
 CREATE INDEX idx_users_phone ON users (phone);
 CREATE INDEX idx_users_auth ON users (auth_id);
 
 -- ---------------------------------------------------------------------------
--- PHOTOS
+-- PHOTOS (3 sizes: 200/600/1200)
 -- ---------------------------------------------------------------------------
 CREATE TABLE photos (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  url_full TEXT NOT NULL,
-  url_card TEXT NOT NULL,
-  url_thumb TEXT NOT NULL,
-  position INT NOT NULL,
+  url_200 TEXT NOT NULL,
+  url_600 TEXT NOT NULL,
+  url_1200 TEXT NOT NULL,
+  "order" INT NOT NULL DEFAULT 0,
+  is_primary BOOLEAN DEFAULT false,
   is_video BOOLEAN DEFAULT false,
   video_duration_ms INT,
-  moderation_status TEXT DEFAULT 'approved',
+  moderated_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE INDEX idx_photos_user ON photos (user_id, position);
+CREATE INDEX idx_photos_user ON photos (user_id, "order");
 
 -- ---------------------------------------------------------------------------
 -- FCM TOKENS
@@ -91,13 +79,13 @@ CREATE TABLE user_fcm_tokens (
 -- ---------------------------------------------------------------------------
 CREATE TABLE user_sindhi (
   user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-  fluency TEXT,
+  fluency TEXT CHECK (fluency IN ('native','fluent','basic','none')),
   religion TEXT,
   gotra TEXT,
-  generation TEXT,
-  dietary TEXT,
-  festivals TEXT[],
-  family_involvement TEXT,
+  generation TEXT CHECK (generation IN ('1st','2nd','3rd','4th+')),
+  dietary TEXT CHECK (dietary IN ('veg','non-veg','vegan','jain')),
+  festivals TEXT[] DEFAULT '{}',
+  family_involvement TEXT CHECK (family_involvement IN ('very','moderate','independent')),
   fav_dish TEXT
 );
 
@@ -107,12 +95,12 @@ CREATE TABLE user_sindhi (
 CREATE TABLE user_chatti (
   user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   chatti_name TEXT,
-  dob DATE,
-  time_of_birth TEXT,
-  place_of_birth TEXT,
+  chatti_dob DATE,
+  chatti_time TEXT,
+  chatti_place TEXT,
   nakshatra TEXT,
   rashi TEXT,
-  chatti_image_url TEXT
+  image_url TEXT
 );
 
 -- ---------------------------------------------------------------------------
@@ -135,6 +123,7 @@ CREATE TABLE user_basics (
 -- ---------------------------------------------------------------------------
 CREATE TABLE user_personality (
   user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  about_me TEXT CHECK (char_length(about_me) <= 500),
   prompts JSONB DEFAULT '[]',
   interests TEXT[] DEFAULT '{}',
   voice_intro_url TEXT,
@@ -142,19 +131,16 @@ CREATE TABLE user_personality (
 );
 
 -- ---------------------------------------------------------------------------
--- SETTINGS
+-- SETTINGS (16 discovery filters + notification toggles)
 -- ---------------------------------------------------------------------------
 CREATE TABLE user_settings (
   user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   show_in_discovery BOOLEAN DEFAULT true,
-  snooze_on BOOLEAN DEFAULT false,
-  snooze_duration TEXT,
-  snooze_until TIMESTAMPTZ,
-  incognito BOOLEAN DEFAULT false,
-  theme TEXT DEFAULT 'sys' CHECK (theme IN ('sys','light','dark')),
-  disc_city TEXT,
-  disc_passport TEXT,
-  disc_passport_expires TIMESTAMPTZ,
+  incognito_mode BOOLEAN DEFAULT false,
+  passport_city TEXT,
+  passport_expires TIMESTAMPTZ,
+  theme TEXT DEFAULT 'system' CHECK (theme IN ('system','light','dark')),
+  -- Discovery filters
   disc_age_min INT DEFAULT 18,
   disc_age_max INT DEFAULT 60,
   disc_intent TEXT[],
@@ -171,116 +157,108 @@ CREATE TABLE user_settings (
   disc_settling TEXT[],
   disc_exercise TEXT[],
   disc_dietary TEXT[],
-  disc_kundli_min INT,
-  notif_push BOOLEAN DEFAULT true,
-  notif_matches BOOLEAN DEFAULT true,
+  disc_kundli_min INT DEFAULT 0,
+  -- Notification toggles (18 types)
   notif_likes BOOLEAN DEFAULT true,
+  notif_matches BOOLEAN DEFAULT true,
   notif_messages BOOLEAN DEFAULT true,
+  notif_voice_messages BOOLEAN DEFAULT true,
+  notif_photo_messages BOOLEAN DEFAULT true,
+  notif_expiry_warning BOOLEAN DEFAULT true,
+  notif_match_dissolved BOOLEAN DEFAULT true,
   notif_calls BOOLEAN DEFAULT true,
-  notif_family BOOLEAN DEFAULT true,
-  notif_tips BOOLEAN DEFAULT false,
-  notif_email BOOLEAN DEFAULT false,
+  notif_family_joined BOOLEAN DEFAULT true,
+  notif_family_suggestion BOOLEAN DEFAULT true,
+  notif_suggestion_reviewed BOOLEAN DEFAULT true,
+  notif_access_revoked BOOLEAN DEFAULT true,
+  notif_verified BOOLEAN DEFAULT true,
+  notif_snooze_ended BOOLEAN DEFAULT true,
+  notif_deletion_reminder BOOLEAN DEFAULT true,
+  notif_profile_nudge BOOLEAN DEFAULT true,
+  notif_strike_issued BOOLEAN DEFAULT true,
+  notif_appeal_resolved BOOLEAN DEFAULT true,
   timezone TEXT
 );
 
 -- ---------------------------------------------------------------------------
--- PRIVILEGES
+-- PRIVILEGES — NO premium fields. 50 likes/day, 10 rewinds/day.
 -- ---------------------------------------------------------------------------
 CREATE TABLE user_privileges (
   user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   likes_used_today INT DEFAULT 0,
-  super_likes_left INT DEFAULT 1,
-  comments_left INT DEFAULT 1,
-  super_exhausted_at TIMESTAMPTZ,
-  comment_exhausted_at TIMESTAMPTZ,
   rewinds_used_today INT DEFAULT 0,
-  boost_available INT DEFAULT 0,
-  boost_expires_at TIMESTAMPTZ,
-  boost_week_reset TIMESTAMPTZ
+  last_reset_date DATE DEFAULT CURRENT_DATE
+);
+
+-- ---------------------------------------------------------------------------
+-- USER SAFETY
+-- ---------------------------------------------------------------------------
+CREATE TABLE user_safety (
+  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  strike_count INT DEFAULT 0,
+  last_strike_at TIMESTAMPTZ,
+  is_permanently_banned BOOLEAN DEFAULT false,
+  is_suspended BOOLEAN DEFAULT false,
+  suspension_until TIMESTAMPTZ
 );
 
 -- ---------------------------------------------------------------------------
 -- PAIR SCORES (Cultural + Kundli)
 -- ---------------------------------------------------------------------------
 CREATE TABLE pair_scores (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_a_id UUID REFERENCES users(id) ON DELETE CASCADE,
   user_b_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  cultural_total INT,
-  family_score INT,
-  language_score INT,
-  festival_score INT,
-  food_score INT,
-  diaspora_score INT,
-  intent_score INT,
-  badge TEXT CHECK (badge IN ('gold','green','orange','none')),
-  kundli_total INT,
-  kundli_tier TEXT,
-  varna INT,
-  vashya INT,
-  tara INT,
-  yoni INT,
-  graha INT,
-  gana INT,
-  bhakoot INT,
-  nadi INT,
+  cultural_score INT,
+  cultural_breakdown JSONB,
+  kundli_score INT,
+  kundli_breakdown JSONB,
   common_interests INT DEFAULT 0,
-  computed_at TIMESTAMPTZ DEFAULT now(),
-  expires_at TIMESTAMPTZ
+  calculated_at TIMESTAMPTZ DEFAULT now(),
+  PRIMARY KEY (user_a_id, user_b_id)
 );
 
-CREATE UNIQUE INDEX idx_pair_canonical ON pair_scores (user_a_id, user_b_id);
-
 -- ---------------------------------------------------------------------------
--- LIKES
+-- LIKES — only 'like' or 'pass'. NO super/comment.
 -- ---------------------------------------------------------------------------
 CREATE TABLE likes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   from_user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   to_user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  type TEXT NOT NULL CHECK (type IN ('like','super','pass','comment')),
-  comment_text TEXT CHECK (char_length(comment_text) <= 150),
-  comment_on TEXT,
-  from_name TEXT,
-  from_thumb TEXT,
-  from_city TEXT,
-  from_age INT,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  expires_at TIMESTAMPTZ
+  type TEXT NOT NULL CHECK (type IN ('like','pass')),
+  created_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE UNIQUE INDEX idx_likes_unique ON likes (from_user_id, to_user_id) WHERE type != 'pass';
-CREATE INDEX idx_likes_received ON likes (to_user_id, created_at DESC) WHERE type != 'pass';
+CREATE UNIQUE INDEX idx_likes_unique ON likes (from_user_id, to_user_id);
+CREATE INDEX idx_likes_received ON likes (to_user_id, created_at DESC) WHERE type = 'like';
 
 -- ---------------------------------------------------------------------------
--- MATCHES
+-- MATCHES — Respect-First mechanics
 -- ---------------------------------------------------------------------------
 CREATE TABLE matches (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_a_id UUID REFERENCES users(id),
   user_b_id UUID REFERENCES users(id),
-  user_a_name TEXT,
-  user_a_thumb TEXT,
-  user_b_name TEXT,
-  user_b_thumb TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  expires_at TIMESTAMPTZ,
   first_msg_by UUID,
   first_msg_at TIMESTAMPTZ,
-  reply_deadline TIMESTAMPTZ,
-  deadline_extended BOOLEAN DEFAULT false,
+  first_msg_locked BOOLEAN DEFAULT false,
+  is_dissolved BOOLEAN DEFAULT false,
+  dissolved_reason TEXT,
+  extended_once BOOLEAN DEFAULT false,
   calls_unlocked BOOLEAN DEFAULT false,
   last_msg_text TEXT,
   last_msg_at TIMESTAMPTZ,
   last_msg_by UUID,
   unread_a INT DEFAULT 0,
-  unread_b INT DEFAULT 0,
-  status TEXT DEFAULT 'active' CHECK (status IN ('active','expired','unmatched','blocked')),
-  ended_reason TEXT,
-  created_at TIMESTAMPTZ DEFAULT now()
+  unread_b INT DEFAULT 0
 );
 
 CREATE UNIQUE INDEX idx_matches_pair ON matches (user_a_id, user_b_id);
-CREATE INDEX idx_matches_user ON matches (user_a_id, status, last_msg_at DESC);
-CREATE INDEX idx_matches_expiry ON matches (reply_deadline, status) WHERE status = 'active';
+CREATE INDEX idx_matches_user_a ON matches (user_a_id) WHERE is_dissolved = false;
+CREATE INDEX idx_matches_user_b ON matches (user_b_id) WHERE is_dissolved = false;
+CREATE INDEX idx_matches_expiry ON matches (first_msg_at)
+  WHERE first_msg_locked = true AND is_dissolved = false;
 
 -- ---------------------------------------------------------------------------
 -- MESSAGES
@@ -289,26 +267,15 @@ CREATE TABLE messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   match_id UUID REFERENCES matches(id) ON DELETE CASCADE,
   sender_id UUID REFERENCES users(id),
-  type TEXT NOT NULL CHECK (type IN ('text','photo','voice','gif','icebreaker')),
-  body TEXT,
-  voice_duration_ms INT,
-  is_screened BOOLEAN DEFAULT false,
-  is_blocked BOOLEAN DEFAULT false,
-  is_flagged BOOLEAN DEFAULT false,
-  read_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT now()
+  content TEXT,
+  media_url TEXT,
+  msg_type TEXT NOT NULL CHECK (msg_type IN ('text','photo','voice','gif','icebreaker')),
+  is_ai_blocked BOOLEAN DEFAULT false,
+  sent_at TIMESTAMPTZ DEFAULT now(),
+  read_at TIMESTAMPTZ
 );
 
-CREATE INDEX idx_messages_match ON messages (match_id, created_at);
-
--- ---------------------------------------------------------------------------
--- ICEBREAKERS
--- ---------------------------------------------------------------------------
-CREATE TABLE icebreakers (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  category TEXT CHECK (category IN ('sindhi','general')),
-  question TEXT NOT NULL
-);
+CREATE INDEX idx_messages_match ON messages (match_id, sent_at);
 
 -- ---------------------------------------------------------------------------
 -- FAMILY ACCESS
@@ -316,32 +283,28 @@ CREATE TABLE icebreakers (
 CREATE TABLE family_access (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  family_member_id UUID REFERENCES users(id),
+  family_user_id UUID REFERENCES users(id),
   invite_code TEXT UNIQUE,
   invite_expires_at TIMESTAMPTZ,
-  relationship TEXT CHECK (relationship IN ('mom','dad','sibling','grandparent','uncle_aunt','other')),
-  status TEXT DEFAULT 'pending' CHECK (status IN ('pending','active','paused','revoked')),
-  perm_photos BOOLEAN DEFAULT true,
-  perm_bio BOOLEAN DEFAULT true,
-  perm_education BOOLEAN DEFAULT true,
-  perm_chatti BOOLEAN DEFAULT true,
-  perm_kundli BOOLEAN DEFAULT true,
-  perm_prompts BOOLEAN DEFAULT true,
-  perm_voice BOOLEAN DEFAULT true,
-  perm_location BOOLEAN DEFAULT true,
-  suggestions_today INT DEFAULT 0,
+  role_tag TEXT CHECK (role_tag IN ('mom','dad','sibling','grandparent','uncle_aunt','other')),
+  permissions JSONB DEFAULT '{"photos":true,"bio":true,"education":true,"chatti":true,"kundli":true,"prompts":true,"voice":true,"cultural_badges":true}',
+  joined_at TIMESTAMPTZ,
+  is_revoked BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT now()
 );
+
+CREATE INDEX idx_family_user ON family_access (user_id) WHERE is_revoked = false;
 
 -- ---------------------------------------------------------------------------
 -- FAMILY SUGGESTIONS
 -- ---------------------------------------------------------------------------
 CREATE TABLE family_suggestions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  family_access_id UUID REFERENCES family_access(id) ON DELETE CASCADE,
+  family_user_id UUID REFERENCES users(id),
+  target_user_id UUID REFERENCES users(id),
   suggested_user_id UUID REFERENCES users(id),
   note TEXT CHECK (char_length(note) <= 200),
-  user_action TEXT CHECK (user_action IN ('liked','passed','saved')),
+  reviewed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -354,14 +317,16 @@ CREATE TABLE reports (
   reported_id UUID REFERENCES users(id),
   reason TEXT CHECK (reason IN ('fake','harassment','spam','photos','underage','safety')),
   details TEXT,
-  source TEXT,
-  priority TEXT DEFAULT 'P2',
-  status TEXT DEFAULT 'pending',
-  admin_action TEXT,
+  priority TEXT DEFAULT 'P2' CHECK (priority IN ('P0','P1','P2')),
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending','reviewing','resolved')),
+  admin_action TEXT CHECK (admin_action IN ('dismiss','warn','suspend','ban')),
   admin_id UUID,
+  admin_note TEXT,
   reviewed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT now()
 );
+
+CREATE INDEX idx_reports_pending ON reports (priority, created_at) WHERE status = 'pending';
 
 -- ---------------------------------------------------------------------------
 -- STRIKES
@@ -369,37 +334,52 @@ CREATE TABLE reports (
 CREATE TABLE strikes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES users(id),
-  strike_number INT,
-  reason TEXT,
-  action TEXT,
-  ban_until TIMESTAMPTZ,
+  number INT CHECK (number IN (1, 2, 3)),
+  reason TEXT NOT NULL,
+  issued_by UUID,
+  is_appealed BOOLEAN DEFAULT false,
   appeal_text TEXT,
-  appeal_status TEXT,
   appeal_admin_id UUID,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  expires_at TIMESTAMPTZ
+  appeal_status TEXT CHECK (appeal_status IN ('pending','approved','denied')),
+  appeal_resolved_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now()
 );
+
+CREATE INDEX idx_strikes_user ON strikes (user_id, created_at DESC);
 
 -- ---------------------------------------------------------------------------
 -- BLOCKED USERS
 -- ---------------------------------------------------------------------------
 CREATE TABLE blocked_users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   blocker_id UUID REFERENCES users(id),
   blocked_id UUID REFERENCES users(id),
   created_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(blocker_id, blocked_id)
+  PRIMARY KEY (blocker_id, blocked_id)
 );
 
 -- ---------------------------------------------------------------------------
 -- BLOCKED PHONES
 -- ---------------------------------------------------------------------------
 CREATE TABLE blocked_phones (
+  phone TEXT PRIMARY KEY,
+  reason TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ---------------------------------------------------------------------------
+-- AI FLAGS
+-- ---------------------------------------------------------------------------
+CREATE TABLE ai_flags (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES users(id),
-  phone_hash TEXT,
-  UNIQUE(user_id, phone_hash)
+  content_type TEXT CHECK (content_type IN ('photo','message','profile_text')),
+  flag_reason TEXT,
+  score DECIMAL,
+  created_at TIMESTAMPTZ DEFAULT now()
 );
+
+CREATE INDEX idx_ai_flags_user ON ai_flags (user_id, created_at DESC);
 
 -- ---------------------------------------------------------------------------
 -- NOTIFICATION LOG
@@ -407,14 +387,10 @@ CREATE TABLE blocked_phones (
 CREATE TABLE notif_log (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES users(id),
-  type TEXT,
-  channel TEXT,
-  title TEXT,
-  body TEXT,
+  type TEXT NOT NULL,
   data JSONB,
   sent_at TIMESTAMPTZ DEFAULT now(),
-  opened BOOLEAN DEFAULT false,
-  opened_at TIMESTAMPTZ
+  fcm_token TEXT
 );
 
 CREATE INDEX idx_notif_user ON notif_log (user_id, sent_at DESC);
@@ -425,26 +401,38 @@ CREATE INDEX idx_notif_user ON notif_log (user_id, sent_at DESC);
 CREATE TABLE daily_prompts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   question TEXT NOT NULL,
-  is_active BOOLEAN DEFAULT false,
-  set_by TEXT DEFAULT 'system',
-  set_at TIMESTAMPTZ DEFAULT now()
+  active_date DATE,
+  is_override BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT now()
 );
+
+CREATE INDEX idx_daily_prompts_date ON daily_prompts (active_date);
 
 -- ---------------------------------------------------------------------------
 -- SEASONAL EVENTS
 -- ---------------------------------------------------------------------------
 CREATE TABLE seasonal_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT,
+  name TEXT NOT NULL,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
   banner_url TEXT,
-  special_prompts TEXT[],
-  start_date DATE,
-  end_date DATE
+  prompt_override TEXT,
+  is_active BOOLEAN DEFAULT true
 );
 
+-- ---------------------------------------------------------------------------
+-- ICEBREAKERS
+-- ---------------------------------------------------------------------------
+CREATE TABLE icebreakers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  text TEXT NOT NULL,
+  type TEXT CHECK (type IN ('sindhi','general')),
+  is_active BOOLEAN DEFAULT true
+);
 
 -- ===========================================================================
--- TRIGGER: auto-update updated_at on row modification
+-- TRIGGER: auto-update updated_at
 -- ===========================================================================
 CREATE OR REPLACE FUNCTION trigger_set_updated_at()
 RETURNS TRIGGER AS $$
@@ -459,68 +447,102 @@ CREATE TRIGGER set_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION trigger_set_updated_at();
 
+-- ===========================================================================
+-- ROW LEVEL SECURITY
+-- ===========================================================================
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE photos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_sindhi ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_chatti ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_basics ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_personality ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_privileges ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_safety ENABLE ROW LEVEL SECURITY;
+ALTER TABLE likes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE matches ENABLE ROW LEVEL SECURITY;
+ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE family_access ENABLE ROW LEVEL SECURITY;
+ALTER TABLE family_suggestions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE blocked_users ENABLE ROW LEVEL SECURITY;
+
+-- Service role bypass (backend uses service role key)
+CREATE POLICY "Service role full access" ON users FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access" ON photos FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access" ON user_sindhi FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access" ON user_chatti FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access" ON user_basics FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access" ON user_personality FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access" ON user_settings FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access" ON user_privileges FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access" ON user_safety FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access" ON likes FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access" ON matches FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access" ON messages FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access" ON family_access FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access" ON family_suggestions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access" ON reports FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access" ON blocked_users FOR ALL USING (true) WITH CHECK (true);
 
 -- ===========================================================================
 -- SEED DATA: Icebreakers (50 Sindhi + 50 General)
 -- ===========================================================================
-
--- 50 Sindhi icebreakers
-INSERT INTO icebreakers (category, question) VALUES
+INSERT INTO icebreakers (type, text) VALUES
 ('sindhi', 'What is your favourite Sindhi dish your mom or nani makes?'),
 ('sindhi', 'Do you speak Sindhi at home, or is it more of a "understand but reply in Hindi/English" situation?'),
-('sindhi', 'Cheti Chand or Diwali -- which one does your family go bigger on?'),
+('sindhi', 'Cheti Chand or Diwali — which one does your family go bigger on?'),
 ('sindhi', 'What is one Sindhi tradition you would want to keep alive in your own family?'),
-('sindhi', 'Sai bhaji or dal pakwan -- pick one for the rest of your life.'),
+('sindhi', 'Sai bhaji or dal pakwan — pick one for the rest of your life.'),
 ('sindhi', 'Have you ever attended a Sindhi panchayat or community event? How was it?'),
 ('sindhi', 'What is your gotra, and does your family actually care about matching it?'),
 ('sindhi', 'Do you know any Sindhi jokes or shayari? Share your best one!'),
-('sindhi', 'Papad, paapri, or pickle -- which Sindhi snack can you not live without?'),
+('sindhi', 'Papad, paapri, or pickle — which Sindhi snack can you not live without?'),
 ('sindhi', 'How involved is your family in your marriage decisions, on a scale of 1-10?'),
 ('sindhi', 'Do you celebrate Jhulelal Jayanti? What does it mean to you?'),
-('sindhi', 'What is your favourite Sindhi sweet -- singhar ji mithai or gur wari tikki?'),
+('sindhi', 'What is your favourite Sindhi sweet — singhar ji mithai or gur wari tikki?'),
 ('sindhi', 'Has your family kept the tradition of a morning Jhulelal prayer?'),
 ('sindhi', 'If you could live in any Sindhi-heavy city, which would you pick and why?'),
 ('sindhi', 'What is the most "Sindhi uncle" or "Sindhi aunty" thing your parents do?'),
-('sindhi', 'Koki for breakfast -- yay or nay?'),
+('sindhi', 'Koki for breakfast — yay or nay?'),
 ('sindhi', 'What is the funniest misunderstanding someone had about Sindhis?'),
 ('sindhi', 'Do you observe Teejri? How does your family celebrate it?'),
 ('sindhi', 'What is the one thing about Sindhi culture you are most proud of?'),
 ('sindhi', 'Have you ever been to Sindh or thought about visiting the ancestral homeland?'),
-('sindhi', 'Sindhi kadhi or regular kadhi -- which wins?'),
+('sindhi', 'Sindhi kadhi or regular kadhi — which wins?'),
 ('sindhi', 'How important is it to you that your partner speaks or understands Sindhi?'),
 ('sindhi', 'What Sindhi value did your grandparents pass down that stuck with you?'),
 ('sindhi', 'Do you know the story of Jhulelal? Can you tell it in 3 sentences?'),
 ('sindhi', 'What is your take on the "Sindhis are great businesspeople" stereotype?'),
 ('sindhi', 'Have you been to Ulhasnagar? What was that experience like?'),
 ('sindhi', 'If you had to name a Sindhi role model, who comes to mind?'),
-('sindhi', 'Thadal or solkadhi -- which is your summer drink?'),
+('sindhi', 'Thadal or solkadhi — which is your summer drink?'),
 ('sindhi', 'What Sindhi festival do you think deserves more hype?'),
 ('sindhi', 'Does your family still do Bahraana Sahib readings at home?'),
 ('sindhi', 'What is the most elaborate Sindhi wedding you have ever attended?'),
 ('sindhi', 'How would you describe the Sindhi community in your city?'),
 ('sindhi', 'Do you prefer Sindhi music or Bollywood? Any favourite Sindhi artists?'),
 ('sindhi', 'What is one Sindhi word that has no translation in English?'),
-('sindhi', 'Have you ever worn traditional Sindhi attire -- ajrak or topi?'),
+('sindhi', 'Have you ever worn traditional Sindhi attire — ajrak or topi?'),
 ('sindhi', 'What role does religion play in your daily life?'),
 ('sindhi', 'What is your family''s partition story? Has it been passed down?'),
-('sindhi', 'Besan jo lolo or mitho lolo -- what is your pick?'),
+('sindhi', 'Besan jo lolo or mitho lolo — what is your pick?'),
 ('sindhi', 'How do you feel about kundli matching for marriage?'),
 ('sindhi', 'What is the best business advice you got from a Sindhi elder?'),
 ('sindhi', 'If you could bring back one lost Sindhi tradition, what would it be?'),
 ('sindhi', 'Do you know how to read or write in Sindhi script?'),
 ('sindhi', 'What is the most Sindhi thing about your household?'),
 ('sindhi', 'Have you joined any Sindhi youth groups or online communities?'),
-('sindhi', 'Seyal mani or seyal pata -- which is comfort food for you?'),
+('sindhi', 'Seyal mani or seyal pata — which is comfort food for you?'),
 ('sindhi', 'Would you want a traditional Sindhi wedding or a modern one?'),
 ('sindhi', 'What Sindhi dish would you cook to impress someone?'),
 ('sindhi', 'How do you stay connected to Sindhi culture while living abroad or away from family?'),
 ('sindhi', 'What is the one thing you would tell someone who knows nothing about Sindhis?'),
 ('sindhi', 'Do you think the Sindhi community is getting better at preserving its language and culture?');
 
--- 50 General icebreakers
-INSERT INTO icebreakers (category, question) VALUES
+INSERT INTO icebreakers (type, text) VALUES
 ('general', 'What is something you are passionate about that most people do not know?'),
-('general', 'If you could have dinner with anyone -- alive or dead -- who would it be?'),
+('general', 'If you could have dinner with anyone — alive or dead — who would it be?'),
 ('general', 'What does a perfect Sunday look like for you?'),
 ('general', 'What is the last show you binged and would recommend?'),
 ('general', 'Coffee or chai? And how do you take it?'),
@@ -569,7 +591,6 @@ INSERT INTO icebreakers (category, question) VALUES
 ('general', 'What is the best concert or live event you have been to?'),
 ('general', 'What is your unpopular opinion?'),
 ('general', 'If you could describe yourself in three words, what would they be?');
-
 
 -- ===========================================================================
 -- SEED DATA: Daily Prompts (110 questions)
@@ -640,7 +661,7 @@ INSERT INTO daily_prompts (question) VALUES
 ('What is something you believe in that you cannot prove?'),
 ('What is one habit that has made your life better?'),
 ('What is the most spontaneous decision you have ever made?'),
-('What do you value more -- honesty or kindness?'),
+('What do you value more — honesty or kindness?'),
 ('What is a tradition you have created for yourself?'),
 ('What is a compliment you would love to receive?'),
 ('What does a perfect lazy day look like to you?'),
@@ -660,7 +681,7 @@ INSERT INTO daily_prompts (question) VALUES
 ('What is a fear that still holds you back?'),
 ('What was your biggest "aha" moment?'),
 ('What is one thing you would tell someone going through a heartbreak?'),
-('How do you express love -- words, actions, gifts, time, or touch?'),
+('How do you express love — words, actions, gifts, time, or touch?'),
 ('What is the last thing you did that scared you?'),
 ('What is one thing about your culture that you want to share with the world?'),
 ('What makes you different from most people?'),
@@ -687,3 +708,14 @@ INSERT INTO daily_prompts (question) VALUES
 ('What would a perfect year look like for you?'),
 ('What is one question you wish this prompt had asked?'),
 ('What does growing old together look like in your imagination?');
+
+-- ===========================================================================
+-- SEED DATA: Seasonal Events
+-- ===========================================================================
+INSERT INTO seasonal_events (name, start_date, end_date, banner_url) VALUES
+('Cheti Chand', '2026-03-28', '2026-03-29', '/banners/cheti-chand.jpg'),
+('Holi', '2026-03-17', '2026-03-18', '/banners/holi.jpg'),
+('Eid ul-Fitr', '2026-03-21', '2026-03-22', '/banners/eid.jpg'),
+('Diwali', '2026-10-20', '2026-10-25', '/banners/diwali.jpg'),
+('Thadri', '2026-09-15', '2026-09-16', '/banners/thadri.jpg'),
+('Lal Loi', '2027-01-13', '2027-01-14', '/banners/lal-loi.jpg');

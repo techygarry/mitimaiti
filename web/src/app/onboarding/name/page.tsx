@@ -8,7 +8,7 @@ export default function NamePage() {
   const router = useRouter();
   const [name, setName] = useState('');
 
-  const isValid = name.trim().length >= 1 && name.trim().length <= 50;
+  const isValid = name.trim().length >= 2 && name.trim().length <= 50;
 
   const handleContinue = () => {
     if (!isValid) return;

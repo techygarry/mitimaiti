@@ -2,6 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --color-rose: #B5336A;
+  --color-rose-dark: #8A1A4A;
+  --color-rose-light: #E8A0BE;
+  --color-gold: #D4A853;
+  --color-charcoal: #2D2426;
+  --color-text-main: #3D2B33;
+  --color-text-light: #7A6670;
+  --color-background: #FAFAFA;
+  --color-border: #E8E0E4;
+  --color-cream: #FFF8F0;
+}
+
 html {
   scroll-behavior: smooth;
 }
@@ -38,6 +51,7 @@ html {
 @layer base {
   body {
     @apply text-textMain antialiased;
+    background-color: var(--color-background);
   }
 
   input,
@@ -90,6 +104,30 @@ html {
   .card-shadow-hover {
     box-shadow: 0 8px 30px rgba(45, 36, 38, 0.12);
   }
+
+  /* Bottom sheet component */
+  .bottom-sheet-overlay {
+    @apply fixed inset-0 z-50 bg-black/50 backdrop-blur-sm;
+  }
+
+  .bottom-sheet-content {
+    @apply fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl shadow-xl max-h-[85vh] overflow-y-auto;
+  }
+
+  .bottom-sheet-handle {
+    @apply w-10 h-1 bg-gray-300 rounded-full mx-auto mt-3 mb-2;
+  }
+
+  /* Score tag pill */
+  .score-tag {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold cursor-pointer transition-all duration-200 hover:shadow-sm active:scale-95;
+    min-height: 32px;
+  }
+
+  /* Offline banner */
+  .offline-banner {
+    @apply fixed top-0 left-0 right-0 z-[60] bg-red-500 text-white text-center py-2 text-sm font-medium;
+  }
 }
 
 @layer utilities {
@@ -99,6 +137,20 @@ html {
 
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
   }
 }
 
@@ -125,5 +177,14 @@ html {
   100% {
     transform: translateY(400px) rotate(720deg);
     opacity: 0;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
   }
 }

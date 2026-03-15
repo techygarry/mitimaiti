@@ -3,6 +3,7 @@ import multer from 'multer';
 import sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '../config/supabase';
+import { redis } from '../config/redis';
 import { AppError, asyncHandler } from '../utils/errors';
 import { authenticate } from '../middleware/auth';
 import { rateLimit } from '../middleware/rateLimit';
@@ -10,6 +11,8 @@ import { AuthenticatedRequest, Icebreaker } from '../types';
 import icebreakers from '../data/icebreakers.json';
 
 const router = Router();
+
+// ─── Multer config for chat media ────────────────────────────────────────────
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -23,22 +26,98 @@ const upload = multer({
       'image/png',
       'image/webp',
       'image/gif',
-      'audio/mpeg',
-      'audio/mp4',
-      'audio/ogg',
-      'video/mp4',
     ];
     if (allowed.includes(file.mimetype)) {
       cb(null, true);
     } else {
       cb(
-        new AppError(400, 'Unsupported media type', 'INVALID_MEDIA_TYPE')
+        new AppError(400, 'Unsupported media type. Only JPEG, PNG, WebP, and GIF are allowed.', 'INVALID_MEDIA_TYPE')
       );
     }
   },
 });
 
-// ─── Helper: Verify match access ────────────────────────────────────────────────
+// ─── Sightengine config ──────────────────────────────────────────────────────
+
+const SIGHTENGINE_API_USER = process.env.SIGHTENGINE_API_USER;
+const SIGHTENGINE_API_SECRET = process.env.SIGHTENGINE_API_SECRET;
+
+interface SightengineResult {
+  status: string;
+  nudity?: { raw: number; partial: number };
+  weapon?: number;
+  alcohol?: number;
+  drugs?: number;
+  offensive?: { prob: number };
+  gore?: { prob: number };
+}
+
+/**
+ * Screen an image buffer through Sightengine for NSFW/unsafe content.
+ * Uses the base64-upload approach to avoid external form-data dependencies.
+ * Returns true if the image is safe, false if rejected.
+ * If Sightengine is not configured, logs a warning and allows the image.
+ */
+async function screenImage(buffer: Buffer): Promise<{ safe: boolean; reason?: string }> {
+  if (!SIGHTENGINE_API_USER || !SIGHTENGINE_API_SECRET) {
+    console.warn('[Chat] Sightengine not configured, skipping image screening');
+    return { safe: true };
+  }
+
+  try {
+    const base64Image = buffer.toString('base64');
+    const dataUri = `data:image/jpeg;base64,${base64Image}`;
+
+    const params = new URLSearchParams({
+      media: dataUri,
+      models: 'nudity-2.1,offensive,gore',
+      api_user: SIGHTENGINE_API_USER,
+      api_secret: SIGHTENGINE_API_SECRET,
+    });
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+
+    const response = await fetch('https://api.sightengine.com/1.0/check.json', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      console.error(`[Chat] Sightengine returned HTTP ${response.status}`);
+      return { safe: true }; // Fail open on API error
+    }
+
+    const result = (await response.json()) as SightengineResult;
+
+    // Reject if nudity probability is high
+    if (result.nudity && (result.nudity.raw > 0.5 || result.nudity.partial > 0.7)) {
+      return { safe: false, reason: 'Image contains nudity or sexually explicit content' };
+    }
+
+    // Reject if offensive content probability is high
+    if (result.offensive && result.offensive.prob > 0.7) {
+      return { safe: false, reason: 'Image contains offensive content' };
+    }
+
+    // Reject if gore/violence probability is high
+    if (result.gore && result.gore.prob > 0.7) {
+      return { safe: false, reason: 'Image contains violent or graphic content' };
+    }
+
+    return { safe: true };
+  } catch (err) {
+    console.error('[Chat] Sightengine screening failed:', err);
+    // On screening failure, allow the image but log for manual review
+    return { safe: true };
+  }
+}
+
+// ─── Helper: Verify match access ────────────────────────────────────────────
 
 async function verifyMatchAccess(
   matchId: string,
@@ -58,17 +137,13 @@ async function verifyMatchAccess(
     throw new AppError(403, 'Not authorized to access this conversation', 'MATCH_UNAUTHORIZED');
   }
 
-  if (match.status !== 'active') {
-    throw new AppError(403, 'This match is no longer active', 'MATCH_INACTIVE');
-  }
-
   const otherId =
     match.user_a_id === userId ? match.user_b_id : match.user_a_id;
 
   return { match, otherId };
 }
 
-// ─── Helper: Get random icebreakers ─────────────────────────────────────────────
+// ─── Helper: Get random icebreakers ─────────────────────────────────────────
 
 function getRandomIcebreakers(count: number = 3): Icebreaker[] {
   const allIcebreakers = icebreakers as Icebreaker[];
@@ -91,7 +166,15 @@ function getRandomIcebreakers(count: number = 3): Icebreaker[] {
   return selected;
 }
 
-// ─── GET /v1/chat/:matchId ──────────────────────────────────────────────────────
+// ─── Helper: Compute countdown remaining ─────────────────────────────────────
+
+function computeCountdown(expiresAt: string | null): number | null {
+  if (!expiresAt) return null;
+  const remaining = new Date(expiresAt).getTime() - Date.now();
+  return remaining > 0 ? Math.ceil(remaining / 1000) : 0;
+}
+
+// ─── GET /v1/chat/:matchId ──────────────────────────────────────────────────
 
 router.get(
   '/:matchId',
@@ -99,12 +182,12 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const user = (req as AuthenticatedRequest).user;
     const { matchId } = req.params;
-    const cursor = req.query.cursor as string | undefined;
+    const before = req.query.before as string | undefined;
     const limit = Math.min(parseInt(req.query.limit as string) || 30, 100);
 
     const { match, otherId } = await verifyMatchAccess(matchId, user.id);
 
-    // Fetch messages with cursor pagination
+    // Build message query with cursor pagination (before=msgId)
     let query = supabase
       .from('messages')
       .select('*')
@@ -112,8 +195,19 @@ router.get(
       .order('created_at', { ascending: false })
       .limit(limit);
 
-    if (cursor) {
-      query = query.lt('created_at', cursor);
+    if (before) {
+      // Fetch the timestamp of the cursor message for pagination
+      const { data: cursorMsg } = await supabase
+        .from('messages')
+        .select('created_at')
+        .eq('id', before)
+        .single();
+
+      if (cursorMsg) {
+        query = query.lt('created_at', cursorMsg.created_at);
+      } else {
+        throw new AppError(400, 'Invalid cursor message ID', 'INVALID_CURSOR');
+      }
     }
 
     const { data: messages, error: msgError } = await query;
@@ -152,9 +246,9 @@ router.get(
           .single(),
       ]);
 
-    // Get icebreakers if no messages exist
+    // Get icebreakers if no messages exist and not paginating
     const hasMessages = messages && messages.length > 0;
-    const suggestedIcebreakers = hasMessages ? [] : getRandomIcebreakers(3);
+    const suggestedIcebreakers = hasMessages || before ? [] : getRandomIcebreakers(3);
 
     // Get cultural score for this match
     let culturalScore = match.cultural_score;
@@ -168,25 +262,35 @@ router.get(
       }
     }
 
-    // Format messages (reverse to chronological order)
+    // Format messages (reverse to chronological order for display)
     const formattedMessages = (messages || []).reverse().map((m: any) => ({
       id: m.id,
       senderId: m.sender_id,
       isYou: m.sender_id === user.id,
       content: m.content,
+      msgType: m.msg_type || 'text',
       mediaUrl: m.media_url,
       mediaType: m.media_type,
       isRead: m.is_read,
       createdAt: m.created_at,
     }));
 
-    const lastMessage = messages?.[messages.length - 1];
+    // Determine the oldest message ID for the next "before" cursor
+    const oldestMessage = messages?.[messages.length - 1];
 
     res.json({
       success: true,
       data: {
         matchId,
-        matchedAt: match.matched_at,
+        matchMeta: {
+          matchedAt: match.matched_at,
+          firstMsgBy: match.first_msg_by || null,
+          firstMsgLocked: match.first_msg_locked ?? false,
+          isDissolved: match.is_dissolved ?? (match.status === 'dissolved'),
+          expiresAt: match.expires_at || null,
+          countdownRemaining: computeCountdown(match.expires_at),
+          extendedOnce: match.extended_once ?? false,
+        },
         culturalScore,
         otherUser: {
           id: otherId,
@@ -199,14 +303,14 @@ router.get(
         },
         messages: formattedMessages,
         icebreakers: suggestedIcebreakers,
-        cursor: lastMessage?.created_at || null,
+        cursor: oldestMessage?.id || null,
         hasMore: (messages?.length || 0) >= limit,
       },
     });
   })
 );
 
-// ─── POST /v1/chat/:matchId/media ───────────────────────────────────────────────
+// ─── POST /v1/chat/:matchId/media ───────────────────────────────────────────
 
 router.post(
   '/:matchId/media',
@@ -222,14 +326,24 @@ router.post(
       throw new AppError(400, 'No media file uploaded', 'NO_FILE');
     }
 
-    const { otherId } = await verifyMatchAccess(matchId, user.id);
+    const { match, otherId } = await verifyMatchAccess(matchId, user.id);
+
+    // Reject if match is dissolved
+    if (match.is_dissolved || match.status === 'dissolved') {
+      throw new AppError(403, 'This match has been dissolved', 'MATCH_DISSOLVED');
+    }
+
+    // Reject if match has expired
+    if (match.expires_at && new Date(match.expires_at) < new Date()) {
+      throw new AppError(403, 'This match has expired', 'MATCH_EXPIRED');
+    }
 
     const mediaId = uuidv4();
     const basePath = `chat/${matchId}/${mediaId}`;
     let processedBuffer = file.buffer;
     let contentType = file.mimetype;
 
-    // Process images with sharp
+    // Process images with sharp (skip GIFs to preserve animation)
     if (file.mimetype.startsWith('image/') && file.mimetype !== 'image/gif') {
       processedBuffer = await sharp(file.buffer)
         .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
@@ -238,20 +352,26 @@ router.post(
       contentType = 'image/jpeg';
     }
 
+    // Screen image through Sightengine before delivery
+    const screenResult = await screenImage(processedBuffer);
+    if (!screenResult.safe) {
+      throw new AppError(
+        400,
+        screenResult.reason || 'Image rejected by content moderation',
+        'CONTENT_REJECTED'
+      );
+    }
+
     // Determine file extension
     const extMap: Record<string, string> = {
       'image/jpeg': 'jpg',
       'image/png': 'png',
       'image/webp': 'webp',
       'image/gif': 'gif',
-      'audio/mpeg': 'mp3',
-      'audio/mp4': 'm4a',
-      'audio/ogg': 'ogg',
-      'video/mp4': 'mp4',
     };
-    const ext = extMap[file.mimetype] || 'bin';
+    const ext = extMap[contentType] || extMap[file.mimetype] || 'jpg';
 
-    // Upload to storage
+    // Upload to Supabase Storage
     const { error: uploadError } = await supabase.storage
       .from('chat-media')
       .upload(`${basePath}.${ext}`, processedBuffer, {
@@ -267,13 +387,7 @@ router.post(
       .from('chat-media')
       .getPublicUrl(`${basePath}.${ext}`);
 
-    // Determine media type category
-    let mediaType = 'file';
-    if (file.mimetype.startsWith('image/')) mediaType = 'image';
-    else if (file.mimetype.startsWith('audio/')) mediaType = 'audio';
-    else if (file.mimetype.startsWith('video/')) mediaType = 'video';
-
-    // Create message record
+    // Create message record with msg_type='photo'
     const caption = req.body?.caption || null;
 
     const { data: message, error: msgError } = await supabase
@@ -282,8 +396,9 @@ router.post(
         match_id: matchId,
         sender_id: user.id,
         content: caption,
+        msg_type: 'photo',
         media_url: urlData.publicUrl,
-        media_type: mediaType,
+        media_type: 'image',
         is_read: false,
       })
       .select()
@@ -293,25 +408,117 @@ router.post(
       throw new AppError(500, 'Failed to save message', 'MESSAGE_SAVE_FAILED');
     }
 
-    // Send notification to the other user
-    const { sendTemplateNotification } = await import('../services/notifications');
-    const { data: myBasic } = await supabase
-      .from('basic_profiles')
-      .select('display_name')
-      .eq('user_id', user.id)
-      .single();
+    // Send notification to the other user if they are not in the chat
+    try {
+      const otherInChat = await redis.get(`in_chat:${otherId}:${matchId}`);
+      if (!otherInChat) {
+        const { sendTemplateNotification } = await import('../services/notifications');
+        const { data: myBasic } = await supabase
+          .from('basic_profiles')
+          .select('display_name')
+          .eq('user_id', user.id)
+          .single();
 
-    await sendTemplateNotification('new_message', otherId, {
-      name: myBasic?.display_name || 'Someone',
-    });
+        await sendTemplateNotification('photo_received', otherId, {
+          name: myBasic?.display_name || 'Someone',
+        });
+      }
+    } catch {
+      // Notification failure is non-critical
+    }
 
     res.status(201).json({
       success: true,
       data: {
         messageId: message.id,
+        msgType: 'photo',
         mediaUrl: urlData.publicUrl,
-        mediaType,
+        mediaType: 'image',
         createdAt: message.created_at,
+      },
+    });
+  })
+);
+
+// ─── POST /v1/chat/:matchId/extend ──────────────────────────────────────────
+
+router.post(
+  '/:matchId/extend',
+  authenticate,
+  rateLimit({ maxRequests: 5, windowSeconds: 60, keyPrefix: 'rl_chat_extend' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const user = (req as AuthenticatedRequest).user;
+    const { matchId } = req.params;
+
+    const { match } = await verifyMatchAccess(matchId, user.id);
+
+    // Check if match is dissolved
+    if (match.is_dissolved || match.status === 'dissolved') {
+      throw new AppError(403, 'Cannot extend a dissolved match', 'MATCH_DISSOLVED');
+    }
+
+    // Check if match has already expired
+    if (match.expires_at && new Date(match.expires_at) < new Date()) {
+      throw new AppError(403, 'Cannot extend an expired match', 'MATCH_EXPIRED');
+    }
+
+    // Check if already extended once
+    if (match.extended_once) {
+      throw new AppError(
+        400,
+        'This match has already been extended once. Each match can only be extended once.',
+        'ALREADY_EXTENDED'
+      );
+    }
+
+    // Calculate new expiry: current expires_at + 24 hours
+    // If no expires_at is set, extend from now
+    const currentExpiry = match.expires_at
+      ? new Date(match.expires_at)
+      : new Date();
+    const newExpiry = new Date(currentExpiry.getTime() + 24 * 60 * 60 * 1000);
+
+    // Update the match
+    const { data: updatedMatch, error: updateError } = await supabase
+      .from('matches')
+      .update({
+        expires_at: newExpiry.toISOString(),
+        extended_once: true,
+      })
+      .eq('id', matchId)
+      .select()
+      .single();
+
+    if (updateError) {
+      throw new AppError(500, 'Failed to extend match deadline', 'EXTEND_FAILED');
+    }
+
+    // Notify the other user about the extension
+    try {
+      const otherId =
+        match.user_a_id === user.id ? match.user_b_id : match.user_a_id;
+
+      const { sendTemplateNotification } = await import('../services/notifications');
+      const { data: myBasic } = await supabase
+        .from('basic_profiles')
+        .select('display_name')
+        .eq('user_id', user.id)
+        .single();
+
+      await sendTemplateNotification('match_expiring', otherId, {
+        name: myBasic?.display_name || 'Someone',
+      });
+    } catch {
+      // Notification failure is non-critical
+    }
+
+    res.json({
+      success: true,
+      data: {
+        matchId,
+        expiresAt: newExpiry.toISOString(),
+        countdownRemaining: computeCountdown(newExpiry.toISOString()),
+        extendedOnce: true,
       },
     });
   })

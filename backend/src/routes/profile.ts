@@ -2,168 +2,427 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
+import { z } from 'zod';
 import { supabase } from '../config/supabase';
+import { redis } from '../config/redis';
 import { AppError, asyncHandler } from '../utils/errors';
 import { authenticate } from '../middleware/auth';
+import { validate } from '../middleware/validate';
 import { rateLimit } from '../middleware/rateLimit';
 import { AuthenticatedRequest } from '../types';
 import { invalidateCulturalScoreCache } from '../services/scoring';
 
 const router = Router();
 
-// Multer config for photo uploads
-const upload = multer({
+// ─── Constants ──────────────────────────────────────────────────────────────────
+
+const SIGHTENGINE_API_USER = process.env.SIGHTENGINE_API_USER || '';
+const SIGHTENGINE_API_SECRET = process.env.SIGHTENGINE_API_SECRET || '';
+const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
+
+const MAX_PHOTOS = 6;
+const MAX_VIDEOS = 1;
+const MAX_VERIFY_ATTEMPTS_PER_DAY = 3;
+const REKOGNITION_SIMILARITY_THRESHOLD = 85;
+
+const IMAGE_SIZES = {
+  thumb: { width: 200, quality: 80 },
+  medium: { width: 600, quality: 80 },
+  large: { width: 1200, quality: 80 },
+} as const;
+
+const ALLOWED_IMAGE_MIMES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+];
+const ALLOWED_VIDEO_MIMES = ['video/mp4', 'video/quicktime', 'video/webm'];
+const ALLOWED_MIMES = [...ALLOWED_IMAGE_MIMES, ...ALLOWED_VIDEO_MIMES];
+
+// ─── Multer Config ──────────────────────────────────────────────────────────────
+
+const uploadMedia = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10 MB
-    files: 6,
+    fileSize: 50 * 1024 * 1024, // 50 MB (video can be larger)
+    files: 1,
   },
   fileFilter: (_req, file, cb) => {
-    const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'];
-    if (allowedMimes.includes(file.mimetype)) {
+    if (ALLOWED_MIMES.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new AppError(400, 'Only JPEG, PNG, WebP, and HEIC images are allowed', 'INVALID_FILE_TYPE'));
+      cb(
+        new AppError(
+          400,
+          'Only JPEG, PNG, WebP, HEIC images and MP4/MOV/WebM videos are allowed',
+          'INVALID_FILE_TYPE'
+        )
+      );
     }
   },
 });
 
-// ─── Profile tables that map to different DB tables ─────────────────────────────
+const uploadSelfie = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10 MB
+    files: 1,
+  },
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_IMAGE_MIMES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(
+        new AppError(
+          400,
+          'Selfie must be a JPEG, PNG, WebP, or HEIC image',
+          'INVALID_FILE_TYPE'
+        )
+      );
+    }
+  },
+});
 
-const PROFILE_TABLE_MAP: Record<string, string> = {
-  // basic_profiles fields
-  display_name: 'basic_profiles',
-  date_of_birth: 'basic_profiles',
-  gender: 'basic_profiles',
-  bio: 'basic_profiles',
-  height_cm: 'basic_profiles',
-  city: 'basic_profiles',
-  state: 'basic_profiles',
-  country: 'basic_profiles',
-  latitude: 'basic_profiles',
-  longitude: 'basic_profiles',
-  education: 'basic_profiles',
-  occupation: 'basic_profiles',
-  company: 'basic_profiles',
-  religion: 'basic_profiles',
-  intent: 'basic_profiles',
+// ─── Zod Schemas for PATCH /v1/me ───────────────────────────────────────────────
 
-  // sindhi_profiles fields
-  mother_tongue: 'sindhi_profiles',
-  sindhi_dialect: 'sindhi_profiles',
-  sindhi_fluency: 'sindhi_profiles',
-  community_sub_group: 'sindhi_profiles',
-  gotra: 'sindhi_profiles',
-  family_origin_city: 'sindhi_profiles',
-  family_origin_country: 'sindhi_profiles',
-  generation: 'sindhi_profiles',
+const basicsSchema = z
+  .object({
+    display_name: z.string().min(2).max(50).optional(),
+    date_of_birth: z.string().date().optional(),
+    gender: z.enum(['man', 'woman', 'non-binary']).optional(),
+    bio: z.string().max(500).optional(),
+    height_cm: z.number().int().min(120).max(240).optional(),
+    city: z.string().max(100).optional(),
+    state: z.string().max(100).optional(),
+    country: z.string().max(100).optional(),
+  })
+  .strict();
 
-  // chatti_profiles fields
-  family_values: 'chatti_profiles',
-  joint_family_preference: 'chatti_profiles',
-  festivals_celebrated: 'chatti_profiles',
-  food_preference: 'chatti_profiles',
-  cuisine_preferences: 'chatti_profiles',
-  cultural_activities: 'chatti_profiles',
-  traditional_attire: 'chatti_profiles',
+const sindhiSchema = z
+  .object({
+    mother_tongue: z.string().max(50).optional(),
+    sindhi_dialect: z.string().max(50).optional(),
+    sindhi_fluency: z
+      .enum(['native', 'fluent', 'conversational', 'basic', 'learning', 'none'])
+      .optional(),
+    community_sub_group: z.string().max(100).optional(),
+    gotra: z.string().max(100).optional(),
+  })
+  .strict();
 
-  // personality fields
-  interests: 'personality_profiles',
-  music_preferences: 'personality_profiles',
-  movie_genres: 'personality_profiles',
-  travel_style: 'personality_profiles',
-  pet_preference: 'personality_profiles',
-  smoking: 'personality_profiles',
-  drinking: 'personality_profiles',
-  workout: 'personality_profiles',
+const chattiSchema = z
+  .object({
+    family_values: z.enum(['traditional', 'moderate', 'liberal']).optional(),
+    joint_family_preference: z.boolean().optional(),
+    festivals_celebrated: z.array(z.string().max(50)).max(20).optional(),
+    food_preference: z
+      .enum(['vegetarian', 'non_vegetarian', 'vegan', 'jain', 'eggetarian'])
+      .optional(),
+    cuisine_preferences: z.array(z.string().max(50)).max(15).optional(),
+    cultural_activities: z.array(z.string().max(50)).max(15).optional(),
+    traditional_attire: z.string().max(100).optional(),
+  })
+  .strict();
 
-  // user_settings fields
-  discovery_enabled: 'user_settings',
-  show_online_status: 'user_settings',
-  show_distance: 'user_settings',
-  push_notifications: 'user_settings',
-  email_notifications: 'user_settings',
-  age_min: 'user_settings',
-  age_max: 'user_settings',
-  distance_km: 'user_settings',
-  gender_preference: 'user_settings',
-  quiet_hours_start: 'user_settings',
-  quiet_hours_end: 'user_settings',
-};
+const personalitySchema = z
+  .object({
+    interests: z.array(z.string().max(50)).max(20).optional(),
+    music_preferences: z.array(z.string().max(50)).max(15).optional(),
+    movie_genres: z.array(z.string().max(50)).max(15).optional(),
+    travel_style: z.string().max(100).optional(),
+    pet_preference: z.string().max(100).optional(),
+  })
+  .strict();
 
-// ─── Completeness Calculator ────────────────────────────────────────────────────
+const settingsSchema = z
+  .object({
+    discovery_enabled: z.boolean().optional(),
+    show_online_status: z.boolean().optional(),
+    show_distance: z.boolean().optional(),
+    push_notifications: z.boolean().optional(),
+    email_notifications: z.boolean().optional(),
+    age_min: z.number().int().min(18).max(99).optional(),
+    age_max: z.number().int().min(18).max(99).optional(),
+    distance_km: z.number().int().min(1).max(500).optional(),
+    gender_preference: z.enum(['men', 'women', 'everyone']).optional(),
+  })
+  .strict();
 
-interface CompletenessFields {
-  basic: Record<string, any> | null;
+const userSchema = z
+  .object({
+    intent: z
+      .enum(['casual', 'open', 'marriage'])
+      .optional(),
+    education: z.string().max(100).optional(),
+    occupation: z.string().max(100).optional(),
+    company: z.string().max(100).optional(),
+    religion: z.string().max(100).optional(),
+  })
+  .strict();
+
+const patchProfileSchema = z
+  .object({
+    basics: basicsSchema.optional(),
+    sindhi: sindhiSchema.optional(),
+    chatti: chattiSchema.optional(),
+    personality: personalitySchema.optional(),
+    settings: settingsSchema.optional(),
+    user: userSchema.optional(),
+  })
+  .strict()
+  .refine(
+    (data) => Object.keys(data).length > 0,
+    { message: 'At least one section must be provided' }
+  );
+
+// ─── Profile Completeness Calculator ────────────────────────────────────────────
+// 28 total fields:
+//   8 basics:   display_name, date_of_birth, gender, bio, height_cm, city, state, country
+//   5 sindhi:   mother_tongue, sindhi_dialect, sindhi_fluency, community_sub_group, gotra
+//   7 chatti:   family_values, joint_family_preference, festivals_celebrated,
+//               food_preference, cuisine_preferences, cultural_activities, traditional_attire
+//   3 culture from user_sindhi (overlap counted via sindhi table):
+//               Already counted in sindhi fields; the spec says "3 culture from user_sindhi"
+//               These are family_origin_city, family_origin_country, generation — stored in sindhi_profiles.
+//               So total sindhi = 5 + 3 = 8 unique fields from sindhi_profiles
+//   5 personality: interests, music_preferences, movie_genres, travel_style, pet_preference
+// Re-reading the spec: 8 basics + 5 sindhi + 7 chatti + 3 culture + 5 personality = 28
+
+interface CompletenessData {
+  basics: Record<string, any> | null;
   sindhi: Record<string, any> | null;
   chatti: Record<string, any> | null;
   personality: Record<string, any> | null;
-  photos: number;
 }
 
-function calculateCompleteness(fields: CompletenessFields): number {
+function calculateCompleteness(data: CompletenessData): number {
+  const fields: Array<{ table: keyof CompletenessData; field: string }> = [
+    // 8 basics
+    { table: 'basics', field: 'display_name' },
+    { table: 'basics', field: 'date_of_birth' },
+    { table: 'basics', field: 'gender' },
+    { table: 'basics', field: 'bio' },
+    { table: 'basics', field: 'height_cm' },
+    { table: 'basics', field: 'city' },
+    { table: 'basics', field: 'state' },
+    { table: 'basics', field: 'country' },
+    // 5 sindhi
+    { table: 'sindhi', field: 'mother_tongue' },
+    { table: 'sindhi', field: 'sindhi_dialect' },
+    { table: 'sindhi', field: 'sindhi_fluency' },
+    { table: 'sindhi', field: 'community_sub_group' },
+    { table: 'sindhi', field: 'gotra' },
+    // 7 chatti
+    { table: 'chatti', field: 'family_values' },
+    { table: 'chatti', field: 'joint_family_preference' },
+    { table: 'chatti', field: 'festivals_celebrated' },
+    { table: 'chatti', field: 'food_preference' },
+    { table: 'chatti', field: 'cuisine_preferences' },
+    { table: 'chatti', field: 'cultural_activities' },
+    { table: 'chatti', field: 'traditional_attire' },
+    // 3 culture (from sindhi_profiles table)
+    { table: 'sindhi', field: 'family_origin_city' },
+    { table: 'sindhi', field: 'family_origin_country' },
+    { table: 'sindhi', field: 'generation' },
+    // 5 personality
+    { table: 'personality', field: 'interests' },
+    { table: 'personality', field: 'music_preferences' },
+    { table: 'personality', field: 'movie_genres' },
+    { table: 'personality', field: 'travel_style' },
+    { table: 'personality', field: 'pet_preference' },
+  ];
+
+  const total = fields.length; // 28
   let filled = 0;
-  let total = 0;
 
-  // Basic profile (40% weight = 40 points)
-  const basicRequired = [
-    'display_name', 'date_of_birth', 'gender', 'bio', 'city',
-    'country', 'intent',
-  ];
-  const basicOptional = [
-    'height_cm', 'state', 'education', 'occupation', 'company', 'religion',
-  ];
+  for (const { table, field } of fields) {
+    const row = data[table];
+    if (!row) continue;
 
-  for (const field of basicRequired) {
-    total += 4;
-    if (fields.basic && fields.basic[field]) filled += 4;
-  }
-  for (const field of basicOptional) {
-    total += 2;
-    if (fields.basic && fields.basic[field]) filled += 2;
+    const value = row[field];
+    if (value === null || value === undefined || value === '') continue;
+
+    // For arrays, only count as filled if non-empty
+    if (Array.isArray(value) && value.length === 0) continue;
+
+    // For booleans, any value (including false) counts as filled
+    filled++;
   }
 
-  // Sindhi profile (20% weight)
-  const sindhiFields = [
-    'mother_tongue', 'sindhi_dialect', 'sindhi_fluency',
-    'community_sub_group', 'family_origin_city',
-  ];
-  for (const field of sindhiFields) {
-    total += 4;
-    if (fields.sindhi && fields.sindhi[field]) filled += 4;
-  }
-
-  // Chatti profile (15% weight)
-  const chattiFields = [
-    'family_values', 'festivals_celebrated', 'food_preference', 'cuisine_preferences',
-  ];
-  for (const field of chattiFields) {
-    total += 3;
-    if (fields.chatti && fields.chatti[field]) {
-      const val = fields.chatti[field];
-      if (Array.isArray(val) ? val.length > 0 : true) filled += 3;
-    }
-  }
-
-  // Personality (10% weight)
-  const personalityFields = ['interests', 'travel_style', 'music_preferences'];
-  for (const field of personalityFields) {
-    total += 3;
-    if (fields.personality && fields.personality[field]) {
-      const val = fields.personality[field];
-      if (Array.isArray(val) ? val.length > 0 : true) filled += 3;
-    }
-  }
-
-  // Photos (15% weight)
-  total += 15;
-  filled += Math.min(fields.photos * 5, 15); // Up to 3 photos count
-
-  if (total === 0) return 0;
   return Math.round((filled / total) * 100);
 }
 
+// ─── Sightengine Moderation ─────────────────────────────────────────────────────
+
+async function checkImageModeration(
+  buffer: Buffer
+): Promise<{ safe: boolean; nudityScore: number }> {
+  if (!SIGHTENGINE_API_USER || !SIGHTENGINE_API_SECRET) {
+    // If Sightengine is not configured, allow (dev mode)
+    console.warn(
+      '[Moderation] Sightengine not configured — skipping moderation check'
+    );
+    return { safe: true, nudityScore: 0 };
+  }
+
+  const FormData = (await import('form-data')).default;
+  const form = new FormData();
+  form.append('media', buffer, { filename: 'upload.jpg', contentType: 'image/jpeg' });
+  form.append('models', 'nudity-2.1');
+  form.append('api_user', SIGHTENGINE_API_USER);
+  form.append('api_secret', SIGHTENGINE_API_SECRET);
+
+  const response = await fetch('https://api.sightengine.com/1.0/check.json', {
+    method: 'POST',
+    body: form as any,
+    headers: form.getHeaders(),
+  });
+
+  if (!response.ok) {
+    console.error(
+      '[Moderation] Sightengine API returned',
+      response.status
+    );
+    // Fail open in case of API outage — log for review
+    return { safe: true, nudityScore: 0 };
+  }
+
+  const result = (await response.json()) as any;
+
+  // Sightengine nudity-2.1 returns scores for various categories
+  const nudityScore = Math.max(
+    result?.nudity?.sexual_activity ?? 0,
+    result?.nudity?.sexual_display ?? 0,
+    result?.nudity?.erotica ?? 0
+  );
+
+  return {
+    safe: nudityScore <= 0.7,
+    nudityScore,
+  };
+}
+
+// ─── AWS Rekognition Face Comparison ────────────────────────────────────────────
+
+async function compareFaces(
+  sourceBuffer: Buffer,
+  targetBuffer: Buffer
+): Promise<{ match: boolean; similarity: number }> {
+  // Dynamic import to avoid loading AWS SDK when not needed
+  const {
+    RekognitionClient,
+    CompareFacesCommand,
+  } = await import('@aws-sdk/client-rekognition');
+
+  const client = new RekognitionClient({ region: AWS_REGION });
+
+  const command = new CompareFacesCommand({
+    SourceImage: { Bytes: sourceBuffer },
+    TargetImage: { Bytes: targetBuffer },
+    SimilarityThreshold: REKOGNITION_SIMILARITY_THRESHOLD,
+  });
+
+  const response = await client.send(command);
+
+  if (!response.FaceMatches || response.FaceMatches.length === 0) {
+    return { match: false, similarity: 0 };
+  }
+
+  const bestMatch = response.FaceMatches.reduce(
+    (best: any, current: any) =>
+      (current.Similarity ?? 0) > (best.Similarity ?? 0) ? current : best,
+    response.FaceMatches[0]
+  );
+
+  const similarity = bestMatch.Similarity ?? 0;
+
+  return {
+    match: similarity >= REKOGNITION_SIMILARITY_THRESHOLD,
+    similarity,
+  };
+}
+
+// ─── Helper: upsert a profile sub-table ─────────────────────────────────────────
+
+async function upsertProfileTable(
+  table: string,
+  userId: string,
+  fields: Record<string, any>
+): Promise<Record<string, any>> {
+  const { data: existing } = await supabase
+    .from(table)
+    .select('id')
+    .eq('user_id', userId)
+    .single();
+
+  if (existing) {
+    const { data, error } = await supabase
+      .from(table)
+      .update(fields)
+      .eq('user_id', userId)
+      .select()
+      .single();
+
+    if (error) {
+      throw new AppError(
+        500,
+        `Failed to update ${table}: ${error.message}`,
+        'UPDATE_FAILED'
+      );
+    }
+    return data!;
+  } else {
+    const { data, error } = await supabase
+      .from(table)
+      .insert({ user_id: userId, ...fields })
+      .select()
+      .single();
+
+    if (error) {
+      throw new AppError(
+        500,
+        `Failed to create ${table}: ${error.message}`,
+        'INSERT_FAILED'
+      );
+    }
+    return data!;
+  }
+}
+
+// ─── Helper: Fetch all profile data for completeness ────────────────────────────
+
+async function fetchProfileData(userId: string): Promise<CompletenessData> {
+  const [
+    { data: basics },
+    { data: sindhi },
+    { data: chatti },
+    { data: personality },
+  ] = await Promise.all([
+    supabase.from('basic_profiles').select('*').eq('user_id', userId).single(),
+    supabase
+      .from('sindhi_profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .single(),
+    supabase
+      .from('chatti_profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .single(),
+    supabase
+      .from('personality_profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .single(),
+  ]);
+
+  return { basics, sindhi, chatti, personality };
+}
+
 // ─── GET /v1/me ─────────────────────────────────────────────────────────────────
+// Returns the authenticated user's full profile across all tables.
 
 router.get(
   '/',
@@ -173,137 +432,167 @@ router.get(
 
     const [
       { data: userData },
-      { data: basic },
+      { data: basics },
       { data: sindhi },
       { data: chatti },
       { data: personality },
       { data: photos },
       { data: settings },
       { data: privileges },
+      { data: safety },
     ] = await Promise.all([
       supabase.from('users').select('*').eq('id', user.id).single(),
-      supabase.from('basic_profiles').select('*').eq('user_id', user.id).single(),
-      supabase.from('sindhi_profiles').select('*').eq('user_id', user.id).single(),
-      supabase.from('chatti_profiles').select('*').eq('user_id', user.id).single(),
-      supabase.from('personality_profiles').select('*').eq('user_id', user.id).single(),
-      supabase.from('photos').select('*').eq('user_id', user.id).order('sort_order'),
-      supabase.from('user_settings').select('*').eq('user_id', user.id).single(),
-      supabase.from('user_privileges').select('*').eq('user_id', user.id).single(),
+      supabase
+        .from('basic_profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .single(),
+      supabase
+        .from('sindhi_profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .single(),
+      supabase
+        .from('chatti_profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .single(),
+      supabase
+        .from('personality_profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .single(),
+      supabase
+        .from('photos')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('sort_order'),
+      supabase
+        .from('user_settings')
+        .select('*')
+        .eq('user_id', user.id)
+        .single(),
+      supabase
+        .from('user_privileges')
+        .select('*')
+        .eq('user_id', user.id)
+        .single(),
+      supabase
+        .from('user_safety')
+        .select('*')
+        .eq('user_id', user.id)
+        .single(),
     ]);
 
     res.json({
       success: true,
       data: {
         user: userData,
-        basic,
+        basics,
         sindhi,
         chatti,
         personality,
         photos: photos || [],
         settings,
         privileges,
+        safety,
       },
     });
   })
 );
 
 // ─── PATCH /v1/me ───────────────────────────────────────────────────────────────
+// Section-based profile update. Body: { basics?, sindhi?, chatti?, personality?, settings?, user? }
 
 router.patch(
   '/',
   authenticate,
+  validate(patchProfileSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const user = (req as AuthenticatedRequest).user;
-    const updates = req.body;
-
-    if (!updates || Object.keys(updates).length === 0) {
-      throw new AppError(400, 'No fields to update', 'EMPTY_UPDATE');
-    }
-
-    // Group updates by target table
-    const tableUpdates: Record<string, Record<string, any>> = {};
-
-    for (const [field, value] of Object.entries(updates)) {
-      const table = PROFILE_TABLE_MAP[field];
-      if (!table) {
-        // Skip unknown fields silently
-        continue;
-      }
-
-      if (!tableUpdates[table]) {
-        tableUpdates[table] = {};
-      }
-      tableUpdates[table][field] = value;
-    }
-
-    // Execute updates per table
-    const results: Record<string, any> = {};
-
-    for (const [table, fields] of Object.entries(tableUpdates)) {
-      // Check if row exists; upsert if needed
-      const { data: existing } = await supabase
-        .from(table)
-        .select('id')
-        .eq('user_id', user.id)
-        .single();
-
-      if (existing) {
-        const { data, error } = await supabase
-          .from(table)
-          .update(fields)
-          .eq('user_id', user.id)
-          .select()
-          .single();
-
-        if (error) {
-          throw new AppError(500, `Failed to update ${table}: ${error.message}`, 'UPDATE_FAILED');
-        }
-        results[table] = data;
-      } else {
-        const { data, error } = await supabase
-          .from(table)
-          .insert({ user_id: user.id, ...fields })
-          .select()
-          .single();
-
-        if (error) {
-          throw new AppError(500, `Failed to create ${table}: ${error.message}`, 'INSERT_FAILED');
-        }
-        results[table] = data;
-      }
-    }
-
-    // Recalculate profile completeness
-    const [
-      { data: basic },
-      { data: sindhi },
-      { data: chatti },
-      { data: personality },
-      { data: photos },
-    ] = await Promise.all([
-      supabase.from('basic_profiles').select('*').eq('user_id', user.id).single(),
-      supabase.from('sindhi_profiles').select('*').eq('user_id', user.id).single(),
-      supabase.from('chatti_profiles').select('*').eq('user_id', user.id).single(),
-      supabase.from('personality_profiles').select('*').eq('user_id', user.id).single(),
-      supabase.from('photos').select('id').eq('user_id', user.id),
-    ]);
-
-    const completeness = calculateCompleteness({
-      basic,
+    const {
+      basics,
       sindhi,
       chatti,
       personality,
-      photos: photos?.length || 0,
-    });
+      settings,
+      user: userFields,
+    } = req.body;
+
+    const results: Record<string, any> = {};
+
+    // Map sections to their database tables and execute updates in parallel
+    const updatePromises: Array<Promise<void>> = [];
+
+    if (basics && Object.keys(basics).length > 0) {
+      updatePromises.push(
+        upsertProfileTable('basic_profiles', user.id, basics).then((data) => {
+          results.basics = data;
+        })
+      );
+    }
+
+    if (sindhi && Object.keys(sindhi).length > 0) {
+      updatePromises.push(
+        upsertProfileTable('sindhi_profiles', user.id, sindhi).then((data) => {
+          results.sindhi = data;
+        })
+      );
+    }
+
+    if (chatti && Object.keys(chatti).length > 0) {
+      updatePromises.push(
+        upsertProfileTable('chatti_profiles', user.id, chatti).then((data) => {
+          results.chatti = data;
+        })
+      );
+    }
+
+    if (personality && Object.keys(personality).length > 0) {
+      updatePromises.push(
+        upsertProfileTable('personality_profiles', user.id, personality).then(
+          (data) => {
+            results.personality = data;
+          }
+        )
+      );
+    }
+
+    if (settings && Object.keys(settings).length > 0) {
+      updatePromises.push(
+        upsertProfileTable('user_settings', user.id, settings).then((data) => {
+          results.settings = data;
+        })
+      );
+    }
+
+    if (userFields && Object.keys(userFields).length > 0) {
+      // User-level fields (intent, education, etc.) go to basic_profiles
+      updatePromises.push(
+        upsertProfileTable('basic_profiles', user.id, userFields).then(
+          (data) => {
+            results.user = data;
+          }
+        )
+      );
+    }
+
+    await Promise.all(updatePromises);
+
+    // Recalculate profile completeness
+    const profileData = await fetchProfileData(user.id);
+    const completeness = calculateCompleteness(profileData);
 
     await supabase
       .from('users')
-      .update({ profile_completeness: completeness, updated_at: new Date().toISOString() })
+      .update({
+        profile_completeness: completeness,
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', user.id);
 
-    // Invalidate cultural score cache if relevant fields changed
-    const culturalTables = ['sindhi_profiles', 'chatti_profiles', 'basic_profiles'];
-    if (Object.keys(tableUpdates).some((t) => culturalTables.includes(t))) {
+    // Invalidate cultural score cache if culturally-relevant fields changed
+    if (basics || sindhi || chatti || userFields) {
       await invalidateCulturalScoreCache(user.id);
     }
 
@@ -318,134 +607,217 @@ router.patch(
 );
 
 // ─── POST /v1/me/media ──────────────────────────────────────────────────────────
+// Upload a single photo or video. Photos are resized to 3 WebP sizes,
+// EXIF-stripped, and moderation-checked via Sightengine.
+// Limits: max 6 photos + 1 video per user.
 
 router.post(
   '/media',
   authenticate,
   rateLimit({ maxRequests: 20, windowSeconds: 60, keyPrefix: 'rl_media' }),
-  upload.array('photos', 6),
+  uploadMedia.single('file'),
   asyncHandler(async (req: Request, res: Response) => {
     const user = (req as AuthenticatedRequest).user;
-    const files = req.files as Express.Multer.File[];
+    const file = req.file;
 
-    if (!files || files.length === 0) {
-      throw new AppError(400, 'No files uploaded', 'NO_FILES');
+    if (!file) {
+      throw new AppError(400, 'No file uploaded', 'NO_FILE');
     }
 
-    // Check existing photo count
+    const isVideo = ALLOWED_VIDEO_MIMES.includes(file.mimetype);
+
+    // Check existing media counts
     const { data: existingPhotos } = await supabase
       .from('photos')
-      .select('id')
+      .select('id, is_video')
       .eq('user_id', user.id);
 
-    const currentCount = existingPhotos?.length || 0;
-    if (currentCount + files.length > 6) {
-      throw new AppError(400, `Maximum 6 photos allowed. You have ${currentCount}.`, 'MAX_PHOTOS');
+    const photos = (existingPhotos || []).filter((p: any) => !p.is_video);
+    const videos = (existingPhotos || []).filter((p: any) => p.is_video);
+
+    if (isVideo && videos.length >= MAX_VIDEOS) {
+      throw new AppError(
+        400,
+        `Maximum ${MAX_VIDEOS} video allowed. Delete your existing video first.`,
+        'MAX_VIDEOS'
+      );
     }
 
-    const uploadedPhotos = [];
+    if (!isVideo && photos.length >= MAX_PHOTOS) {
+      throw new AppError(
+        400,
+        `Maximum ${MAX_PHOTOS} photos allowed. You currently have ${photos.length}.`,
+        'MAX_PHOTOS'
+      );
+    }
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const photoId = uuidv4();
-      const basePath = `users/${user.id}/photos/${photoId}`;
+    const mediaId = uuidv4();
+    const basePath = `users/${user.id}/media/${mediaId}`;
 
-      // Resize to 3 sizes using sharp
-      const [original, medium, thumb] = await Promise.all([
-        sharp(file.buffer)
-          .resize(1200, 1600, { fit: 'inside', withoutEnlargement: true })
-          .jpeg({ quality: 85 })
-          .toBuffer(),
-        sharp(file.buffer)
-          .resize(600, 800, { fit: 'inside', withoutEnlargement: true })
-          .jpeg({ quality: 80 })
-          .toBuffer(),
-        sharp(file.buffer)
-          .resize(200, 200, { fit: 'cover' })
-          .jpeg({ quality: 70 })
-          .toBuffer(),
-      ]);
+    if (isVideo) {
+      // Upload video as-is (no server-side transcoding)
+      const ext = file.mimetype === 'video/mp4' ? 'mp4' : 'webm';
+      const videoPath = `${basePath}/video.${ext}`;
 
-      // Upload to Supabase Storage
-      const [origRes, medRes, thumbRes] = await Promise.all([
-        supabase.storage
-          .from('photos')
-          .upload(`${basePath}/original.jpg`, original, {
-            contentType: 'image/jpeg',
-            upsert: true,
-          }),
-        supabase.storage
-          .from('photos')
-          .upload(`${basePath}/medium.jpg`, medium, {
-            contentType: 'image/jpeg',
-            upsert: true,
-          }),
-        supabase.storage
-          .from('photos')
-          .upload(`${basePath}/thumb.jpg`, thumb, {
-            contentType: 'image/jpeg',
-            upsert: true,
-          }),
-      ]);
+      const { error: uploadError } = await supabase.storage
+        .from('photos')
+        .upload(videoPath, file.buffer, {
+          contentType: file.mimetype,
+          upsert: true,
+        });
 
-      if (origRes.error || medRes.error || thumbRes.error) {
-        throw new AppError(500, 'Failed to upload photos to storage', 'UPLOAD_FAILED');
+      if (uploadError) {
+        throw new AppError(
+          500,
+          'Failed to upload video to storage',
+          'UPLOAD_FAILED'
+        );
       }
 
-      // Get public URLs
-      const { data: origUrl } = supabase.storage
+      const { data: videoUrl } = supabase.storage
         .from('photos')
-        .getPublicUrl(`${basePath}/original.jpg`);
-      const { data: medUrl } = supabase.storage
-        .from('photos')
-        .getPublicUrl(`${basePath}/medium.jpg`);
-      const { data: thumbUrl } = supabase.storage
-        .from('photos')
-        .getPublicUrl(`${basePath}/thumb.jpg`);
+        .getPublicUrl(videoPath);
 
-      // Insert photo record
-      const { data: photoRecord, error: insertError } = await supabase
+      const { data: mediaRecord, error: insertError } = await supabase
         .from('photos')
         .insert({
-          id: photoId,
+          id: mediaId,
           user_id: user.id,
-          url_original: origUrl.publicUrl,
-          url_medium: medUrl.publicUrl,
-          url_thumb: thumbUrl.publicUrl,
-          is_primary: currentCount === 0 && i === 0, // First photo is primary
-          sort_order: currentCount + i,
+          url_original: videoUrl.publicUrl,
+          url_medium: videoUrl.publicUrl,
+          url_thumb: videoUrl.publicUrl,
+          is_primary: false,
+          is_video: true,
+          sort_order: (existingPhotos?.length || 0),
         })
         .select()
         .single();
 
       if (insertError) {
-        throw new AppError(500, 'Failed to save photo record', 'PHOTO_SAVE_FAILED');
+        throw new AppError(
+          500,
+          'Failed to save video record',
+          'MEDIA_SAVE_FAILED'
+        );
       }
 
-      uploadedPhotos.push(photoRecord);
+      res.status(201).json({
+        success: true,
+        data: { media: mediaRecord },
+      });
+      return;
     }
 
-    // Recalculate completeness
-    const { data: allPhotos } = await supabase
+    // ── Image processing pipeline ──
+
+    // 1. Moderation check on the raw image
+    const moderation = await checkImageModeration(file.buffer);
+    if (!moderation.safe) {
+      throw new AppError(
+        400,
+        'Image was rejected by our content moderation system. Please upload an appropriate photo.',
+        'CONTENT_REJECTED'
+      );
+    }
+
+    // 2. Resize to 3 WebP sizes, strip EXIF metadata
+    const [thumb, medium, large] = await Promise.all([
+      sharp(file.buffer)
+        .rotate() // auto-rotate based on EXIF
+        .resize(IMAGE_SIZES.thumb.width, undefined, {
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .webp({ quality: IMAGE_SIZES.thumb.quality })
+        .withMetadata({ exif: undefined } as any) // strip EXIF
+        .toBuffer(),
+      sharp(file.buffer)
+        .rotate()
+        .resize(IMAGE_SIZES.medium.width, undefined, {
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .webp({ quality: IMAGE_SIZES.medium.quality })
+        .withMetadata({ exif: undefined } as any)
+        .toBuffer(),
+      sharp(file.buffer)
+        .rotate()
+        .resize(IMAGE_SIZES.large.width, undefined, {
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .webp({ quality: IMAGE_SIZES.large.quality })
+        .withMetadata({ exif: undefined } as any)
+        .toBuffer(),
+    ]);
+
+    // 3. Upload all 3 sizes to Supabase Storage
+    const [thumbRes, medRes, largeRes] = await Promise.all([
+      supabase.storage.from('photos').upload(`${basePath}/thumb.webp`, thumb, {
+        contentType: 'image/webp',
+        upsert: true,
+      }),
+      supabase.storage
+        .from('photos')
+        .upload(`${basePath}/medium.webp`, medium, {
+          contentType: 'image/webp',
+          upsert: true,
+        }),
+      supabase.storage
+        .from('photos')
+        .upload(`${basePath}/large.webp`, large, {
+          contentType: 'image/webp',
+          upsert: true,
+        }),
+    ]);
+
+    if (thumbRes.error || medRes.error || largeRes.error) {
+      throw new AppError(
+        500,
+        'Failed to upload images to storage',
+        'UPLOAD_FAILED'
+      );
+    }
+
+    // 4. Get public URLs
+    const { data: thumbUrl } = supabase.storage
       .from('photos')
-      .select('id')
-      .eq('user_id', user.id);
+      .getPublicUrl(`${basePath}/thumb.webp`);
+    const { data: medUrl } = supabase.storage
+      .from('photos')
+      .getPublicUrl(`${basePath}/medium.webp`);
+    const { data: largeUrl } = supabase.storage
+      .from('photos')
+      .getPublicUrl(`${basePath}/large.webp`);
 
-    const [{ data: basic }, { data: sindhi }, { data: chatti }, { data: personality }] =
-      await Promise.all([
-        supabase.from('basic_profiles').select('*').eq('user_id', user.id).single(),
-        supabase.from('sindhi_profiles').select('*').eq('user_id', user.id).single(),
-        supabase.from('chatti_profiles').select('*').eq('user_id', user.id).single(),
-        supabase.from('personality_profiles').select('*').eq('user_id', user.id).single(),
-      ]);
+    // 5. Create photo record
+    const currentCount = photos.length;
+    const { data: photoRecord, error: insertError } = await supabase
+      .from('photos')
+      .insert({
+        id: mediaId,
+        user_id: user.id,
+        url_thumb: thumbUrl.publicUrl,
+        url_medium: medUrl.publicUrl,
+        url_original: largeUrl.publicUrl,
+        is_primary: currentCount === 0, // first photo is primary
+        is_video: false,
+        sort_order: (existingPhotos?.length || 0),
+      })
+      .select()
+      .single();
 
-    const completeness = calculateCompleteness({
-      basic,
-      sindhi,
-      chatti,
-      personality,
-      photos: allPhotos?.length || 0,
-    });
+    if (insertError) {
+      throw new AppError(
+        500,
+        'Failed to save photo record',
+        'MEDIA_SAVE_FAILED'
+      );
+    }
+
+    // 6. Recalculate profile completeness (photos may affect it indirectly)
+    const profileData = await fetchProfileData(user.id);
+    const completeness = calculateCompleteness(profileData);
 
     await supabase
       .from('users')
@@ -455,61 +827,79 @@ router.post(
     res.status(201).json({
       success: true,
       data: {
-        photos: uploadedPhotos,
+        media: photoRecord,
         profileCompleteness: completeness,
       },
     });
   })
 );
 
-// ─── DELETE /v1/me/media/:photoId ───────────────────────────────────────────────
+// ─── DELETE /v1/me/media/:id ────────────────────────────────────────────────────
+// Delete a photo or video by ID. Blocks deletion of the last remaining photo.
 
 router.delete(
-  '/media/:photoId',
+  '/media/:id',
   authenticate,
   asyncHandler(async (req: Request, res: Response) => {
     const user = (req as AuthenticatedRequest).user;
-    const { photoId } = req.params;
+    const { id } = req.params;
 
     // Verify ownership
-    const { data: photo, error } = await supabase
+    const { data: media, error: findError } = await supabase
       .from('photos')
       .select('*')
-      .eq('id', photoId)
+      .eq('id', id)
       .eq('user_id', user.id)
       .single();
 
-    if (error || !photo) {
-      throw new AppError(404, 'Photo not found', 'PHOTO_NOT_FOUND');
+    if (findError || !media) {
+      throw new AppError(404, 'Media not found', 'MEDIA_NOT_FOUND');
     }
 
-    // Check minimum 1 photo
-    const { data: allPhotos } = await supabase
-      .from('photos')
-      .select('id')
-      .eq('user_id', user.id);
+    // If it's a photo (not video), check minimum photo count
+    if (!media.is_video) {
+      const { data: allPhotos } = await supabase
+        .from('photos')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('is_video', false);
 
-    if (allPhotos && allPhotos.length <= 1) {
-      throw new AppError(400, 'Cannot delete your only photo. Upload another first.', 'MIN_PHOTOS');
+      if (allPhotos && allPhotos.length <= 1) {
+        throw new AppError(
+          400,
+          'Cannot delete your only photo. Upload another first.',
+          'MIN_PHOTOS'
+        );
+      }
     }
 
-    // Delete from storage
-    const basePath = `users/${user.id}/photos/${photoId}`;
-    await supabase.storage.from('photos').remove([
-      `${basePath}/original.jpg`,
-      `${basePath}/medium.jpg`,
-      `${basePath}/thumb.jpg`,
-    ]);
+    // Delete from Supabase Storage
+    const basePath = `users/${user.id}/media/${id}`;
+    if (media.is_video) {
+      // Try both extensions
+      await supabase.storage
+        .from('photos')
+        .remove([`${basePath}/video.mp4`, `${basePath}/video.webm`]);
+    } else {
+      await supabase.storage
+        .from('photos')
+        .remove([
+          `${basePath}/thumb.webp`,
+          `${basePath}/medium.webp`,
+          `${basePath}/large.webp`,
+        ]);
+    }
 
-    // Delete record
-    await supabase.from('photos').delete().eq('id', photoId);
+    // Delete the database record
+    await supabase.from('photos').delete().eq('id', id);
 
-    // If deleted photo was primary, make the next one primary
-    if (photo.is_primary) {
+    // If deleted photo was the primary, promote the next one
+    if (media.is_primary && !media.is_video) {
       const { data: nextPhoto } = await supabase
         .from('photos')
         .select('id')
         .eq('user_id', user.id)
+        .eq('is_video', false)
         .order('sort_order')
         .limit(1)
         .single();
@@ -524,37 +914,150 @@ router.delete(
 
     res.json({
       success: true,
-      message: 'Photo deleted successfully',
+      message: 'Media deleted successfully',
     });
   })
 );
 
 // ─── POST /v1/me/verify ─────────────────────────────────────────────────────────
+// Selfie-based profile verification via AWS Rekognition.
+// Compares the uploaded selfie to the user's primary photo.
+// Max 3 attempts per day. Selfie is never persisted.
 
 router.post(
   '/verify',
   authenticate,
+  rateLimit({
+    maxRequests: MAX_VERIFY_ATTEMPTS_PER_DAY,
+    windowSeconds: 86400, // 24 hours
+    keyPrefix: 'rl_verify',
+  }),
+  uploadSelfie.single('selfie'),
   asyncHandler(async (req: Request, res: Response) => {
     const user = (req as AuthenticatedRequest).user;
+    const selfieFile = req.file;
 
-    // Stub: In production, this would trigger a verification flow
-    // (selfie comparison, ID check, etc.)
+    if (!selfieFile) {
+      throw new AppError(400, 'Selfie image is required', 'NO_SELFIE');
+    }
+
+    // Check if already verified
+    const { data: userData } = await supabase
+      .from('users')
+      .select('is_verified')
+      .eq('id', user.id)
+      .single();
+
+    if (userData?.is_verified) {
+      throw new AppError(
+        400,
+        'Your profile is already verified',
+        'ALREADY_VERIFIED'
+      );
+    }
+
+    // Get primary photo
+    const { data: primaryPhoto } = await supabase
+      .from('photos')
+      .select('url_original')
+      .eq('user_id', user.id)
+      .eq('is_primary', true)
+      .eq('is_video', false)
+      .single();
+
+    if (!primaryPhoto) {
+      throw new AppError(
+        400,
+        'You need a primary photo before verifying your profile',
+        'NO_PRIMARY_PHOTO'
+      );
+    }
+
+    // Download primary photo for comparison
+    const photoResponse = await fetch(primaryPhoto.url_original);
+    if (!photoResponse.ok) {
+      throw new AppError(
+        500,
+        'Failed to retrieve primary photo for comparison',
+        'PHOTO_FETCH_FAILED'
+      );
+    }
+    const primaryPhotoBuffer = Buffer.from(
+      await photoResponse.arrayBuffer()
+    );
+
+    // Normalize the selfie (strip EXIF, convert to JPEG for Rekognition)
+    const selfieBuffer = await sharp(selfieFile.buffer)
+      .rotate()
+      .jpeg({ quality: 90 })
+      .toBuffer();
+
+    // Compare faces using AWS Rekognition
+    let comparisonResult: { match: boolean; similarity: number };
+    try {
+      comparisonResult = await compareFaces(selfieBuffer, primaryPhotoBuffer);
+    } catch (err: any) {
+      // Handle specific Rekognition errors
+      if (
+        err.name === 'InvalidParameterException' ||
+        err.message?.includes('no faces')
+      ) {
+        throw new AppError(
+          400,
+          'Could not detect a face in one or both images. Please use a clear, well-lit photo showing your face.',
+          'FACE_NOT_DETECTED'
+        );
+      }
+      console.error('[Verify] Rekognition error:', err.message);
+      throw new AppError(
+        500,
+        'Face verification service is temporarily unavailable. Please try again later.',
+        'VERIFICATION_SERVICE_ERROR'
+      );
+    }
+
+    // Selfie buffer is intentionally NOT stored — it exists only in memory
+    // and will be garbage collected after this request completes.
+
+    if (!comparisonResult.match) {
+      res.json({
+        success: false,
+        error: {
+          code: 'VERIFICATION_FAILED',
+          message:
+            'The selfie did not match your primary photo closely enough. Please try again with better lighting and a clearer angle.',
+        },
+        data: {
+          similarity: Math.round(comparisonResult.similarity),
+          threshold: REKOGNITION_SIMILARITY_THRESHOLD,
+        },
+      });
+      return;
+    }
+
+    // Verification passed — update user record
     await supabase
       .from('users')
-      .update({ is_verified: true })
+      .update({
+        is_verified: true,
+        verified_at: new Date().toISOString(),
+      })
       .eq('id', user.id);
 
     res.json({
       success: true,
-      message: 'Profile verification complete',
+      message: 'Profile verified successfully',
       data: {
         isVerified: true,
+        verifiedAt: new Date().toISOString(),
+        similarity: Math.round(comparisonResult.similarity),
       },
     });
   })
 );
 
 // ─── GET /v1/me/export ──────────────────────────────────────────────────────────
+// GDPR-compliant data export. Returns all user data as a single JSON object.
 
 router.get(
   '/export',
@@ -563,27 +1066,61 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const user = (req as AuthenticatedRequest).user;
 
-    // GDPR data export stub
-    // In production, this would generate a downloadable archive
     const [
       { data: userData },
-      { data: basic },
+      { data: basics },
       { data: sindhi },
       { data: chatti },
       { data: personality },
       { data: photos },
       { data: settings },
+      { data: privileges },
+      { data: safety },
       { data: actions },
       { data: matches },
       { data: messages },
     ] = await Promise.all([
       supabase.from('users').select('*').eq('id', user.id).single(),
-      supabase.from('basic_profiles').select('*').eq('user_id', user.id).single(),
-      supabase.from('sindhi_profiles').select('*').eq('user_id', user.id).single(),
-      supabase.from('chatti_profiles').select('*').eq('user_id', user.id).single(),
-      supabase.from('personality_profiles').select('*').eq('user_id', user.id).single(),
-      supabase.from('photos').select('*').eq('user_id', user.id),
-      supabase.from('user_settings').select('*').eq('user_id', user.id).single(),
+      supabase
+        .from('basic_profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .single(),
+      supabase
+        .from('sindhi_profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .single(),
+      supabase
+        .from('chatti_profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .single(),
+      supabase
+        .from('personality_profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .single(),
+      supabase
+        .from('photos')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('sort_order'),
+      supabase
+        .from('user_settings')
+        .select('*')
+        .eq('user_id', user.id)
+        .single(),
+      supabase
+        .from('user_privileges')
+        .select('*')
+        .eq('user_id', user.id)
+        .single(),
+      supabase
+        .from('user_safety')
+        .select('*')
+        .eq('user_id', user.id)
+        .single(),
       supabase.from('actions').select('*').eq('actor_id', user.id),
       supabase
         .from('matches')
@@ -592,14 +1129,28 @@ router.get(
       supabase.from('messages').select('*').eq('sender_id', user.id),
     ]);
 
+    // Set response headers for download
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="mitimati-data-export-${user.id}.json"`
+    );
+    res.setHeader('Content-Type', 'application/json');
+
     res.json({
       success: true,
       data: {
         exportedAt: new Date().toISOString(),
         user: userData,
-        profile: { basic, sindhi, chatti, personality },
+        profile: {
+          basics,
+          sindhi,
+          chatti,
+          personality,
+        },
         photos: photos || [],
         settings,
+        privileges,
+        safety,
         actions: actions || [],
         matches: matches || [],
         messages: messages || [],

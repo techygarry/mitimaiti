@@ -5,44 +5,43 @@ import { redis } from '../config/redis';
 import { AppError, asyncHandler } from '../utils/errors';
 import { authenticate } from '../middleware/auth';
 import { validate } from '../middleware/validate';
-import { requirePlan, attachPlanInfo } from '../middleware/planCheck';
 import { getCulturalScore } from '../services/scoring';
-import { AuthenticatedRequest, Plan } from '../types';
+import { getKundliScore } from '../services/kundli';
+import { AuthenticatedRequest, FeedCard, CulturalBadge, KundliTier } from '../types';
 
 const router = Router();
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
 
 const PAGE_SIZE = 20;
-const BOOST_DURATION_MINUTES = 30;
-const PASSPORT_DURATION_HOURS = 24;
+const PASSPORT_DURATION_DAYS = 7;
+const COLD_CITY_THRESHOLD = 10;
+const EXPLORE_INJECT_MIN = 2;
+const EXPLORE_INJECT_MAX = 3;
+const CULTURAL_CACHE_TTL = 3600;      // 1 hour
+const PASS_WINDOW_DAYS = 30;
+const INACTIVE_DAYS = 30;
 
-// Feed score weights by plan
-const WEIGHT_FREE = {
-  culturalScore: 0.6,
-  completeness: 0.2,
-  recency: 0.1,
-  verified: 0.1,
-};
-
-const WEIGHT_PREMIUM = {
-  culturalScore: 0.5,
+// Feed score weights (NO premium tiers — everyone is equal)
+const WEIGHT = {
+  cultural: 0.50,
   completeness: 0.15,
-  recency: 0.1,
-  verified: 0.1,
-  intentMatch: 0.15,
+  activity: 0.15,
+  intent: 0.15,
+  freshness: 0.05,
 };
+
+// Gold (90%+) interleave target positions
+const GOLD_POSITIONS = [0, 4, 9, 14, 19];
 
 // ─── Schemas ────────────────────────────────────────────────────────────────────
 
-const boostSchema = z.object({});
-
 const passportSchema = z.object({
-  city: z.string().min(1, 'City is required'),
-  country: z.string().min(1, 'Country is required'),
+  city: z.string().min(1, 'City is required').max(100),
+  country: z.string().min(1, 'Country is required').max(100),
 });
 
-// ─── Helper: Calculate age from DOB ─────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────────────
 
 function calculateAge(dob: string): number {
   const birth = new Date(dob);
@@ -55,78 +54,203 @@ function calculateAge(dob: string): number {
   return age;
 }
 
-// ─── Helper: Compute feed score ─────────────────────────────────────────────────
-
-interface FeedCandidate {
-  userId: string;
-  culturalScore: number;
-  profileCompleteness: number;
-  lastActiveAt: string;
-  isVerified: boolean;
-  isBoosted: boolean;
-  intentMatch: boolean;
+/**
+ * Build canonical cache key for a pair of users.
+ * Ensures score(A,B) === score(B,A).
+ */
+function pairKey(prefix: string, idA: string, idB: string): string {
+  const [first, second] = idA < idB ? [idA, idB] : [idB, idA];
+  return `${prefix}:${first}:${second}`;
 }
 
-function computeFeedScore(candidate: FeedCandidate, plan: Plan): number {
-  const weights = plan === 'free' ? WEIGHT_FREE : WEIGHT_PREMIUM;
+/**
+ * Safe Redis GET — returns null if Redis is unavailable.
+ */
+async function safeRedisGet(key: string): Promise<string | null> {
+  try {
+    return await redis.get(key);
+  } catch {
+    return null;
+  }
+}
 
+/**
+ * Safe Redis SET — silently swallows errors.
+ */
+async function safeRedisSet(key: string, value: string, ttl: number): Promise<void> {
+  try {
+    await redis.set(key, value, 'EX', ttl);
+  } catch {
+    // Redis down — continue without caching
+  }
+}
+
+/**
+ * Safe Redis DEL — silently swallows errors.
+ */
+async function safeRedisDel(...keys: string[]): Promise<void> {
+  try {
+    if (keys.length > 0) await redis.del(...keys);
+  } catch {
+    // Redis down — continue
+  }
+}
+
+// ─── Scoring Helpers ────────────────────────────────────────────────────────────
+
+interface ScoredCandidate {
+  userId: string;
+  profile: any;
+  userMeta: any;
+  culturalScore: number;
+  culturalBadge: CulturalBadge;
+  kundliScore: number | null;
+  kundliTier: KundliTier | null;
+  feedScore: number;
+}
+
+/**
+ * Get cached or compute cultural score for a pair.
+ * Falls back to direct computation if Redis is down.
+ */
+async function getCachedCulturalScore(
+  myId: string,
+  otherId: string,
+): Promise<{ total: number; badge: CulturalBadge }> {
+  const key = pairKey('pair', myId, otherId);
+
+  // Try Redis cache
+  const cached = await safeRedisGet(key);
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      return { total: parsed.total, badge: parsed.badge };
+    } catch {
+      // Corrupted cache — recompute
+    }
+  }
+
+  // Compute via scoring service (which has its own caching layer)
+  try {
+    const result = await getCulturalScore(myId, otherId);
+
+    // Also cache in our pair key for fast feed access
+    await safeRedisSet(key, JSON.stringify({ total: result.total, badge: result.badge }), CULTURAL_CACHE_TTL);
+
+    return { total: result.total, badge: result.badge };
+  } catch {
+    return { total: 0, badge: 'none' };
+  }
+}
+
+/**
+ * Get cached kundli score for a pair via the kundli service.
+ * Only used for card display, NOT for ranking.
+ * The service handles its own Redis caching (24h TTL).
+ */
+async function getCachedKundliScore(
+  myId: string,
+  otherId: string,
+): Promise<{ score: number | null; tier: KundliTier | null }> {
+  try {
+    const result = await getKundliScore(myId, otherId);
+    if (!result) return { score: null, tier: null };
+    return { score: result.total, tier: result.tier };
+  } catch {
+    return { score: null, tier: null };
+  }
+}
+
+/**
+ * Compute feed ranking score.
+ * cultural 50% + profile_completeness 15% + activity 15% + intent 15% + freshness 5%
+ */
+function computeFeedScore(
+  culturalScore: number,
+  profileCompleteness: number,
+  lastActiveAt: string,
+  intentMatch: boolean,
+  createdAt: string,
+): number {
   // Normalize cultural score (0-100 -> 0-1)
-  const culturalNorm = candidate.culturalScore / 100;
+  const culturalNorm = Math.min(culturalScore, 100) / 100;
 
   // Normalize completeness (0-100 -> 0-1)
-  const completenessNorm = candidate.profileCompleteness / 100;
+  const completenessNorm = Math.min(profileCompleteness, 100) / 100;
 
-  // Recency: decay over 7 days
-  const lastActive = new Date(candidate.lastActiveAt).getTime();
+  // Activity: decay over 7 days (0 = 7d+ inactive, 1 = just active)
+  const lastActive = new Date(lastActiveAt).getTime();
   const now = Date.now();
   const daysSinceActive = (now - lastActive) / (1000 * 60 * 60 * 24);
-  const recencyNorm = Math.max(0, 1 - daysSinceActive / 7);
+  const activityNorm = Math.max(0, 1 - daysSinceActive / 7);
 
-  // Verified bonus
-  const verifiedNorm = candidate.isVerified ? 1 : 0;
+  // Intent match: binary
+  const intentNorm = intentMatch ? 1 : 0;
 
-  let score =
-    culturalNorm * weights.culturalScore +
-    completenessNorm * weights.completeness +
-    recencyNorm * weights.recency +
-    verifiedNorm * weights.verified;
+  // Freshness: new accounts get a boost for 14 days
+  const daysSinceCreation = (now - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24);
+  const freshnessNorm = Math.max(0, 1 - daysSinceCreation / 14);
 
-  // Premium: intent match bonus
-  if (plan !== 'free' && 'intentMatch' in weights) {
-    score += (candidate.intentMatch ? 1 : 0) * (weights as any).intentMatch;
-  }
+  const score =
+    culturalNorm * WEIGHT.cultural +
+    completenessNorm * WEIGHT.completeness +
+    activityNorm * WEIGHT.activity +
+    intentNorm * WEIGHT.intent +
+    freshnessNorm * WEIGHT.freshness;
 
-  // Boost multiplier
-  if (candidate.isBoosted) {
-    score *= 1.5;
-  }
-
-  return Math.round(score * 1000) / 1000;
+  return Math.round(score * 10000) / 10000;
 }
 
-// ─── Helper: Interleave high and low scores ─────────────────────────────────────
+/**
+ * Interleave gold-badge profiles at positions ~1, 5, 10, 15, 20.
+ * Fill remaining with great (65-89%) + normal profiles.
+ */
+function interleaveFeed(candidates: ScoredCandidate[]): ScoredCandidate[] {
+  if (candidates.length <= 5) return candidates;
 
-function interleaveScores<T extends { feedScore: number }>(sorted: T[]): T[] {
-  if (sorted.length <= 4) return sorted;
+  const gold: ScoredCandidate[] = [];
+  const great: ScoredCandidate[] = [];
+  const normal: ScoredCandidate[] = [];
 
-  const result: T[] = [];
-  const high = sorted.slice(0, Math.ceil(sorted.length * 0.7));
-  const low = sorted.slice(Math.ceil(sorted.length * 0.7));
+  for (const c of candidates) {
+    if (c.culturalScore >= 90) gold.push(c);
+    else if (c.culturalScore >= 65) great.push(c);
+    else normal.push(c);
+  }
 
-  let hIdx = 0;
-  let lIdx = 0;
+  // Sort each tier by feedScore descending
+  gold.sort((a, b) => b.feedScore - a.feedScore);
+  great.sort((a, b) => b.feedScore - a.feedScore);
+  normal.sort((a, b) => b.feedScore - a.feedScore);
 
-  while (hIdx < high.length || lIdx < low.length) {
-    // 3 high, 1 low pattern
-    for (let i = 0; i < 3 && hIdx < high.length; i++) {
-      result.push(high[hIdx++]);
-    }
-    if (lIdx < low.length) {
-      result.push(low[lIdx++]);
+  // Merge great + normal as the fill pool
+  const fill = [...great, ...normal];
+
+  const result: ScoredCandidate[] = new Array(candidates.length);
+  let goldIdx = 0;
+  let fillIdx = 0;
+
+  for (let i = 0; i < candidates.length; i++) {
+    if (GOLD_POSITIONS.includes(i) && goldIdx < gold.length) {
+      result[i] = gold[goldIdx++];
+    } else if (fillIdx < fill.length) {
+      result[i] = fill[fillIdx++];
+    } else if (goldIdx < gold.length) {
+      // Ran out of fill, use remaining gold
+      result[i] = gold[goldIdx++];
     }
   }
 
-  return result;
+  // Any remaining gold profiles that didn't fit
+  while (goldIdx < gold.length) {
+    result.push(gold[goldIdx++]);
+  }
+  while (fillIdx < fill.length) {
+    result.push(fill[fillIdx++]);
+  }
+
+  // Remove any undefined slots (shouldn't happen, but defensive)
+  return result.filter(Boolean);
 }
 
 // ─── GET /v1/feed ───────────────────────────────────────────────────────────────
@@ -134,75 +258,140 @@ function interleaveScores<T extends { feedScore: number }>(sorted: T[]): T[] {
 router.get(
   '/',
   authenticate,
-  attachPlanInfo,
   asyncHandler(async (req: Request, res: Response) => {
     const user = (req as AuthenticatedRequest).user;
-    const cursor = req.query.cursor as string | undefined;
-    const limit = Math.min(parseInt(req.query.limit as string) || PAGE_SIZE, 50);
+    const lastUserId = (req.query.last_user_id as string) || null;
 
-    // 1. Get current user's profile and settings
+    // ── Step 0: Load current user's profile, settings, and metadata ─────────
+
     const [
       { data: myBasic },
       { data: mySettings },
-      { data: myPrivileges },
+      { data: myUser },
     ] = await Promise.all([
       supabase.from('basic_profiles').select('*').eq('user_id', user.id).single(),
       supabase.from('user_settings').select('*').eq('user_id', user.id).single(),
-      supabase.from('user_privileges').select('*').eq('user_id', user.id).single(),
+      supabase.from('users').select('id, created_at, profile_completeness').eq('id', user.id).single(),
     ]);
 
     if (!myBasic) {
       throw new AppError(400, 'Complete your profile before discovering matches', 'PROFILE_INCOMPLETE');
     }
 
-    // Determine discovery city (passport or actual)
-    const passportCity = myPrivileges?.passport_city;
-    const passportExpires = myPrivileges?.passport_expires
-      ? new Date(myPrivileges.passport_expires)
-      : null;
-    const usePassport =
-      passportCity && passportExpires && passportExpires > new Date();
+    // Determine discovery city: passport mode or actual city
+    let discoveryCity = myBasic.city;
+    let isPassportMode = false;
 
-    const discoveryCity = usePassport ? passportCity : myBasic.city;
+    try {
+      const passportData = await safeRedisGet(`passport:${user.id}`);
+      if (passportData) {
+        const parsed = JSON.parse(passportData);
+        discoveryCity = parsed.city;
+        isPassportMode = true;
+      }
+    } catch {
+      // Check DB fallback
+      if (mySettings?.passport_city) {
+        const passportExpiry = mySettings.passport_expires_at
+          ? new Date(mySettings.passport_expires_at)
+          : null;
+        if (passportExpiry && passportExpiry > new Date()) {
+          discoveryCity = mySettings.passport_city;
+          isPassportMode = true;
+        }
+      }
+    }
 
-    // 2. Get blocked users (both directions)
-    const { data: blocks } = await supabase
-      .from('blocks')
-      .select('blocker_id, blocked_id')
-      .or(`blocker_id.eq.${user.id},blocked_id.eq.${user.id}`);
+    // ── Step 1: Hard filters — build exclusion set ──────────────────────────
+
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - PASS_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const inactiveThreshold = new Date(now.getTime() - INACTIVE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+    // Parallel exclusion queries
+    const [
+      { data: blocks },
+      { data: passedRecently },
+      { data: snoozedUsers },
+      { data: incognitoLikedMe },
+    ] = await Promise.all([
+      // Blocked both directions
+      supabase
+        .from('blocks')
+        .select('blocker_id, blocked_id')
+        .or(`blocker_id.eq.${user.id},blocked_id.eq.${user.id}`),
+
+      // Passed within 30 days
+      supabase
+        .from('actions')
+        .select('target_id')
+        .eq('actor_id', user.id)
+        .eq('kind', 'pass')
+        .gte('created_at', thirtyDaysAgo),
+
+      // Users in snooze mode
+      supabase
+        .from('user_settings')
+        .select('user_id')
+        .eq('is_snoozed', true),
+
+      // Incognito users who liked me (exception: they SHOULD appear)
+      supabase
+        .from('actions')
+        .select('actor_id')
+        .eq('target_id', user.id)
+        .eq('kind', 'like'),
+    ]);
 
     const blockedIds = new Set<string>();
     (blocks || []).forEach((b: any) => {
       blockedIds.add(b.blocker_id === user.id ? b.blocked_id : b.blocker_id);
     });
 
-    // 3. Get already-seen users (actions by this user)
-    const { data: seenActions } = await supabase
-      .from('actions')
-      .select('target_id')
-      .eq('actor_id', user.id);
-
-    const seenIds = new Set<string>(
-      (seenActions || []).map((a: any) => a.target_id)
+    const passedIds = new Set<string>(
+      (passedRecently || []).map((a: any) => a.target_id),
     );
 
-    // 4. Build exclusion list
-    const excludeIds = new Set([user.id, ...blockedIds, ...seenIds]);
+    const snoozedIds = new Set<string>(
+      (snoozedUsers || []).map((s: any) => s.user_id),
+    );
 
-    // 5. Hard filters query
-    const genderPreference = mySettings?.gender_preference || 'any';
-    const ageMin = mySettings?.age_min || 18;
-    const ageMax = mySettings?.age_max || 50;
+    const incognitoExceptionIds = new Set<string>(
+      (incognitoLikedMe || []).map((a: any) => a.actor_id),
+    );
 
-    // Calculate DOB range for age filter
-    const now = new Date();
+    // Users I've already liked (don't show again)
+    const { data: alreadyLiked } = await supabase
+      .from('actions')
+      .select('target_id')
+      .eq('actor_id', user.id)
+      .eq('kind', 'like');
+
+    const likedIds = new Set<string>(
+      (alreadyLiked || []).map((a: any) => a.target_id),
+    );
+
+    // Combined hard exclusion set
+    const hardExclude = new Set<string>([
+      user.id,
+      ...blockedIds,
+      ...passedIds,
+      ...likedIds,
+    ]);
+
+    // ── Step 2: Apply user's 16 discovery filters ───────────────────────────
+
+    const ageMin = mySettings?.age_min ?? 18;
+    const ageMax = mySettings?.age_max ?? 50;
     const maxDob = new Date(now.getFullYear() - ageMin, now.getMonth(), now.getDate())
-      .toISOString()
-      .split('T')[0];
+      .toISOString().split('T')[0];
     const minDob = new Date(now.getFullYear() - ageMax - 1, now.getMonth(), now.getDate())
-      .toISOString()
-      .split('T')[0];
+      .toISOString().split('T')[0];
 
+    // Gender preference mapping
+    const genderPref = mySettings?.gender_preference || 'any';
+
+    // Build base query for candidate profiles
     let query = supabase
       .from('basic_profiles')
       .select(`
@@ -213,252 +402,459 @@ router.get(
         bio,
         height_cm,
         city,
+        state,
         country,
         intent,
         education,
-        occupation
+        occupation,
+        religion
       `)
       .gte('date_of_birth', minDob)
       .lte('date_of_birth', maxDob);
 
     // Gender filter
-    if (genderPreference !== 'any') {
-      query = query.eq('gender', genderPreference);
+    if (genderPref === 'men') {
+      query = query.eq('gender', 'man');
+    } else if (genderPref === 'women') {
+      query = query.eq('gender', 'woman');
+    }
+    // 'any' / 'everyone' = no gender filter
+
+    // City filter for discovery
+    query = query.eq('city', discoveryCity);
+
+    // Intent filter from settings
+    if (mySettings?.intent_filter) {
+      query = query.eq('intent', mySettings.intent_filter);
     }
 
-    // City filter (basic - can be overridden for premium)
-    if (user.plan === 'free') {
-      query = query.eq('city', discoveryCity);
+    // Religion filter from settings
+    if (mySettings?.religion_filter) {
+      query = query.eq('religion', mySettings.religion_filter);
     }
 
-    // Premium filters from query params
-    if (user.plan !== 'free') {
-      const intentFilter = req.query.intent as string;
-      const verifiedFilter = req.query.verified as string;
-      const heightMin = req.query.heightMin as string;
-      const heightMax = req.query.heightMax as string;
-      const religionFilter = req.query.religion as string;
-      const cityFilter = req.query.city as string;
+    // Verified only filter
+    // (We'll apply this after joining with users table)
+    const verifiedOnly: boolean = mySettings?.verified_only === true;
 
-      if (intentFilter) {
-        query = query.eq('intent', intentFilter);
-      }
-      if (heightMin) {
-        query = query.gte('height_cm', parseInt(heightMin));
-      }
-      if (heightMax) {
-        query = query.lte('height_cm', parseInt(heightMax));
-      }
-      if (religionFilter) {
-        query = query.eq('religion', religionFilter);
-      }
-      if (cityFilter) {
-        query = query.eq('city', cityFilter);
-      }
+    // Height filters
+    if (mySettings?.height_min) {
+      query = query.gte('height_cm', mySettings.height_min);
+    }
+    if (mySettings?.height_max) {
+      query = query.lte('height_cm', mySettings.height_max);
     }
 
-    // Pagination: fetch more than needed to account for exclusions
-    const fetchSize = limit * 3;
-    query = query.limit(fetchSize);
-
-    if (cursor) {
-      query = query.gt('user_id', cursor);
+    // Education filter
+    if (mySettings?.education_filter) {
+      query = query.eq('education', mySettings.education_filter);
     }
 
-    const { data: candidates, error: queryError } = await query;
+    // Cursor pagination
+    if (lastUserId) {
+      query = query.gt('user_id', lastUserId);
+    }
+
+    // Fetch 3x to account for exclusions
+    const fetchSize = PAGE_SIZE * 3;
+    query = query.limit(fetchSize).order('user_id');
+
+    const { data: candidateProfiles, error: queryError } = await query;
 
     if (queryError) {
-      throw new AppError(500, 'Failed to fetch discovery feed', 'FEED_ERROR');
+      throw new AppError(500, 'Failed to fetch discovery candidates', 'FEED_QUERY_ERROR');
     }
 
-    // 6. Filter out excluded users
-    const filtered = (candidates || []).filter(
-      (c: any) => !excludeIds.has(c.user_id)
-    );
+    // ── Filter out hard-excluded, banned, hidden, inactive, incognito ───────
 
-    // 7. Get user metadata for scoring
-    const candidateIds = filtered.map((c: any) => c.user_id);
+    const candidateIds = (candidateProfiles || [])
+      .filter((c: any) => !hardExclude.has(c.user_id))
+      .map((c: any) => c.user_id);
 
     if (candidateIds.length === 0) {
-      res.json({
+      // Cold city check
+      const { count: cityCount } = await supabase
+        .from('basic_profiles')
+        .select('*', { count: 'exact', head: true })
+        .eq('city', discoveryCity);
+
+      if ((cityCount || 0) < COLD_CITY_THRESHOLD) {
+        return res.json({
+          success: true,
+          data: {
+            cards: [],
+            cursor: null,
+            has_more: false,
+            cold_city: true,
+            city_profile_count: cityCount || 0,
+            message: `Only ${cityCount || 0} profiles in ${discoveryCity}. Explore other cities!`,
+          },
+        });
+      }
+
+      return res.json({
         success: true,
         data: {
           cards: [],
           cursor: null,
-          hasMore: false,
+          has_more: false,
+          cold_city: false,
         },
       });
-      return;
     }
 
+    // Get user metadata (active status, ban status, verification, completeness, etc.)
     const { data: usersMeta } = await supabase
       .from('users')
-      .select('id, is_verified, profile_completeness, last_active_at')
+      .select('id, is_active, is_banned, is_hidden, is_verified, profile_completeness, last_active_at, created_at')
       .in('id', candidateIds);
 
-    const { data: privileges } = await supabase
-      .from('user_privileges')
-      .select('user_id, boost_active_until')
-      .in('user_id', candidateIds);
-
-    // Verified filter (premium only)
-    const verifiedOnly = req.query.verified === 'true' && user.plan !== 'free';
-
-    // 8. Score each candidate
     const metaMap = new Map<string, any>();
     (usersMeta || []).forEach((u: any) => metaMap.set(u.id, u));
 
-    const privMap = new Map<string, any>();
-    (privileges || []).forEach((p: any) => privMap.set(p.user_id, p));
+    // Get incognito status
+    const { data: incognitoSettings } = await supabase
+      .from('user_settings')
+      .select('user_id, is_incognito')
+      .in('user_id', candidateIds);
 
-    const scoredCandidates = [];
+    const incognitoMap = new Map<string, boolean>();
+    (incognitoSettings || []).forEach((s: any) => {
+      incognitoMap.set(s.user_id, s.is_incognito === true);
+    });
 
-    for (const candidate of filtered) {
-      const meta = metaMap.get(candidate.user_id);
+    // Apply soft filters from additional settings (drinking, smoking, kids, fluency, gotra, etc.)
+    // These require joining sindhi_profiles and personality_profiles
+    const { data: sindhiProfiles } = await supabase
+      .from('sindhi_profiles')
+      .select('user_id, sindhi_fluency, gotra')
+      .in('user_id', candidateIds);
+
+    const sindhiMap = new Map<string, any>();
+    (sindhiProfiles || []).forEach((s: any) => sindhiMap.set(s.user_id, s));
+
+    const { data: personalityProfiles } = await supabase
+      .from('personality_profiles')
+      .select('user_id, smoking, drinking, interests')
+      .in('user_id', candidateIds);
+
+    const personalityMap = new Map<string, any>();
+    (personalityProfiles || []).forEach((p: any) => personalityMap.set(p.user_id, p));
+
+    // Build the filtered candidate list
+    const profileMap = new Map<string, any>();
+    (candidateProfiles || []).forEach((c: any) => profileMap.set(c.user_id, c));
+
+    const filteredCandidateIds: string[] = [];
+
+    for (const cId of candidateIds) {
+      const meta = metaMap.get(cId);
       if (!meta) continue;
 
+      // Hard filter: banned, hidden, inactive
+      if (meta.is_banned || meta.is_hidden || !meta.is_active) continue;
+
+      // Hard filter: inactive 30d+
+      if (meta.last_active_at && new Date(meta.last_active_at) < new Date(inactiveThreshold)) continue;
+
+      // Hard filter: snoozed
+      if (snoozedIds.has(cId)) continue;
+
+      // Hard filter: incognito (unless they liked me)
+      if (incognitoMap.get(cId) && !incognitoExceptionIds.has(cId)) continue;
+
+      // Soft filter: verified only
       if (verifiedOnly && !meta.is_verified) continue;
 
-      const priv = privMap.get(candidate.user_id);
-      const isBoosted =
-        priv?.boost_active_until && new Date(priv.boost_active_until) > new Date();
-
-      // Get cultural score
-      let culturalScore = 0;
-      try {
-        const csResult = await getCulturalScore(user.id, candidate.user_id);
-        culturalScore = csResult.total;
-      } catch {
-        // If cultural score fails, use 0
+      // Soft filter: smoking
+      if (mySettings?.smoking_filter) {
+        const personality = personalityMap.get(cId);
+        if (personality && personality.smoking && personality.smoking !== mySettings.smoking_filter) continue;
       }
 
-      const feedScore = computeFeedScore(
-        {
-          userId: candidate.user_id,
-          culturalScore,
-          profileCompleteness: meta.profile_completeness || 0,
-          lastActiveAt: meta.last_active_at,
-          isVerified: meta.is_verified,
-          isBoosted: !!isBoosted,
-          intentMatch: candidate.intent === myBasic.intent,
-        },
-        user.plan
-      );
+      // Soft filter: drinking
+      if (mySettings?.drinking_filter) {
+        const personality = personalityMap.get(cId);
+        if (personality && personality.drinking && personality.drinking !== mySettings.drinking_filter) continue;
+      }
 
-      scoredCandidates.push({
-        ...candidate,
-        age: calculateAge(candidate.date_of_birth),
-        culturalScore,
-        isVerified: meta.is_verified,
-        isBoosted: !!isBoosted,
-        feedScore,
+      // Soft filter: fluency minimum
+      if (mySettings?.fluency_filter) {
+        const sindhi = sindhiMap.get(cId);
+        const fluencyRank: Record<string, number> = { native: 4, fluent: 3, basic: 2, none: 1 };
+        const minFluency = fluencyRank[mySettings.fluency_filter] || 0;
+        const candidateFluency = fluencyRank[sindhi?.sindhi_fluency] || 0;
+        if (candidateFluency < minFluency) continue;
+      }
+
+      // Soft filter: gotra exclusion (same gotra = traditionally incompatible)
+      if (mySettings?.gotra_filter === 'exclude_same') {
+        const sindhi = sindhiMap.get(cId);
+        const mySindhiData = sindhiMap.get(user.id);
+        if (sindhi?.gotra && mySindhiData?.gotra && sindhi.gotra === mySindhiData.gotra) continue;
+      }
+
+      // Soft filter: dietary
+      if (mySettings?.dietary_filter) {
+        const profile = profileMap.get(cId);
+        // dietary could be on personality or chatti; check personality for now
+        const personality = personalityMap.get(cId);
+        if (personality?.dietary && personality.dietary !== mySettings.dietary_filter) continue;
+      }
+
+      // Soft filter: kundli minimum score
+      // Skip at filter stage; we check after computing kundli score below
+
+      filteredCandidateIds.push(cId);
+    }
+
+    if (filteredCandidateIds.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          cards: [],
+          cursor: null,
+          has_more: false,
+          cold_city: false,
+        },
       });
     }
 
-    // 9. Sort and interleave
-    scoredCandidates.sort((a, b) => b.feedScore - a.feedScore);
-    const interleaved = interleaveScores(scoredCandidates);
+    // ── Step 3 & 4: Compute/fetch cultural + kundli scores ──────────────────
 
-    // 10. Paginate
-    const page = interleaved.slice(0, limit);
+    const scored: ScoredCandidate[] = [];
+    const kundliMin = mySettings?.kundli_min ?? 0;
 
-    // Get photos for the page
-    const pageIds = page.map((c) => c.user_id);
-    const { data: photos } = await supabase
-      .from('photos')
-      .select('user_id, url_medium, url_thumb, is_primary, sort_order')
-      .in('user_id', pageIds)
-      .order('sort_order');
+    // Process in parallel batches of 10
+    const BATCH_SIZE = 10;
+    for (let i = 0; i < filteredCandidateIds.length; i += BATCH_SIZE) {
+      const batch = filteredCandidateIds.slice(i, i + BATCH_SIZE);
+
+      const batchResults = await Promise.allSettled(
+        batch.map(async (cId) => {
+          const profile = profileMap.get(cId);
+          const meta = metaMap.get(cId);
+          if (!profile || !meta) return null;
+
+          // Cultural score
+          const { total: culturalScore, badge: culturalBadge } =
+            await getCachedCulturalScore(user.id, cId);
+
+          // Kundli score (display only, NOT for ranking)
+          const { score: kundliScore, tier: kundliTier } =
+            await getCachedKundliScore(user.id, cId);
+
+          // Kundli minimum filter
+          if (kundliMin > 0 && kundliScore !== null && kundliScore < kundliMin) {
+            return null;
+          }
+
+          // Step 5: Feed score
+          const intentMatch = profile.intent === myBasic.intent;
+          const feedScore = computeFeedScore(
+            culturalScore,
+            meta.profile_completeness || 0,
+            meta.last_active_at || meta.created_at,
+            intentMatch,
+            meta.created_at,
+          );
+
+          return {
+            userId: cId,
+            profile,
+            userMeta: meta,
+            culturalScore,
+            culturalBadge,
+            kundliScore,
+            kundliTier,
+            feedScore,
+          } as ScoredCandidate;
+        }),
+      );
+
+      for (const result of batchResults) {
+        if (result.status === 'fulfilled' && result.value) {
+          scored.push(result.value);
+        }
+      }
+    }
+
+    // ── Step 6: Interleave gold at target positions ─────────────────────────
+
+    const interleaved = interleaveFeed(scored);
+
+    // Take top PAGE_SIZE
+    const page = interleaved.slice(0, PAGE_SIZE);
+
+    // ── Explore injection: 2-3 cards from other cities ──────────────────────
+
+    let exploreCards: ScoredCandidate[] = [];
+
+    if (page.length >= 5 && !isPassportMode) {
+      const exploreCount = Math.floor(Math.random() * (EXPLORE_INJECT_MAX - EXPLORE_INJECT_MIN + 1)) + EXPLORE_INJECT_MIN;
+
+      const allExcludeIds = new Set([...hardExclude, ...filteredCandidateIds]);
+
+      const { data: exploreCandidates } = await supabase
+        .from('basic_profiles')
+        .select('user_id, display_name, date_of_birth, gender, bio, height_cm, city, state, country, intent, education, occupation, religion')
+        .neq('city', discoveryCity)
+        .gte('date_of_birth', minDob)
+        .lte('date_of_birth', maxDob)
+        .limit(exploreCount * 3);
+
+      if (exploreCandidates && exploreCandidates.length > 0) {
+        const exploreFiltered = exploreCandidates.filter((c: any) => !allExcludeIds.has(c.user_id));
+
+        for (const ec of exploreFiltered.slice(0, exploreCount)) {
+          const { total: cs, badge: cb } = await getCachedCulturalScore(user.id, ec.user_id);
+          exploreCards.push({
+            userId: ec.user_id,
+            profile: ec,
+            userMeta: { is_verified: false, profile_completeness: 0 },
+            culturalScore: cs,
+            culturalBadge: cb,
+            kundliScore: null,
+            kundliTier: null,
+            feedScore: 0,
+          });
+        }
+      }
+    }
+
+    // ── Cold city handling ───────────────────────────────────────────────────
+
+    let coldCity = false;
+    let cityProfileCount: number | undefined;
+
+    if (page.length < COLD_CITY_THRESHOLD) {
+      const { count } = await supabase
+        .from('basic_profiles')
+        .select('*', { count: 'exact', head: true })
+        .eq('city', discoveryCity);
+
+      if ((count || 0) < COLD_CITY_THRESHOLD) {
+        coldCity = true;
+        cityProfileCount = count || 0;
+      }
+    }
+
+    // ── Build response: fetch photos and prompts for page candidates ────────
+
+    const allPageIds = [...page.map((c) => c.userId), ...exploreCards.map((c) => c.userId)];
+
+    const [
+      { data: photos },
+      { data: prompts },
+      { data: interests },
+      { data: dailyPromptAnswers },
+    ] = await Promise.all([
+      supabase
+        .from('photos')
+        .select('user_id, url_medium, url_original, sort_order')
+        .in('user_id', allPageIds)
+        .order('sort_order')
+        .limit(allPageIds.length * 6),
+      supabase
+        .from('prompt_answers')
+        .select('user_id, answer, prompt_id')
+        .in('user_id', allPageIds)
+        .order('created_at', { ascending: false })
+        .limit(allPageIds.length * 3),
+      supabase
+        .from('personality_profiles')
+        .select('user_id, interests')
+        .in('user_id', allPageIds),
+      supabase
+        .from('users')
+        .select('id, daily_prompt_answer')
+        .in('id', allPageIds),
+    ]);
 
     const photoMap = new Map<string, any[]>();
     (photos || []).forEach((p: any) => {
-      if (!photoMap.has(p.user_id)) {
-        photoMap.set(p.user_id, []);
-      }
+      if (!photoMap.has(p.user_id)) photoMap.set(p.user_id, []);
       photoMap.get(p.user_id)!.push(p);
     });
 
-    // Build response cards
-    const cards = page.map((c) => ({
-      userId: c.user_id,
-      displayName: c.display_name,
-      age: c.age,
-      bio: c.bio,
-      city: c.city,
-      country: c.country,
-      intent: c.intent,
-      education: c.education,
-      occupation: c.occupation,
-      heightCm: c.height_cm,
-      culturalScore: c.culturalScore,
-      isVerified: c.isVerified,
-      isBoosted: c.isBoosted,
-      photos: (photoMap.get(c.user_id) || []).map((p: any) => ({
-        urlMedium: p.url_medium,
-        urlThumb: p.url_thumb,
-        isPrimary: p.is_primary,
-      })),
-    }));
-
-    const lastCard = page[page.length - 1];
-    const nextCursor = lastCard ? lastCard.user_id : null;
-    const hasMore = interleaved.length > limit;
-
-    res.json({
-      success: true,
-      data: {
-        cards,
-        cursor: nextCursor,
-        hasMore,
-      },
+    const promptMap = new Map<string, any[]>();
+    (prompts || []).forEach((p: any) => {
+      if (!promptMap.has(p.user_id)) promptMap.set(p.user_id, []);
+      promptMap.get(p.user_id)!.push(p);
     });
-  })
-);
 
-// ─── POST /v1/feed/boost ────────────────────────────────────────────────────────
+    const interestMap = new Map<string, string[]>();
+    (interests || []).forEach((i: any) => {
+      interestMap.set(i.user_id, i.interests || []);
+    });
 
-router.post(
-  '/boost',
-  authenticate,
-  asyncHandler(async (req: Request, res: Response) => {
-    const user = (req as AuthenticatedRequest).user;
+    const dailyPromptMap = new Map<string, string | null>();
+    (dailyPromptAnswers || []).forEach((u: any) => {
+      dailyPromptMap.set(u.id, u.daily_prompt_answer || null);
+    });
 
-    // Check if already boosted
-    const { data: priv } = await supabase
-      .from('user_privileges')
-      .select('boost_active_until')
-      .eq('user_id', user.id)
-      .single();
+    // Compute common interests with current user
+    const myInterests = new Set<string>(interestMap.get(user.id) || []);
 
-    if (priv?.boost_active_until && new Date(priv.boost_active_until) > new Date()) {
-      throw new AppError(400, 'You already have an active boost', 'BOOST_ACTIVE');
+    function buildCard(c: ScoredCandidate, isExplore: boolean = false): FeedCard & { is_explore?: boolean } {
+      const userPhotos = photoMap.get(c.userId) || [];
+      const userPrompts = promptMap.get(c.userId) || [];
+      const userInterests = interestMap.get(c.userId) || [];
+      const commonCount = userInterests.filter((i) => myInterests.has(i)).length;
+
+      return {
+        id: c.userId,
+        first_name: c.profile.display_name?.split(' ')[0] || 'Unknown',
+        age: calculateAge(c.profile.date_of_birth),
+        city: c.profile.city,
+        intent: c.profile.intent,
+        is_verified: c.userMeta.is_verified || false,
+        photos: userPhotos.map((p: any) => ({
+          url_600: p.url_medium,
+          url_1200: p.url_original,
+          is_video: false,
+        })),
+        about_me: c.profile.bio || null,
+        prompts: userPrompts.slice(0, 3),
+        interests: userInterests,
+        cultural_score: c.culturalScore,
+        cultural_badge: c.culturalBadge,
+        kundli_score: c.kundliScore,
+        kundli_tier: c.kundliTier,
+        common_interests: commonCount,
+        daily_prompt_answer: dailyPromptMap.get(c.userId) || null,
+        ...(isExplore ? { is_explore: true } : {}),
+      };
     }
 
-    // Set boost expiry
-    const boostUntil = new Date();
-    boostUntil.setMinutes(boostUntil.getMinutes() + BOOST_DURATION_MINUTES);
+    const cards: (FeedCard & { is_explore?: boolean })[] = page.map((c) => buildCard(c, false));
 
-    await supabase
-      .from('user_privileges')
-      .update({ boost_active_until: boostUntil.toISOString() })
-      .eq('user_id', user.id);
+    // Inject explore cards at random positions near the end
+    for (const ec of exploreCards) {
+      const insertPos = Math.max(cards.length - 5, Math.floor(cards.length * 0.6));
+      const randomOffset = Math.floor(Math.random() * 5);
+      cards.splice(Math.min(insertPos + randomOffset, cards.length), 0, buildCard(ec, true));
+    }
 
-    // Cache in Redis for fast lookup
-    await redis.set(
-      `boost:${user.id}`,
-      '1',
-      'EX',
-      BOOST_DURATION_MINUTES * 60
-    );
+    // Final trim to PAGE_SIZE + explore
+    const finalCards = cards.slice(0, PAGE_SIZE + exploreCards.length);
+
+    const lastCard = page[page.length - 1];
+    const nextCursor = lastCard ? lastCard.userId : null;
+    const hasMore = interleaved.length > PAGE_SIZE;
 
     res.json({
       success: true,
       data: {
-        boostActiveUntil: boostUntil.toISOString(),
-        durationMinutes: BOOST_DURATION_MINUTES,
+        cards: finalCards,
+        cursor: nextCursor,
+        has_more: hasMore,
+        cold_city: coldCity,
+        ...(coldCity ? { city_profile_count: cityProfileCount } : {}),
+        ...(isPassportMode ? { passport_city: discoveryCity } : {}),
       },
     });
-  })
+  }),
 );
 
 // ─── POST /v1/feed/passport ─────────────────────────────────────────────────────
@@ -466,32 +862,65 @@ router.post(
 router.post(
   '/passport',
   authenticate,
-  requirePlan('gold', 'platinum'),
   validate(passportSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const user = (req as AuthenticatedRequest).user;
     const { city, country } = req.body;
 
-    const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + PASSPORT_DURATION_HOURS);
+    // Check if passport is already active
+    const existingPassport = await safeRedisGet(`passport:${user.id}`);
+    if (existingPassport) {
+      try {
+        const parsed = JSON.parse(existingPassport);
+        throw new AppError(
+          409,
+          `Passport already active for ${parsed.city}. Wait for it to expire or it will be replaced.`,
+          'PASSPORT_ACTIVE',
+        );
+      } catch (err) {
+        if (err instanceof AppError) throw err;
+        // Corrupted data — allow overwrite
+      }
+    }
 
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + PASSPORT_DURATION_DAYS);
+
+    const passportData = JSON.stringify({
+      city,
+      country,
+      activated_at: new Date().toISOString(),
+      expires_at: expiresAt.toISOString(),
+    });
+
+    const ttlSeconds = PASSPORT_DURATION_DAYS * 24 * 60 * 60;
+
+    // Write to Redis with 7-day TTL
+    await safeRedisSet(`passport:${user.id}`, passportData, ttlSeconds);
+
+    // Persist to user_settings as durable fallback
     await supabase
-      .from('user_privileges')
+      .from('user_settings')
       .update({
         passport_city: city,
-        passport_expires: expiresAt.toISOString(),
+        passport_country: country,
+        passport_expires_at: expiresAt.toISOString(),
       })
       .eq('user_id', user.id);
 
-    res.json({
+    // Invalidate any cached feed for this user
+    await safeRedisDel(`feed_cache:${user.id}`);
+
+    res.status(201).json({
       success: true,
       data: {
-        passportCity: city,
-        passportCountry: country,
-        expiresAt: expiresAt.toISOString(),
+        passport_city: city,
+        passport_country: country,
+        expires_at: expiresAt.toISOString(),
+        duration_days: PASSPORT_DURATION_DAYS,
       },
     });
-  })
+  }),
 );
 
 export default router;

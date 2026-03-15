@@ -173,7 +173,7 @@ export default function OtpPage() {
           </div>
 
           {/* Resend */}
-          <div className="text-center">
+          <div className="text-center space-y-3">
             {countdown > 0 ? (
               <p className="text-sm text-textLight">
                 Resend code in{' '}
@@ -182,9 +182,17 @@ export default function OtpPage() {
                 </span>
               </p>
             ) : resendCount >= 3 ? (
-              <p className="text-sm text-red-500">
-                Maximum resend attempts reached. Please try again later.
-              </p>
+              <div>
+                <p className="text-sm text-red-500 mb-2">
+                  Maximum resend attempts reached.
+                </p>
+                <a
+                  href="mailto:support@mitimaiti.com"
+                  className="text-sm font-semibold text-rose hover:text-rose-dark transition-colors"
+                >
+                  Contact Support for help
+                </a>
+              </div>
             ) : (
               <button
                 onClick={handleResend}
@@ -192,6 +200,18 @@ export default function OtpPage() {
               >
                 Resend OTP
               </button>
+            )}
+
+            {resendCount >= 2 && resendCount < 3 && (
+              <p className="text-xs text-textLight">
+                Still not received?{' '}
+                <a
+                  href="mailto:support@mitimaiti.com"
+                  className="text-rose font-medium hover:underline"
+                >
+                  Get help
+                </a>
+              </p>
             )}
           </div>
         </motion.div>

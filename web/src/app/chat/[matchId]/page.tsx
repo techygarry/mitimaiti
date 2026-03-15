@@ -5,16 +5,16 @@ import { useRouter, useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft,
-  Phone,
-  Video,
   Camera,
   Mic,
   Send,
   Smile,
+  CheckCheck,
+  Check,
 } from 'lucide-react';
 import AppShell from '@/components/ui/AppShell';
 import Avatar from '@/components/ui/Avatar';
-import Card from '@/components/ui/Card';
+import CountdownTimer from '@/components/ui/CountdownTimer';
 import { mockMatches, mockMessages, mockIcebreakers } from '@/lib/mockData';
 import { Message } from '@/types';
 import { format, isToday, isYesterday } from 'date-fns';
@@ -47,19 +47,29 @@ function MessageBubble({
         }`}
       >
         <p className="text-sm leading-relaxed">{message.content}</p>
-        <p
-          className={`text-[11px] mt-1 ${
-            isMine ? 'text-white/60' : 'text-textLight'
-          }`}
-        >
-          {formatMessageTime(message.created_at)}
-        </p>
+        <div className={`flex items-center gap-1 mt-1 ${isMine ? 'justify-end' : ''}`}>
+          <p
+            className={`text-[11px] ${
+              isMine ? 'text-white/60' : 'text-textLight'
+            }`}
+          >
+            {formatMessageTime(message.created_at)}
+          </p>
+          {/* Read receipts for sent messages */}
+          {isMine && (
+            message.read ? (
+              <CheckCheck className="w-3.5 h-3.5 text-white/80" aria-label="Read" />
+            ) : (
+              <Check className="w-3.5 h-3.5 text-white/50" aria-label="Delivered" />
+            )
+          )}
+        </div>
       </div>
     </motion.div>
   );
 }
 
-function IcebreakerCard({
+function IcebreakerChip({
   text,
   onClick,
 }: {
@@ -69,7 +79,8 @@ function IcebreakerCard({
   return (
     <button
       onClick={onClick}
-      className="inline-block px-4 py-2.5 bg-rose/5 border border-rose-light/30 rounded-2xl text-sm text-rose font-medium hover:bg-rose/10 transition-colors whitespace-nowrap shrink-0"
+      className="inline-block px-4 py-2.5 bg-rose/5 border border-rose-light/30 rounded-2xl text-sm text-rose font-medium hover:bg-rose/10 transition-colors whitespace-nowrap shrink-0 touch-target"
+      aria-label={`Send icebreaker: ${text}`}
     >
       {text}
     </button>
@@ -79,7 +90,7 @@ function IcebreakerCard({
 function TypingIndicator() {
   return (
     <div className="flex justify-start mb-3">
-      <div className="bg-gray-100 px-5 py-3 rounded-2xl rounded-bl-md flex items-center gap-1">
+      <div className="bg-gray-100 px-5 py-3 rounded-2xl rounded-bl-md flex items-center gap-1" aria-label="Typing">
         <motion.div
           animate={{ opacity: [0.4, 1, 0.4] }}
           transition={{ duration: 1, repeat: Infinity, delay: 0 }}
@@ -113,9 +124,10 @@ function MatchesSidebar({ currentMatchId }: { currentMatchId: string }) {
           <button
             key={match.id}
             onClick={() => router.push(`/chat/${match.id}`)}
-            className={`w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors text-left ${
+            className={`w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors text-left touch-target ${
               match.id === currentMatchId ? 'bg-rose/5 border-r-2 border-rose' : ''
             }`}
+            aria-label={`Chat with ${match.user.first_name}`}
           >
             <Avatar
               src={match.photos[0]?.url}
@@ -158,9 +170,9 @@ export default function ChatPage() {
   );
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isLocked, setIsLocked] = useState(match.first_msg_locked);
   const isNewChat = messages.length === 0;
 
-  // Scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
@@ -168,6 +180,7 @@ export default function ChatPage() {
   const sendMessage = useCallback(
     (text: string) => {
       if (!text.trim()) return;
+      if (isLocked) return;
 
       const newMessage: Message = {
         id: `msg-${Date.now()}`,
@@ -182,7 +195,15 @@ export default function ChatPage() {
       setMessages((prev) => [...prev, newMessage]);
       setInput('');
 
-      // Simulate typing response
+      // If this is the first message, lock the input
+      if (messages.length === 0 || isNewChat) {
+        setIsLocked(true);
+        // Simulate reply after delay
+        setTimeout(() => {
+          setIsLocked(false);
+        }, 5000);
+      }
+
       setIsTyping(true);
       setTimeout(() => {
         setIsTyping(false);
@@ -196,9 +217,13 @@ export default function ChatPage() {
           created_at: new Date().toISOString(),
         };
         setMessages((prev) => [...prev, reply]);
+        // Mark previous messages as read
+        setMessages((prev) =>
+          prev.map((m) => (m.sender_id === 'me' ? { ...m, read: true } : m))
+        );
       }, 2000 + Math.random() * 2000);
     },
-    [matchId, match.user.id]
+    [matchId, match.user.id, isLocked, messages.length, isNewChat]
   );
 
   const handleSend = useCallback(() => {
@@ -229,7 +254,8 @@ export default function ChatPage() {
           <div className="flex items-center gap-4 px-6 py-4 border-b border-gray-100 bg-white shrink-0">
             <button
               onClick={() => router.back()}
-              className="lg:hidden p-2 rounded-full hover:bg-gray-100 transition-colors"
+              className="lg:hidden p-2 rounded-full hover:bg-gray-100 transition-colors touch-target"
+              aria-label="Go back"
             >
               <ArrowLeft className="w-5 h-5 text-charcoal" />
             </button>
@@ -250,21 +276,31 @@ export default function ChatPage() {
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button className="p-2.5 rounded-xl hover:bg-gray-100 transition-colors">
-                <Phone className="w-5 h-5 text-charcoal" />
-              </button>
-              <button className="p-2.5 rounded-xl hover:bg-gray-100 transition-colors">
-                <Video className="w-5 h-5 text-charcoal" />
-              </button>
-            </div>
+            {/* Countdown timer visible to both */}
+            {!match.is_dissolved && (
+              <CountdownTimer
+                expiresAt={match.expires_at}
+                variant="badge"
+              />
+            )}
           </div>
 
-          {/* Respect-first banner */}
-          {match.reply_deadline && (
+          {/* Countdown banner */}
+          {!match.is_dissolved && (
+            <CountdownTimer
+              expiresAt={match.expires_at}
+              variant="banner"
+            />
+          )}
+
+          {/* Locked first message state */}
+          {isLocked && (
             <div className="px-6 py-2.5 bg-rose/5 border-b border-rose-light/20 text-center">
               <p className="text-sm text-rose font-medium">
-                Message sent! Waiting for reply...
+                Waiting for reply...
+              </p>
+              <p className="text-xs text-textLight mt-0.5">
+                Your message has been sent. You can send another message once they reply.
               </p>
             </div>
           )}
@@ -279,7 +315,7 @@ export default function ChatPage() {
                 </p>
                 <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
                   {mockIcebreakers.map((ice) => (
-                    <IcebreakerCard
+                    <IcebreakerChip
                       key={ice.id}
                       text={ice.text}
                       onClick={() => sendMessage(ice.text)}
@@ -318,43 +354,62 @@ export default function ChatPage() {
 
           {/* Input bar */}
           <div className="shrink-0 border-t border-gray-100 bg-white px-6 py-4">
-            <div className="flex items-center gap-3 max-w-4xl mx-auto">
-              <button className="p-2.5 rounded-xl hover:bg-gray-100 transition-colors">
-                <Camera className="w-5 h-5 text-textLight" />
-              </button>
-
-              <div className="flex-1 relative">
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyPress}
-                  placeholder="Type a message..."
-                  className="w-full px-5 py-3 bg-gray-100 rounded-full text-sm text-charcoal placeholder:text-textLight/50 focus:bg-gray-50 focus:ring-2 focus:ring-rose-light outline-none transition-all"
-                />
-                <button className="absolute right-4 top-1/2 -translate-y-1/2">
-                  <Smile className="w-5 h-5 text-textLight" />
-                </button>
+            {isLocked ? (
+              <div className="flex items-center justify-center py-3 bg-gray-50 rounded-full">
+                <p className="text-sm text-textLight font-medium">
+                  Waiting for reply...
+                </p>
               </div>
+            ) : (
+              <div className="flex items-center gap-3 max-w-4xl mx-auto">
+                <button
+                  className="p-2.5 rounded-xl hover:bg-gray-100 transition-colors touch-target"
+                  aria-label="Send photo"
+                >
+                  <Camera className="w-5 h-5 text-textLight" />
+                </button>
 
-              <button className="p-2.5 rounded-xl hover:bg-gray-100 transition-colors">
-                <Mic className="w-5 h-5 text-textLight" />
-              </button>
+                <div className="flex-1 relative">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={handleKeyPress}
+                    placeholder="Type a message..."
+                    className="w-full px-5 py-3 bg-gray-100 rounded-full text-sm text-charcoal placeholder:text-textLight/50 focus:bg-gray-50 focus:ring-2 focus:ring-rose-light outline-none transition-all"
+                    aria-label="Message input"
+                  />
+                  <button
+                    className="absolute right-4 top-1/2 -translate-y-1/2 touch-target"
+                    aria-label="Emoji picker"
+                  >
+                    <Smile className="w-5 h-5 text-textLight" />
+                  </button>
+                </div>
 
-              <motion.button
-                whileTap={{ scale: 0.9 }}
-                onClick={handleSend}
-                disabled={!input.trim()}
-                className={`p-3 rounded-full transition-all ${
-                  input.trim()
-                    ? 'bg-rose text-white shadow-sm hover:bg-rose-dark'
-                    : 'bg-gray-100 text-textLight'
-                }`}
-              >
-                <Send className="w-5 h-5" />
-              </motion.button>
-            </div>
+                <button
+                  className="p-2.5 rounded-xl hover:bg-gray-100 transition-colors touch-target"
+                  aria-label="Record voice note"
+                >
+                  <Mic className="w-5 h-5 text-textLight" />
+                </button>
+
+                <motion.button
+                  whileTap={{ scale: 0.9 }}
+                  onClick={handleSend}
+                  disabled={!input.trim()}
+                  className={`p-3 rounded-full transition-all touch-target ${
+                    input.trim()
+                      ? 'bg-rose text-white shadow-sm hover:bg-rose-dark'
+                      : 'bg-gray-100 text-textLight'
+                  }`}
+                  aria-label="Send message"
+                >
+                  <Send className="w-5 h-5" />
+                </motion.button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -362,7 +417,6 @@ export default function ChatPage() {
   );
 }
 
-// Auto-reply for demo
 function getAutoReply(message: string): string {
   const replies = [
     'That sounds amazing! Tell me more about yourself.',
