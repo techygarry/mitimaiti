@@ -127,12 +127,27 @@ class FeedNotifier extends StateNotifier<FeedState> {
   }
 
   List<FeedCard> _generateMockCards(int count) {
-    final names = [
-      'Priya', 'Kavita', 'Meena', 'Sonal', 'Riya',
-      'Nisha', 'Pooja', 'Anita', 'Deepa', 'Rekha',
-      'Rahul', 'Arjun', 'Vikram', 'Sunil', 'Raj',
-      'Amit', 'Nikhil', 'Karan', 'Rohan', 'Dev',
-    ];
+    final showMe = _storage.getOnboardingField('showMe') as String? ?? 'everyone';
+
+    final List<String> names;
+    if (showMe == 'women') {
+      names = [
+        'Priya', 'Kavita', 'Meena', 'Sonal', 'Riya',
+        'Nisha', 'Pooja', 'Anita', 'Deepa', 'Rekha',
+      ];
+    } else if (showMe == 'men') {
+      names = [
+        'Rahul', 'Arjun', 'Vikram', 'Sunil', 'Raj',
+        'Amit', 'Nikhil', 'Karan', 'Rohan', 'Dev',
+      ];
+    } else {
+      names = [
+        'Priya', 'Kavita', 'Meena', 'Sonal', 'Riya',
+        'Nisha', 'Pooja', 'Anita', 'Deepa', 'Rekha',
+        'Rahul', 'Arjun', 'Vikram', 'Sunil', 'Raj',
+        'Amit', 'Nikhil', 'Karan', 'Rohan', 'Dev',
+      ];
+    }
     final cities = [
       'Mumbai', 'Delhi', 'Pune', 'Ahmedabad', 'Bangalore',
       'Hyderabad', 'Jaipur', 'Udaipur', 'Jodhpur', 'Chennai',
@@ -162,7 +177,13 @@ class FeedNotifier extends StateNotifier<FeedState> {
           phone: '+91900000000$i',
           firstName: names[nameIdx],
           birthday: DateTime.now().subtract(Duration(days: age * 365)),
-          gender: nameIdx < 10 ? 'Woman' : 'Man',
+          gender: showMe == 'women'
+              ? 'Woman'
+              : showMe == 'men'
+                  ? 'Man'
+                  : nameIdx < 10
+                      ? 'Woman'
+                      : 'Man',
           photos: List.generate(
             3 + (i % 3),
             (p) => Photo(

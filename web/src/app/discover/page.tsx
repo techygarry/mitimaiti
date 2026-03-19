@@ -60,8 +60,17 @@ function EmptyState() {
   );
 }
 
+function getFilteredProfiles() {
+  const showMe = typeof window !== 'undefined'
+    ? sessionStorage.getItem('onboarding_showme')
+    : null;
+  if (showMe === 'men') return mockProfiles.filter((p) => p.user.gender === 'man');
+  if (showMe === 'women') return mockProfiles.filter((p) => p.user.gender === 'woman');
+  return mockProfiles; // 'everyone' or not set
+}
+
 export default function DiscoverPage() {
-  const [profiles, setProfiles] = useState(mockProfiles);
+  const [profiles, setProfiles] = useState(() => getFilteredProfiles());
   const [loading, setLoading] = useState(false);
   const [likesUsed, setLikesUsed] = useState(7);
   const [showFilters, setShowFilters] = useState(false);
@@ -74,7 +83,7 @@ export default function DiscoverPage() {
       prefetchTriggered.current = true;
       setLoading(true);
       setTimeout(() => {
-        setProfiles((prev) => [...prev, ...mockProfiles]);
+        setProfiles((prev) => [...prev, ...getFilteredProfiles()]);
         setLoading(false);
         prefetchTriggered.current = false;
       }, 1500);

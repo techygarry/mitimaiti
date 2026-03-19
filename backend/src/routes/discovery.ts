@@ -695,13 +695,21 @@ router.get(
 
       const allExcludeIds = new Set([...hardExclude, ...filteredCandidateIds]);
 
-      const { data: exploreCandidates } = await supabase
+      let exploreQuery = supabase
         .from('basic_profiles')
         .select('user_id, display_name, date_of_birth, gender, bio, height_cm, city, state, country, intent, education, occupation, religion')
         .neq('city', discoveryCity)
         .gte('date_of_birth', minDob)
-        .lte('date_of_birth', maxDob)
-        .limit(exploreCount * 3);
+        .lte('date_of_birth', maxDob);
+
+      // Apply same gender filter to explore candidates
+      if (genderPref === 'men') {
+        exploreQuery = exploreQuery.eq('gender', 'man');
+      } else if (genderPref === 'women') {
+        exploreQuery = exploreQuery.eq('gender', 'woman');
+      }
+
+      const { data: exploreCandidates } = await exploreQuery.limit(exploreCount * 3);
 
       if (exploreCandidates && exploreCandidates.length > 0) {
         const exploreFiltered = exploreCandidates.filter((c: any) => !allExcludeIds.has(c.user_id));
