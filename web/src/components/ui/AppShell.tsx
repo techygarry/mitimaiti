@@ -9,25 +9,23 @@ import {
   Heart,
   MessageCircle,
   User,
-  Settings,
   Bell,
   Users,
 } from 'lucide-react';
 
 const mainNavItems = [
   { href: '/discover', label: 'Discover', icon: Compass },
-  { href: '/inbox', label: 'Inbox', icon: Heart, badge: 3 },
-  { href: '/inbox?tab=matches', label: 'Matches', icon: MessageCircle, badge: 2 },
+  { href: '/inbox', label: 'Liked You', icon: Heart, badge: 3 },
+  { href: '/matches', label: 'Matches', icon: MessageCircle, badge: 2 },
   { href: '/profile', label: 'Profile', icon: User },
 ];
 
 const sidebarItems = [
   { href: '/discover', label: 'Discover', icon: Compass },
   { href: '/inbox', label: 'Liked You', icon: Heart },
-  { href: '/inbox?tab=matches', label: 'Matches', icon: MessageCircle },
+  { href: '/matches', label: 'Matches', icon: MessageCircle },
   { href: '/profile', label: 'My Profile', icon: User },
   { href: '/family', label: 'Family Mode', icon: Users },
-  { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -99,13 +97,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <Bell className="w-5 h-5 text-textLight" />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose rounded-full" />
             </button>
-            <Link
-              href="/settings"
-              className="p-2 rounded-xl hover:bg-gray-50 transition-colors touch-target"
-              aria-label="Settings"
-            >
-              <Settings className="w-5 h-5 text-textLight" />
-            </Link>
           </div>
         </div>
       </header>

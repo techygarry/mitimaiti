@@ -175,16 +175,16 @@ export default function WelcomePage() {
                   <div className="bg-white rounded-2xl overflow-hidden shadow-card">
                     <div className="h-56 gradient-rose flex items-center justify-center relative">
                       <div className="w-20 h-20 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border-4 border-white/30">
-                        <span className="text-3xl font-bold text-white">P</span>
+                        <span className="text-3xl font-bold text-white">T</span>
                       </div>
                       <Sparkles className="absolute top-4 right-4 w-5 h-5 text-gold animate-pulse" />
                     </div>
                     <div className="p-5">
-                      <h3 className="text-xl font-bold text-charcoal">Priya, 27</h3>
-                      <p className="text-sm text-textLight mt-1">Mumbai, India</p>
+                      <h3 className="text-xl font-bold text-charcoal">Tanya, 28</h3>
+                      <p className="text-sm text-textLight mt-1">Hyderabad, India</p>
                       <div className="mt-3 flex gap-2">
                         <span className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-medium border border-amber-200">
-                          92% Cultural Match
+                          94% Cultural Match
                         </span>
                         <span className="px-2.5 py-1 bg-rose/10 text-rose rounded-full text-xs font-medium">
                           💍 Marriage

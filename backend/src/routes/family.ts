@@ -704,7 +704,7 @@ router.get(
     blockedIds.add(user.id);
 
     // Build discovery query based on owner's preferences
-    const genderPreference = ownerSettings.gender_preference || 'any';
+    const genderPreference = ownerSettings.gender_preference || 'everyone';
     const ageMin = ownerSettings.age_min || 18;
     const ageMax = ownerSettings.age_max || 50;
 
@@ -727,8 +727,10 @@ router.get(
       .gte('date_of_birth', minDob)
       .lte('date_of_birth', maxDob);
 
-    if (genderPreference !== 'any') {
-      query = query.eq('gender', genderPreference);
+    if (genderPreference === 'men') {
+      query = query.eq('gender', 'man');
+    } else if (genderPreference === 'women') {
+      query = query.eq('gender', 'woman');
     }
 
     if (cursor) {

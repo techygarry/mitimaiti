@@ -2,6 +2,8 @@ export interface User {
   id: string;
   phone: string;
   first_name: string;
+  last_name?: string;
+  show_full_name?: boolean;
   date_of_birth: string;
   age: number;
   gender: 'man' | 'woman' | 'nonbinary';

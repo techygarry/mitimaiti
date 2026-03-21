@@ -428,6 +428,7 @@ export default function EditProfilePage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('basics');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isNonSindhi = typeof window !== 'undefined' && localStorage.getItem('onboarding_non_sindhi') === 'true';
 
   return (
     <AppShell>
@@ -440,45 +441,46 @@ export default function EditProfilePage() {
             <h1 className="text-2xl font-bold text-charcoal">Edit Profile</h1>
           </div>
 
-          <div className="flex flex-col lg:flex-row gap-8">
-            {/* Left Column - Photo Grid */}
-            <div className="lg:w-96 shrink-0">
-              <div className="bg-white rounded-2xl shadow-card p-6 sticky top-24">
-                <h2 className="font-semibold text-charcoal mb-4">Photos</h2>
-                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" />
-                <div className="grid grid-cols-3 gap-3">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => fileInputRef.current?.click()}
-                      className="aspect-[3/4] rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 flex flex-col items-center justify-center hover:border-rose hover:bg-rose/5 transition-all touch-target"
-                      aria-label={i === 0 ? 'Upload main photo' : `Upload photo ${i + 1}`}
-                    >
-                      {i === 0 ? (
-                        <>
-                          <Camera className="w-7 h-7 text-textLight/40 mb-1" />
-                          <div className="flex items-center gap-0.5">
-                            <Star className="w-3.5 h-3.5 text-gold" />
-                            <span className="text-xs text-textLight">Main</span>
-                          </div>
-                        </>
-                      ) : (
-                        <Plus className="w-7 h-7 text-textLight/40" />
-                      )}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-xs text-textLight mt-3 text-center">
-                  Add up to 6 photos. First photo is your main profile photo.
-                </p>
+          <div className="max-w-xl mx-auto lg:mx-0 space-y-6">
+            {/* Photos */}
+            <div className="bg-white rounded-2xl shadow-card p-6">
+              <h2 className="font-semibold text-charcoal mb-4">Photos</h2>
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" />
+              <div className="grid grid-cols-3 gap-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="aspect-[3/4] rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 flex flex-col items-center justify-center hover:border-rose hover:bg-rose/5 transition-all touch-target"
+                    aria-label={i === 0 ? 'Upload main photo' : `Upload photo ${i + 1}`}
+                  >
+                    {i === 0 ? (
+                      <>
+                        <Camera className="w-7 h-7 text-textLight/40 mb-1" />
+                        <div className="flex items-center gap-0.5">
+                          <Star className="w-3.5 h-3.5 text-gold" />
+                          <span className="text-xs text-textLight">Main</span>
+                        </div>
+                      </>
+                    ) : (
+                      <Plus className="w-7 h-7 text-textLight/40" />
+                    )}
+                  </button>
+                ))}
               </div>
+              <p className="text-xs text-textLight mt-3 text-center">
+                Add up to 6 photos. First photo is your main profile photo.
+              </p>
             </div>
 
-            {/* Right Column - Tabbed Form */}
-            <div className="flex-1">
+            {/* Tabbed Form */}
+            <div>
               <div className="bg-white rounded-2xl shadow-card overflow-hidden">
                 <Tabs
-                  tabs={[
+                  tabs={isNonSindhi ? [
+                    { id: 'basics', label: 'My Basics' },
+                    { id: 'personality', label: 'Personality' },
+                  ] : [
                     { id: 'basics', label: 'My Basics' },
                     { id: 'sindhi', label: 'Sindhi Identity' },
                     { id: 'chatti', label: 'My Chatti' },
@@ -496,9 +498,9 @@ export default function EditProfilePage() {
                   transition={{ duration: 0.3 }}
                 >
                   {activeTab === 'basics' && <BasicsTab />}
-                  {activeTab === 'sindhi' && <SindhiTab />}
-                  {activeTab === 'chatti' && <ChattiTab />}
-                  {activeTab === 'culture' && <CultureTab />}
+                  {!isNonSindhi && activeTab === 'sindhi' && <SindhiTab />}
+                  {!isNonSindhi && activeTab === 'chatti' && <ChattiTab />}
+                  {!isNonSindhi && activeTab === 'culture' && <CultureTab />}
                   {activeTab === 'personality' && <PersonalityTab />}
                 </motion.div>
               </div>

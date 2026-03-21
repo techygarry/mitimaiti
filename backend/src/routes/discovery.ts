@@ -389,7 +389,7 @@ router.get(
       .toISOString().split('T')[0];
 
     // Gender preference mapping
-    const genderPref = mySettings?.gender_preference || 'any';
+    const genderPref = mySettings?.gender_preference || 'everyone';
 
     // Build base query for candidate profiles
     let query = supabase

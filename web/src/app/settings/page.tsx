@@ -116,6 +116,10 @@ export default function SettingsPage() {
   const router = useRouter();
   const [showDiscovery, setShowDiscovery] = useState(true);
   const [incognito, setIncognito] = useState(false);
+  const [showFullName, setShowFullName] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('setting_show_full_name') === 'true';
+    return false;
+  });
 
   // 18 notification toggles
   const [notifMatches, setNotifMatches] = useState(true);
@@ -157,12 +161,15 @@ export default function SettingsPage() {
             <SettingRow icon={EyeOff} label="Incognito Mode" description="Browse without being seen">
               <Toggle enabled={incognito} onChange={(v) => { setIncognito(v); showToast.success(v ? 'Incognito on' : 'Incognito off'); }} />
             </SettingRow>
+            <SettingRow icon={Users} label="Display Full Name" description="Show your last name on your profile">
+              <Toggle enabled={showFullName} onChange={(v) => { setShowFullName(v); localStorage.setItem('setting_show_full_name', String(v)); showToast.success(v ? 'Full name visible' : 'Only first name visible'); }} />
+            </SettingRow>
             <SettingRow icon={Moon} label="Snooze" description="Temporarily hide your profile" onClick={() => showToast.info('Snooze settings coming soon')} />
           </SettingSection>
 
-          {/* Family */}
-          <SettingSection title="Family">
-            <SettingRow icon={Users} label="Manage Family Access" description="Invite family to help you find matches" onClick={() => router.push('/family')} />
+          {/* Family & Permissions */}
+          <SettingSection title="Family & Permissions">
+            <SettingRow icon={Users} label="Family Mode & Permissions" description="Manage family access, members, and profile visibility" onClick={() => router.push('/family')} />
           </SettingSection>
 
           {/* Discovery - 16 filters */}

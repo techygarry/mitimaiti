@@ -420,6 +420,16 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const user = (req as AuthenticatedRequest).user;
 
+    // Fetch user's gender preference to filter inbox results
+    const { data: mySettings } = await supabase
+      .from('user_settings')
+      .select('gender_preference')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    const genderPref = mySettings?.gender_preference || 'everyone';
+    const preferredGender = genderPref === 'men' ? 'man' : genderPref === 'women' ? 'woman' : null;
+
     // ── Section 1: Users who liked me (NOT blurred — every user is equal) ───
 
     // Get all likes targeting current user
@@ -458,7 +468,7 @@ router.get(
       ] = await Promise.all([
         supabase
           .from('basic_profiles')
-          .select('user_id, display_name, date_of_birth, city, intent, bio, education, occupation')
+          .select('user_id, display_name, date_of_birth, gender, city, intent, bio, education, occupation')
           .in('user_id', likerIds),
         supabase
           .from('users')
@@ -521,6 +531,9 @@ router.get(
 
         if (!profile) continue;
 
+        // Skip profiles that don't match gender preference
+        if (preferredGender && profile.gender !== preferredGender) continue;
+
         likedYouCards.push({
           id: like.actor_id,
           action_id: like.id,
@@ -567,7 +580,7 @@ router.get(
       ] = await Promise.all([
         supabase
           .from('basic_profiles')
-          .select('user_id, display_name, city, date_of_birth')
+          .select('user_id, display_name, gender, city, date_of_birth')
           .in('user_id', otherIds),
         supabase
           .from('users')
@@ -597,6 +610,9 @@ router.get(
         const profile = matchProfileMap.get(otherId);
         const userMeta = matchUserMap.get(otherId);
         const photo = matchPhotoMap.get(otherId);
+
+        // Skip profiles that don't match gender preference
+        if (preferredGender && profile?.gender !== preferredGender) continue;
 
         // Get last message for this match
         const { data: lastMessage } = await supabase

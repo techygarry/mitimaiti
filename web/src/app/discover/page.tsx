@@ -7,7 +7,7 @@ import AppShell from '@/components/ui/AppShell';
 import DiscoveryCard from '@/components/discover/DiscoveryCard';
 import FilterSheet from '@/components/discover/FilterSheet';
 import Button from '@/components/ui/Button';
-import { mockProfiles } from '@/lib/mockData';
+import { getFilteredMockProfiles } from '@/lib/mockData';
 import { showToast } from '@/components/ui/Toast';
 
 function ShimmerCard() {
@@ -61,34 +61,18 @@ function EmptyState() {
 }
 
 function getFilteredProfiles() {
-  const showMe = typeof window !== 'undefined'
-    ? sessionStorage.getItem('onboarding_showme')
-    : null;
-  if (showMe === 'men') return mockProfiles.filter((p) => p.user.gender === 'man');
-  if (showMe === 'women') return mockProfiles.filter((p) => p.user.gender === 'woman');
-  return mockProfiles; // 'everyone' or not set
+  return getFilteredMockProfiles();
 }
 
 export default function DiscoverPage() {
-  const [profiles, setProfiles] = useState(() => getFilteredProfiles());
-  const [loading, setLoading] = useState(false);
-  const [likesUsed, setLikesUsed] = useState(7);
+  const [profiles, setProfiles] = useState(() => {
+    // Triple the deck for continuous engagement
+    const base = getFilteredProfiles();
+    return [...base, ...base.map(p => ({...p, user: {...p.user, id: p.user.id + '_b'}})), ...base.map(p => ({...p, user: {...p.user, id: p.user.id + '_c'}}))];
+  });
+  const [likesUsed, setLikesUsed] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
-  const observerRef = useRef<HTMLDivElement>(null);
-  const prefetchTriggered = useRef(false);
-
-  // Pre-fetch trigger at card 15
-  useEffect(() => {
-    if (profiles.length <= 5 && !prefetchTriggered.current && !loading) {
-      prefetchTriggered.current = true;
-      setLoading(true);
-      setTimeout(() => {
-        setProfiles((prev) => [...prev, ...getFilteredProfiles()]);
-        setLoading(false);
-        prefetchTriggered.current = false;
-      }, 1500);
-    }
-  }, [profiles.length, loading]);
+  const [exitDirection, setExitDirection] = useState<'left' | 'right'>('left');
 
   const handleAction = useCallback(
     (profileId: string, action: 'like' | 'pass') => {
@@ -104,15 +88,30 @@ export default function DiscoverPage() {
         showToast.success(`You liked ${profile.user.first_name}!`);
       }
 
-      setProfiles((prev) => prev.filter((p) => p.user.id !== profileId));
+      // Set direction first, then remove card after a tick so AnimatePresence picks up the exit direction
+      setExitDirection(action === 'like' ? 'right' : 'left');
+      setTimeout(() => {
+        setProfiles((prev) => {
+          const remaining = prev.filter((p) => p.user.id !== profileId);
+          if (remaining.length <= 3) {
+            const fresh = getFilteredProfiles();
+            const suffix = '_' + Date.now();
+            return [...remaining, ...fresh.map(p => ({...p, user: {...p.user, id: p.user.id + suffix}}))];
+          }
+          return remaining;
+        });
+      }, 10);
     },
     [profiles, likesUsed]
   );
 
+  // Show top 6 cards in the deck for a "many matches" illusion
+  const visibleCards = profiles.slice(0, 6);
+
   return (
     <AppShell>
       <div className="flex gap-8 p-6">
-        {/* Left Column - Profile Cards Feed */}
+        {/* Left Column - Card Deck */}
         <div className="flex-1 max-w-xl mx-auto lg:mx-0">
           {/* Filter bar */}
           <div className="flex items-center justify-between mb-6">
@@ -127,57 +126,58 @@ export default function DiscoverPage() {
             </button>
           </div>
 
-          <AnimatePresence>
-            {profiles.length > 0 ? (
-              profiles.map((card) => (
-                <DiscoveryCard
-                  key={card.user.id}
-                  card={card}
-                  onAction={(action) => handleAction(card.user.id, action)}
-                  likesUsed={likesUsed}
-                  likesMax={50}
-                />
-              ))
-            ) : !loading ? (
-              <EmptyState />
-            ) : null}
-          </AnimatePresence>
+          {/* Card deck — padded right to show edge layers */}
+          <div className="relative" style={{ marginRight: '48px' }}>
+            {/* 5 stacked edge layers peeking from the right */}
+            {profiles.length > 0 && [1, 2, 3, 4, 5].map((i) => (
+              <div
+                key={`edge-${i}`}
+                className="absolute rounded-3xl shadow-sm"
+                style={{
+                  top: `${i * 3}px`,
+                  bottom: `${i * 3}px`,
+                  left: `${i * 4}px`,
+                  right: `${-i * 8}px`,
+                  backgroundColor: `hsl(0, 0%, ${100 - i * 5}%)`,
+                  zIndex: 6 - i,
+                }}
+              />
+            ))}
 
-          {/* Loading shimmer */}
-          {loading && (
-            <div>
-              <ShimmerCard />
-              <ShimmerCard />
+            {/* Active top card */}
+            <div className="relative" style={{ zIndex: 10 }}>
+              <AnimatePresence mode="wait">
+                {profiles.length > 0 ? (
+                  <motion.div
+                    key={profiles[0].user.id}
+                    initial={{ scale: 0.95, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{
+                      x: exitDirection === 'right' ? 300 : -300,
+                      opacity: 0,
+                      rotate: exitDirection === 'right' ? 15 : -15,
+                      transition: { duration: 0.35, ease: 'easeInOut' },
+                    }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+                  >
+                    <DiscoveryCard
+                      card={profiles[0]}
+                      onAction={(action) => handleAction(profiles[0].user.id, action)}
+                      likesUsed={likesUsed}
+                      likesMax={50}
+                    />
+                  </motion.div>
+                ) : (
+                  <EmptyState />
+                )}
+              </AnimatePresence>
             </div>
-          )}
-
-          <div ref={observerRef} />
+          </div>
         </div>
 
         {/* Right Column - Sidebar */}
         <div className="hidden lg:block w-80 shrink-0">
           <div className="sticky top-24 space-y-6">
-            {/* Stats */}
-            <div className="bg-white rounded-2xl shadow-card p-5">
-              <h3 className="font-semibold text-charcoal mb-3">Today&apos;s Stats</h3>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-textLight">Likes Used</span>
-                  <span className="font-medium text-charcoal">{likesUsed} / 50</span>
-                </div>
-                <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-rose rounded-full transition-all duration-300"
-                    style={{ width: `${(likesUsed / 50) * 100}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-sm pt-2">
-                  <span className="text-textLight">Profile Views</span>
-                  <span className="font-medium text-charcoal">47</span>
-                </div>
-              </div>
-            </div>
-
             {/* Quick tip */}
             <div className="bg-white rounded-2xl shadow-card p-5">
               <h3 className="font-semibold text-charcoal mb-2">Complete Your Profile</h3>

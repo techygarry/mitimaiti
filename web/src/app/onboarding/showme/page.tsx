@@ -19,6 +19,7 @@ export default function ShowMePage() {
     if (!selected) return;
     if (typeof window !== 'undefined') {
       sessionStorage.setItem('onboarding_showme', selected);
+      localStorage.setItem('onboarding_showme', selected);
     }
     router.push('/onboarding/location');
   };

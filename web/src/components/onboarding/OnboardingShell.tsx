@@ -68,7 +68,7 @@ export default function OnboardingShell({
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.4, ease: 'easeOut' }}
-          className="px-6 pt-4 pb-4 overflow-y-auto max-h-[60vh]"
+          className="px-6 pt-4 pb-4 overflow-y-auto max-h-[70vh]"
         >
           <h1 className="text-2xl font-bold text-charcoal mb-1">{title}</h1>
           {subtitle && (

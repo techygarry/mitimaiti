@@ -123,24 +123,24 @@ export default function ReadyPage() {
             </div>
           </motion.div>
 
-          {/* Complete Sindhi Identity prompt */}
+          {/* Complete identity prompt */}
           <motion.button
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.7 }}
             onClick={() => router.push('/profile/edit')}
             className="w-full mt-6 flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-2xl hover:bg-amber-100 transition-colors text-left"
-            aria-label="Complete your Sindhi Identity"
+            aria-label="Complete your profile"
           >
             <div className="w-10 h-10 rounded-full bg-gold/20 flex items-center justify-center shrink-0">
-              <span className="text-lg">🕉</span>
+              <span className="text-lg">{typeof window !== 'undefined' && localStorage.getItem('onboarding_non_sindhi') === 'true' ? '✨' : '🕉'}</span>
             </div>
             <div className="flex-1">
               <p className="text-sm font-semibold text-charcoal">
-                Complete your Sindhi Identity
+                {typeof window !== 'undefined' && localStorage.getItem('onboarding_non_sindhi') === 'true' ? 'Complete your Profile' : 'Complete your Sindhi Identity'}
               </p>
               <p className="text-xs text-textLight mt-0.5">
-                Add fluency, gotra, festivals for better cultural matching
+                {typeof window !== 'undefined' && localStorage.getItem('onboarding_non_sindhi') === 'true' ? 'Add more details for better matching' : 'Add fluency, gotra, festivals for better cultural matching'}
               </p>
             </div>
             <ChevronRight className="w-5 h-5 text-textLight shrink-0" />

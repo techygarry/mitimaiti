@@ -1,91 +1,66 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   X,
   Heart,
   MapPin,
   BadgeCheck,
-  ChevronLeft,
-  ChevronRight,
+  Briefcase,
+  GraduationCap,
+  Ruler,
 } from 'lucide-react';
-import Card from '@/components/ui/Card';
-import Badge from '@/components/ui/Badge';
 import ScoreTag from './ScoreTag';
 import ScoreBreakdownSheet from './ScoreBreakdownSheet';
 import { FeedCard } from '@/types';
+import { getDisplayName } from '@/lib/mockData';
 
-function PhotoCarousel({ photos }: { photos: { url: string }[] }) {
-  const [current, setCurrent] = useState(0);
 
-  const next = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      setCurrent((prev) => (prev + 1) % photos.length);
-    },
-    [photos.length]
-  );
+// ── Hinge-style profile section with optional like button ────────────
 
-  const prev = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      setCurrent((prev) => (prev - 1 + photos.length) % photos.length);
-    },
-    [photos.length]
-  );
-
+function ProfilePhoto({ url, children }: { url: string; children?: React.ReactNode }) {
   return (
-    <div className="relative aspect-[4/5] max-h-[500px] bg-gray-100 overflow-hidden">
-      <img
-        src={photos[current].url}
-        alt="Profile photo"
-        className="w-full h-full object-cover"
-      />
-
-      {photos.length > 1 && (
-        <>
-          <button
-            onClick={prev}
-            className="absolute left-0 top-0 bottom-0 w-1/3 z-10 touch-target"
-            aria-label="Previous photo"
-          />
-          <button
-            onClick={next}
-            className="absolute right-0 top-0 bottom-0 w-1/3 z-10 touch-target"
-            aria-label="Next photo"
-          />
-
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
-            <div className="w-10 h-10 bg-black/30 backdrop-blur-sm rounded-full flex items-center justify-center">
-              <ChevronLeft className="w-6 h-6 text-white" />
-            </div>
-          </div>
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
-            <div className="w-10 h-10 bg-black/30 backdrop-blur-sm rounded-full flex items-center justify-center">
-              <ChevronRight className="w-6 h-6 text-white" />
-            </div>
-          </div>
-        </>
-      )}
-
-      {photos.length > 1 && (
-        <div className="absolute top-3 left-0 right-0 flex justify-center gap-1.5 z-20">
-          {photos.map((_, i) => (
-            <div
-              key={i}
-              className={`h-1 rounded-full transition-all duration-300 ${
-                i === current ? 'w-8 bg-white' : 'w-8 bg-white/40'
-              }`}
-            />
-          ))}
+    <div className="relative">
+      <div className="aspect-[4/5] bg-gray-100 overflow-hidden">
+        <img src={url} alt="Profile photo" className="w-full h-full object-cover" />
+      </div>
+      {children && (
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent p-5 pt-16">
+          {children}
         </div>
       )}
-
-      <div className="gradient-overlay absolute inset-0 pointer-events-none" />
     </div>
   );
 }
+
+function PromptCard({ prompt, answer }: { prompt: string; answer: string }) {
+  return (
+    <div className="px-5 py-6 bg-gray-50">
+      <p className="text-xs font-bold text-rose uppercase tracking-wider mb-2">{prompt}</p>
+      <p className="text-lg font-semibold text-charcoal leading-snug">{answer}</p>
+    </div>
+  );
+}
+
+function InfoSection({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="px-5 py-4 bg-white">
+      {children}
+    </div>
+  );
+}
+
+function InfoPill({ icon: Icon, text }: { icon: React.ComponentType<{ className?: string }>; text: string }) {
+  return (
+    <div className="flex items-center gap-2 px-3.5 py-2 bg-gray-50 rounded-xl">
+      <Icon className="w-4 h-4 text-textLight shrink-0" />
+      <span className="text-sm text-charcoal">{text}</span>
+    </div>
+  );
+}
+
+// ── Main component ───────────────────────────────────────────────────
 
 interface DiscoveryCardProps {
   card: FeedCard;
@@ -94,167 +69,182 @@ interface DiscoveryCardProps {
   likesMax: number;
 }
 
-export default function DiscoveryCard({
-  card,
-  onAction,
-  likesUsed,
-  likesMax,
-}: DiscoveryCardProps) {
+export default function DiscoveryCard({ card, onAction }: DiscoveryCardProps) {
   const { user, photos, basics, personality, cultural_score, cultural_badge, cultural_breakdown, kundli_score, kundli_tier, kundli_breakdown, common_interests } = card;
   const [sheetType, setSheetType] = useState<'cultural' | 'kundli' | null>(null);
 
-  const intentEmoji = user.intent === 'marriage' ? '💍' : user.intent === 'casual' ? '☕' : '✨';
   const intentLabel = user.intent === 'marriage' ? 'Marriage' : user.intent === 'casual' ? 'Casual' : 'Open';
+
+  const prompts = personality?.prompts || [];
+  const secondPhoto = photos.length > 1 ? photos[1] : null;
+  const thirdPhoto = photos.length > 2 ? photos[2] : null;
 
   return (
     <>
       <motion.article
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -30 }}
-        transition={{ duration: 0.4 }}
-        className="bg-white rounded-3xl overflow-hidden shadow-card mb-6 group"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="bg-white rounded-3xl overflow-hidden shadow-card group relative"
         aria-label={`Profile of ${user.first_name}, ${user.age}`}
       >
-        {/* Photo carousel */}
-        <div className="relative">
-          <PhotoCarousel photos={photos} />
+        {/* Scrollable profile content */}
+        <div className="max-h-[75vh] overflow-y-auto no-scrollbar">
 
-          <div className="absolute bottom-0 left-0 right-0 p-6 z-10">
+          {/* Hero photo with name overlay */}
+          <ProfilePhoto url={photos[0].url}>
             <div className="flex items-center gap-2">
-              <h2 className="text-3xl font-bold text-white">
-                {user.first_name}, {user.age}
-              </h2>
-              {user.verified && (
-                <BadgeCheck className="w-7 h-7 text-blue-400 fill-blue-400" aria-label="Verified profile" />
-              )}
+              <h2 className="text-3xl font-bold text-white">{getDisplayName(user)}, {user.age}</h2>
+              {user.verified && <BadgeCheck className="w-6 h-6 text-blue-400 fill-blue-400" />}
             </div>
-
-            <div className="flex items-center gap-3 mt-2 flex-wrap">
-              <span className="glass-pill">
-                <MapPin className="w-3.5 h-3.5" />
-                {user.city}
-              </span>
-              <span className="glass-pill">
-                {intentEmoji} {intentLabel}
-              </span>
+            <div className="flex items-center gap-2 mt-1.5">
+              <MapPin className="w-3.5 h-3.5 text-white/80" />
+              <span className="text-white/90 text-sm">{user.city}</span>
+              <span className="text-white/50 mx-1">·</span>
+              <span className="text-white/90 text-sm">{intentLabel}</span>
             </div>
-          </div>
-        </div>
-
-        {/* Content below photo */}
-        <div className="p-6 space-y-5">
-          {/* Score Tags row */}
-          <div className="flex flex-wrap gap-2">
-            <ScoreTag
-              label="Cultural"
-              value={`${cultural_score}%`}
-              variant="cultural"
-              badge={cultural_badge}
-              onClick={() => setSheetType('cultural')}
-            />
-            {kundli_score !== undefined && kundli_tier && (
-              <ScoreTag
-                label="Kundli"
-                value={`${kundli_score}/36`}
-                variant="kundli"
-                badge={kundli_tier}
-                onClick={() => setSheetType('kundli')}
-              />
-            )}
-            {common_interests.length > 0 && (
-              <ScoreTag
-                label="Common"
-                value={`${common_interests.length}`}
-                variant="interests"
-                badge={common_interests.length === 1 ? 'interest' : 'interests'}
-              />
-            )}
-          </div>
+          </ProfilePhoto>
 
           {/* Bio */}
           {user.bio && (
-            <p className="text-textMain leading-relaxed text-base">{user.bio}</p>
+            <InfoSection>
+              <p className="text-base text-charcoal leading-relaxed">{user.bio}</p>
+            </InfoSection>
           )}
 
-          {/* Work & Education */}
+          {/* Basics row */}
           {basics && (
-            <div className="flex flex-wrap gap-2">
-              {basics.work_title && basics.company && (
-                <Badge variant="gray" size="sm">
-                  💼 {basics.work_title} at {basics.company}
-                </Badge>
-              )}
-              {basics.education && (
-                <Badge variant="gray" size="sm">
-                  🎓 {basics.education}
-                </Badge>
-              )}
-              {basics.height_cm && (
-                <Badge variant="gray" size="sm">
-                  📏 {Math.floor(basics.height_cm / 30.48)}&apos;{Math.round((basics.height_cm / 2.54) % 12)}&quot;
-                </Badge>
-              )}
-            </div>
+            <InfoSection>
+              <div className="flex flex-wrap gap-2">
+                {basics.work_title && basics.company && (
+                  <InfoPill icon={Briefcase} text={`${basics.work_title}, ${basics.company}`} />
+                )}
+                {basics.education && (
+                  <InfoPill icon={GraduationCap} text={basics.education} />
+                )}
+                {basics.height_cm && (
+                  <InfoPill icon={Ruler} text={`${basics.height_cm} cm`} />
+                )}
+              </div>
+            </InfoSection>
           )}
 
-          {/* Prompts */}
-          {personality?.prompts && personality.prompts.length > 0 && (
-            <div className="space-y-3">
-              {personality.prompts.slice(0, 2).map((prompt) => (
-                <Card key={prompt.prompt_id} variant="filled" padding="md">
-                  <p className="text-xs font-semibold text-rose uppercase tracking-wide mb-1">
-                    {prompt.prompt_text}
-                  </p>
-                  <p className="text-textMain font-medium">{prompt.answer}</p>
-                </Card>
-              ))}
+          {/* First prompt */}
+          {prompts[0] && (
+            <PromptCard prompt={prompts[0].prompt_text} answer={prompts[0].answer} />
+          )}
+
+          {/* Second photo */}
+          {secondPhoto && (
+            <ProfilePhoto url={secondPhoto.url} />
+          )}
+
+          {/* Score tags */}
+          <InfoSection>
+            <div className="flex flex-wrap gap-2">
+              <ScoreTag
+                label="Cultural"
+                value={`${cultural_score}%`}
+                variant="cultural"
+                badge={cultural_badge}
+                onClick={() => setSheetType('cultural')}
+              />
+              {kundli_score !== undefined && kundli_tier && (
+                <ScoreTag
+                  label="Kundli"
+                  value={`${kundli_score}/36`}
+                  variant="kundli"
+                  badge={kundli_tier}
+                  onClick={() => setSheetType('kundli')}
+                />
+              )}
+              {common_interests.length > 0 && (
+                <ScoreTag
+                  label="Common"
+                  value={`${common_interests.length}`}
+                  variant="interests"
+                  badge={common_interests.length === 1 ? 'interest' : 'interests'}
+                />
+              )}
             </div>
+          </InfoSection>
+
+          {/* Second prompt */}
+          {prompts[1] && (
+            <PromptCard prompt={prompts[1].prompt_text} answer={prompts[1].answer} />
+          )}
+
+          {/* Third photo */}
+          {thirdPhoto && (
+            <ProfilePhoto url={thirdPhoto.url} />
           )}
 
           {/* Interests */}
-          {personality?.interests && (
-            <div className="flex flex-wrap gap-2">
-              {personality.interests.map((interest) => (
-                <Badge
-                  key={interest}
-                  variant={common_interests.includes(interest) ? 'rose' : 'gray'}
-                  size="sm"
-                >
-                  {common_interests.includes(interest) && '✓ '}
-                  {interest}
-                </Badge>
-              ))}
-            </div>
+          {personality?.interests && personality.interests.length > 0 && (
+            <InfoSection>
+              <p className="text-xs font-bold text-textLight uppercase tracking-wider mb-3">Interests</p>
+              <div className="flex flex-wrap gap-2">
+                {personality.interests.map((interest) => {
+                  const isCommon = common_interests.includes(interest);
+                  return (
+                    <span
+                      key={interest}
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium ${
+                        isCommon
+                          ? 'bg-rose/10 text-rose border border-rose/20'
+                          : 'bg-gray-100 text-charcoal'
+                      }`}
+                    >
+                      {isCommon && '★ '}{interest}
+                    </span>
+                  );
+                })}
+              </div>
+            </InfoSection>
           )}
 
-          {/* Action buttons */}
-          <div className="flex items-center justify-center gap-6 pt-3">
+          {/* Languages */}
+          {personality?.languages && personality.languages.length > 0 && (
+            <InfoSection>
+              <p className="text-xs font-bold text-textLight uppercase tracking-wider mb-3">Languages</p>
+              <div className="flex flex-wrap gap-2">
+                {personality.languages.map((lang) => (
+                  <span key={lang} className="px-3 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-charcoal">
+                    {lang}
+                  </span>
+                ))}
+              </div>
+            </InfoSection>
+          )}
+
+          {/* Bottom spacer for floating buttons */}
+          <div className="h-24" />
+        </div>
+
+        {/* Floating action buttons — pinned at bottom */}
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white/95 to-transparent pt-8 pb-5 px-6">
+          <div className="flex items-center justify-center gap-5">
             <motion.button
-              whileHover={{ scale: 1.08 }}
-              whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
               onClick={() => onAction('pass')}
-              className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors shadow-soft touch-target"
+              className="w-14 h-14 rounded-full bg-white border-2 border-gray-200 flex items-center justify-center hover:border-gray-300 transition-colors shadow-md"
               aria-label="Pass"
             >
-              <X className="w-8 h-8 text-gray-400" />
+              <X className="w-7 h-7 text-gray-400" />
             </motion.button>
 
             <motion.button
-              whileHover={{ scale: 1.08 }}
-              whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
               onClick={() => onAction('like')}
-              className="w-16 h-16 rounded-full bg-rose flex items-center justify-center hover:bg-rose-dark transition-colors shadow-md touch-target"
+              className="w-14 h-14 rounded-full bg-rose flex items-center justify-center hover:bg-rose-dark transition-colors shadow-lg"
               aria-label="Like"
             >
-              <Heart className="w-8 h-8 text-white fill-white" />
+              <Heart className="w-7 h-7 text-white fill-white" />
             </motion.button>
-          </div>
 
-          {/* Likes counter */}
-          <p className="text-center text-xs text-textLight">
-            {likesUsed}/{likesMax} likes used today
-          </p>
+          </div>
         </div>
       </motion.article>
 

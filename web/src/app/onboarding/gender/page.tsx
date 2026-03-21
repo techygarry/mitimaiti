@@ -19,6 +19,7 @@ export default function GenderPage() {
     if (!selected) return;
     if (typeof window !== 'undefined') {
       sessionStorage.setItem('onboarding_gender', selected);
+      localStorage.setItem('onboarding_gender', selected);
     }
     router.push('/onboarding/photos');
   };

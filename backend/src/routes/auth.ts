@@ -206,7 +206,7 @@ router.post(
             age_min: 18,
             age_max: 50,
             distance_km: 100,
-            gender_preference: 'any',
+            gender_preference: 'everyone',
           }),
 
           supabase.from('user_privileges').insert({
