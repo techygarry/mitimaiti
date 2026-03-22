@@ -121,12 +121,12 @@ class _MockMember {
 class _MockSuggestion {
   final String id, suggestedName, suggestedCity, suggestedByName;
   final String? note;
-  const _MockSuggestion({required this.id, required this.suggestedName, required this.suggestedCity, required this.suggestedByName, this.note});
+  const _MockSuggestion({required this.id, required this.suggestedName, required this.suggestedCity, required this.suggestedByName, required this.note});
 }
 
 class _MemberCard extends StatelessWidget {
   final _MockMember member;
-  const _MemberCard({super.key, required this.member});
+  const _MemberCard({required this.member});
 
   @override
   Widget build(BuildContext context) {
@@ -171,7 +171,7 @@ class _MemberCard extends StatelessWidget {
 
 class _SuggestionCard extends StatelessWidget {
   final _MockSuggestion suggestion;
-  const _SuggestionCard({super.key, required this.suggestion});
+  const _SuggestionCard({required this.suggestion});
 
   @override
   Widget build(BuildContext context) {

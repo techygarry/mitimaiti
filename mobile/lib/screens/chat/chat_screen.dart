@@ -200,8 +200,8 @@ class _MockMessage {
   final String text;
   final bool isMe;
   final DateTime time;
-  final bool isRead;
-  const _MockMessage({required this.text, required this.isMe, required this.time, this.isRead = false});
+  bool get isRead => false;
+  const _MockMessage({required this.text, required this.isMe, required this.time});
 }
 
 class _MessageBubble extends StatelessWidget {
