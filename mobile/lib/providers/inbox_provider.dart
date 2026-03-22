@@ -50,7 +50,7 @@ class InboxNotifier extends StateNotifier<InboxState> {
         likedYou: mockLikedYou,
         matches: mockMatches,
       );
-    } catch (e) {
+    } catch (_) {
       state = state.copyWith(isLoading: false, error: 'Failed to load inbox');
     }
   }

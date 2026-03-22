@@ -67,7 +67,7 @@ class FeedNotifier extends StateNotifier<FeedState> {
         dailyLikesUsed: likesUsed,
         dailyRewindsUsed: rewindsUsed,
       );
-    } catch (e) {
+    } catch (_) {
       state = state.copyWith(isLoading: false, error: 'Failed to load feed');
     }
   }
@@ -82,7 +82,7 @@ class FeedNotifier extends StateNotifier<FeedState> {
         cards: [...state.cards, ...moreCards],
         isLoadingMore: false,
       );
-    } catch (e) {
+    } catch (_) {
       state = state.copyWith(isLoadingMore: false);
     }
   }

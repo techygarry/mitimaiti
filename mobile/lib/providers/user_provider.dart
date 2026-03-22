@@ -55,7 +55,7 @@ class UserNotifier extends StateNotifier<UserState> {
         profileCompletion: 75,
       );
       state = UserState(user: user);
-    } catch (e) {
+    } catch (_) {
       state = state.copyWith(
         isLoading: false,
         error: 'Failed to load profile',
@@ -78,7 +78,7 @@ class UserNotifier extends StateNotifier<UserState> {
         intent: updates['intent'] as String? ?? currentUser.intent,
       );
       state = UserState(user: updatedUser);
-    } catch (e) {
+    } catch (_) {
       state = state.copyWith(
         isLoading: false,
         error: 'Failed to update profile',

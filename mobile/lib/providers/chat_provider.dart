@@ -87,7 +87,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         waitingForReply: hasUserSent && !hasOtherReplied,
         countdownStart: messages.isNotEmpty ? messages.first.createdAt : null,
       );
-    } catch (e) {
+    } catch (_) {
       state = state.copyWith(isLoading: false, error: 'Failed to load messages');
     }
   }

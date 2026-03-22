@@ -108,7 +108,7 @@ class FamilyNotifier extends StateNotifier<FamilyState> {
         members: mockMembers,
         suggestions: mockSuggestions,
       );
-    } catch (e) {
+    } catch (_) {
       state = state.copyWith(isLoading: false, error: 'Failed to load family');
     }
   }
