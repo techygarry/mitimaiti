@@ -56,6 +56,7 @@ class _OtpScreenState extends State<OtpScreen> {
     await settings.put('isLoggedIn', true);
 
     setState(() => _loading = false);
+    if (!mounted) return;
     context.go('/onboarding/name');
   }
 

@@ -15,9 +15,8 @@ class _ChatScreenState extends State<ChatScreen> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
   final List<_MockMessage> _messages = [];
-  bool _isFirstMsgSender = false;
   bool _isLocked = false;
-  bool _otherTyping = false;
+  final bool _otherTyping = false;
   DateTime? _deadline;
   Timer? _countdownTimer;
 
@@ -52,7 +51,6 @@ class _ChatScreenState extends State<ChatScreen> {
       _controller.clear();
       if (_messages.where((m) => m.isMe).length == 1) {
         // First message sent — lock input (Respect-First)
-        _isFirstMsgSender = true;
         _isLocked = true;
       }
     });
