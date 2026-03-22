@@ -7,6 +7,7 @@ import AppShell from '@/components/ui/AppShell';
 import { getFilteredMockMatches, getDisplayName } from '@/lib/mockData';
 import { formatDistanceToNow } from 'date-fns';
 import { Match } from '@/types';
+import { useTranslation } from '@/lib/i18n';
 
 // ── Circular timer avatar ────────────────────────────────────────────
 
@@ -127,6 +128,7 @@ function TimerAvatar({
 
 export default function MatchesPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const matches = getFilteredMockMatches();
 
   // Split into: new matches (timer active, no back-and-forth yet) and active chats
@@ -143,27 +145,27 @@ export default function MatchesPage() {
 
   return (
     <AppShell>
-      <div className="flex gap-8 p-6">
-        <div className="flex-1 max-w-xl mx-auto lg:mx-0">
+      <div className="flex justify-center p-4 sm:p-6">
+        <div className="w-full max-w-md">
           {/* Header */}
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-charcoal">Matches</h1>
+          <div className="mb-3">
+            <h1 className="text-2xl font-bold text-charcoal">{t('matches.title')}</h1>
           </div>
 
           {matches.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="flex flex-col items-center justify-center py-12 text-center">
               <div className="w-16 h-16 rounded-full bg-rose/10 flex items-center justify-center mb-4">
                 <MessageCircle className="w-8 h-8 text-rose" />
               </div>
-              <h3 className="text-xl font-bold text-charcoal mb-2">No matches yet</h3>
-              <p className="text-textLight text-sm max-w-sm">Start liking profiles to get matched.</p>
+              <h3 className="text-xl font-bold text-charcoal mb-2">{t('matches.noMatchesYet')}</h3>
+              <p className="text-textLight text-sm max-w-sm">{t('matches.startLikingShort')}</p>
             </div>
           ) : (
             <>
               {/* Your matches — circular avatars with timers */}
               {newMatches.length > 0 && (
-                <div className="mb-8">
-                  <h2 className="text-lg font-bold text-charcoal mb-4">Your matches</h2>
+                <div className="mb-5">
+                  <h2 className="text-lg font-bold text-charcoal mb-4">{t('matches.yourMatches')}</h2>
                   <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
                     {newMatches.map((match, index) => (
                       <motion.div
@@ -189,7 +191,7 @@ export default function MatchesPage() {
               {/* Chats — list of active conversations */}
               {activeChats.length > 0 && (
                 <div>
-                  <h2 className="text-lg font-bold text-charcoal mb-3">Chats</h2>
+                  <h2 className="text-lg font-bold text-charcoal mb-3">{t('matches.chats')}</h2>
                   <div className="bg-white rounded-2xl shadow-card overflow-hidden divide-y divide-gray-50">
                     {activeChats.map((match, index) => (
                       <motion.button

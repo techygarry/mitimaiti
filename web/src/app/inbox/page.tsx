@@ -6,21 +6,23 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, X, MapPin, Eye } from 'lucide-react';
 import AppShell from '@/components/ui/AppShell';
 import { getFilteredMockLikes, getDisplayName } from '@/lib/mockData';
-
-const LIKED_LABELS = [
-  'Liked your photo',
-  'Liked your answer',
-  'Liked your profile',
-  'Liked your bio',
-  'Liked your interests',
-  'Liked your vibe',
-];
+import { useTranslation } from '@/lib/i18n';
 
 export default function InboxPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const allLikes = getFilteredMockLikes();
   const [likes, setLikes] = useState(allLikes);
   const [exitDirection, setExitDirection] = useState<'left' | 'right'>('left');
+
+  const LIKED_LABELS = [
+    t('inbox.likedYourPhoto'),
+    t('inbox.likedYourAnswer'),
+    t('inbox.likedYourProfile'),
+    t('inbox.likedYourBio'),
+    t('inbox.likedYourInterests'),
+    t('inbox.likedYourVibe'),
+  ];
 
   const current = likes[0];
   const upNext = likes.slice(1, 4);
@@ -34,22 +36,22 @@ export default function InboxPage() {
 
   return (
     <AppShell>
-      <div className="flex gap-8 p-6">
-        <div className="flex-1 max-w-xl mx-auto lg:mx-0">
+      <div className="flex justify-center p-4 sm:p-6">
+        <div className="w-full max-w-md">
           {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold text-charcoal">Likes You</h1>
-            <span className="text-sm text-textLight font-medium">{likes.length} pending</span>
+          <div className="flex items-center justify-between mb-3">
+            <h1 className="text-2xl font-bold text-charcoal">{t('inbox.likesYou')}</h1>
+            <span className="text-sm text-textLight font-medium">{likes.length} {t('inbox.pending')}</span>
           </div>
 
           {likes.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="flex flex-col items-center justify-center py-12 text-center">
               <div className="w-16 h-16 rounded-full bg-rose/10 flex items-center justify-center mb-4">
                 <Heart className="w-8 h-8 text-rose" />
               </div>
-              <h3 className="text-xl font-bold text-charcoal mb-2">All caught up!</h3>
+              <h3 className="text-xl font-bold text-charcoal mb-2">{t('inbox.allCaughtUp')}</h3>
               <p className="text-textLight text-sm max-w-sm">
-                No more pending likes. Keep discovering to get more.
+                {t('inbox.noPendingLikes')}
               </p>
             </div>
           ) : (
@@ -106,7 +108,7 @@ export default function InboxPage() {
                           whileTap={{ scale: 0.9 }}
                           onClick={() => handleAction('pass')}
                           className="w-14 h-14 rounded-full bg-white border-2 border-gray-200 flex items-center justify-center hover:border-gray-300 transition-colors shadow-md"
-                          aria-label="Pass"
+                          aria-label={t('discover.pass')}
                         >
                           <X className="w-7 h-7 text-gray-400" />
                         </motion.button>
@@ -116,7 +118,7 @@ export default function InboxPage() {
                           whileTap={{ scale: 0.9 }}
                           onClick={() => handleAction('like')}
                           className="w-14 h-14 rounded-full bg-rose flex items-center justify-center hover:bg-rose-dark transition-colors shadow-lg"
-                          aria-label="Like back"
+                          aria-label={t('discover.like')}
                         >
                           <Heart className="w-7 h-7 text-white fill-white" />
                         </motion.button>
@@ -128,11 +130,11 @@ export default function InboxPage() {
 
               {/* Up next */}
               {upNext.length > 0 && (
-                <div className="mt-8">
+                <div className="mt-5">
                   <div className="flex items-center justify-between mb-3">
                     <div>
-                      <h3 className="text-base font-bold text-charcoal">Up next</h3>
-                      <p className="text-xs text-textLight mt-0.5">See all your likes at once</p>
+                      <h3 className="text-base font-bold text-charcoal">{t('inbox.upNext')}</h3>
+                      <p className="text-xs text-textLight mt-0.5">{t('inbox.seeAllLikes')}</p>
                     </div>
                   </div>
                   <div className="flex gap-3">

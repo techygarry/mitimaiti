@@ -32,6 +32,7 @@ import Badge from '@/components/ui/Badge';
 import Modal from '@/components/ui/Modal';
 import { showToast } from '@/components/ui/Toast';
 import { FamilyPermissions } from '@/types';
+import { useTranslation } from '@/lib/i18n';
 
 interface FamilyMember {
   id: string;
@@ -47,20 +48,23 @@ interface Suggestion {
   name: string;
   age: number;
   city: string;
+  photo: string;
   note: string;
   status: 'pending';
 }
 
-const permissionLabels: { key: keyof FamilyPermissions; label: string; description: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { key: 'can_view_profile', label: 'View profile', description: 'Can see your full profile', icon: Eye },
-  { key: 'can_view_photos', label: 'View photos', description: 'Can see all your photos', icon: Camera },
-  { key: 'can_view_basics', label: 'View basics', description: 'Education, work, height, lifestyle', icon: Briefcase },
-  { key: 'can_view_sindhi', label: 'Sindhi identity', description: 'Fluency, gotra, generation, dietary', icon: Moon },
-  { key: 'can_view_matches', label: 'View matches', description: 'Can see who you matched with', icon: Heart },
-  { key: 'can_suggest', label: 'Suggest profiles', description: 'Can send you profile suggestions', icon: MessageSquare },
-  { key: 'can_view_cultural_score', label: 'Cultural scores', description: 'Can see cultural compatibility', icon: Star },
-  { key: 'can_view_kundli', label: 'Kundli details', description: 'Can see kundli score and chatti', icon: BarChart3 },
-];
+function getPermissionLabels(t: (key: string) => string) {
+  return [
+    { key: 'can_view_profile' as keyof FamilyPermissions, label: t('family.viewProfile'), description: t('family.viewProfileDesc'), icon: Eye },
+    { key: 'can_view_photos' as keyof FamilyPermissions, label: t('family.viewPhotos'), description: t('family.viewPhotosDesc'), icon: Camera },
+    { key: 'can_view_basics' as keyof FamilyPermissions, label: t('family.viewBasics'), description: t('family.viewBasicsDesc'), icon: Briefcase },
+    { key: 'can_view_sindhi' as keyof FamilyPermissions, label: t('family.sindhiIdentity'), description: t('family.sindhiIdentityDesc'), icon: Moon },
+    { key: 'can_view_matches' as keyof FamilyPermissions, label: t('family.viewMatches'), description: t('family.viewMatchesDesc'), icon: Heart },
+    { key: 'can_suggest' as keyof FamilyPermissions, label: t('family.suggestProfiles'), description: t('family.suggestProfilesDesc'), icon: MessageSquare },
+    { key: 'can_view_cultural_score' as keyof FamilyPermissions, label: t('family.culturalScores'), description: t('family.culturalScoresDesc'), icon: Star },
+    { key: 'can_view_kundli' as keyof FamilyPermissions, label: t('family.kundliDetails'), description: t('family.kundliDetailsDesc'), icon: BarChart3 },
+  ];
+}
 
 function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -81,6 +85,8 @@ function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean
 
 export default function FamilyPage() {
   const router = useRouter();
+  const { t } = useTranslation();
+  const permissionLabels = getPermissionLabels(t);
   const [inviteCode] = useState('MM-7X4K');
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showRevokeModal, setShowRevokeModal] = useState(false);
@@ -99,10 +105,10 @@ export default function FamilyPage() {
   ]);
 
   const [suggestions, setSuggestions] = useState<Suggestion[]>([
-    { id: 's1', from: 'Mom', name: 'Rohit', age: 29, city: 'Pune', note: 'Lohana family, very well-settled. Your Nani knows his grandmother!', status: 'pending' },
-    { id: 's2', from: 'Masi', name: 'Kiran', age: 27, city: 'Mumbai', note: 'She is a dentist, very sweet girl. Bhatia family from Ulhasnagar.', status: 'pending' },
-    { id: 's3', from: 'Mom', name: 'Amit', age: 31, city: 'Dubai', note: 'Runs a business in Dubai. Very religious family, does Chaliha every year.', status: 'pending' },
-    { id: 's4', from: 'Masi', name: 'Pooja', age: 26, city: 'Bangalore', note: 'Works at Google. Her mother is from our community in Jodhpur.', status: 'pending' },
+    { id: 's1', from: 'Mom', name: 'Rohit', age: 29, city: 'Pune', photo: 'https://i.pravatar.cc/400?u=Rohit', note: 'Lohana family, very well-settled. Your Nani knows his grandmother!', status: 'pending' },
+    { id: 's2', from: 'Masi', name: 'Kiran', age: 27, city: 'Mumbai', photo: 'https://i.pravatar.cc/400?u=Kiran', note: 'She is a dentist, very sweet girl. Bhatia family from Ulhasnagar.', status: 'pending' },
+    { id: 's3', from: 'Mom', name: 'Amit', age: 31, city: 'Dubai', photo: 'https://i.pravatar.cc/400?u=Amit', note: 'Runs a business in Dubai. Very religious family, does Chaliha every year.', status: 'pending' },
+    { id: 's4', from: 'Masi', name: 'Pooja', age: 26, city: 'Bangalore', photo: 'https://i.pravatar.cc/400?u=Pooja', note: 'Works at Google. Her mother is from our community in Jodhpur.', status: 'pending' },
   ]);
   const [exitDirection, setExitDirection] = useState<'left' | 'right'>('left');
 
@@ -111,7 +117,7 @@ export default function FamilyPage() {
   const copyCode = useCallback(() => {
     navigator.clipboard.writeText(inviteCode);
     setCopied(true);
-    showToast.success('Code copied!');
+    showToast.success(t('family.codeCopied'));
     setTimeout(() => setCopied(false), 2000);
   }, [inviteCode]);
 
@@ -123,7 +129,7 @@ export default function FamilyPage() {
           : m
       )
     );
-    showToast.success('Permission updated');
+    showToast.success(t('family.permissionUpdated'));
   };
 
   const handleRevokeAll = () => {
@@ -134,7 +140,7 @@ export default function FamilyPage() {
       }))
     );
     setShowRevokeModal(false);
-    showToast.success('All permissions revoked');
+    showToast.success(t('family.allPermissionsRevoked'));
   };
 
   const selectedMember = members.find((m) => m.id === selectedMemberId);
@@ -144,10 +150,10 @@ export default function FamilyPage() {
     const activePerms = Object.values(selectedMember.permissions).filter(Boolean).length;
     return (
       <AppShell>
-        <div className="flex gap-8 p-6">
-          <div className="flex-1 max-w-xl mx-auto lg:mx-0">
+        <div className="flex justify-center p-4 sm:p-6">
+          <div className="w-full max-w-md">
             {/* Back header */}
-            <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center gap-3 mb-3">
               <button
                 onClick={() => setSelectedMemberId(null)}
                 className="p-2 rounded-full hover:bg-gray-100 transition-colors"
@@ -155,11 +161,11 @@ export default function FamilyPage() {
                 <ArrowLeft className="w-5 h-5 text-charcoal" />
               </button>
               <div className="flex-1">
-                <h1 className="text-xl font-bold text-charcoal">{selectedMember.name}&apos;s Permissions</h1>
+                <h1 className="text-xl font-bold text-charcoal">{selectedMember.name} — {t('family.permissions')}</h1>
                 <p className="text-xs text-textLight">{activePerms} of {permissionLabels.length} enabled</p>
               </div>
               <Badge variant={selectedMember.status === 'active' ? 'green' : 'orange'} size="sm">
-                {selectedMember.status === 'active' ? 'Active' : 'Pending'}
+                {selectedMember.status === 'active' ? t('family.active') : t('family.pendingStatus')}
               </Badge>
             </div>
 
@@ -196,7 +202,7 @@ export default function FamilyPage() {
                   });
                 }}
               >
-                Enable All
+                {t('family.enableAll')}
               </Button>
               <Button
                 variant="danger"
@@ -208,16 +214,16 @@ export default function FamilyPage() {
                   });
                 }}
               >
-                Disable All
+                {t('family.disableAll')}
               </Button>
             </div>
 
             {/* Privacy note */}
-            <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 mt-6">
+            <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 mt-4">
               <div className="flex gap-3">
                 <Shield className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
                 <p className="text-xs text-textLight leading-relaxed">
-                  {selectedMember.name} can only see what you allow. Your messages always remain private.
+                  {selectedMember.name} {t('family.messagesPrivate')}
                 </p>
               </div>
             </div>
@@ -230,37 +236,37 @@ export default function FamilyPage() {
   // ── Main family page ─────────────────────────────────────────────
   return (
     <AppShell>
-      <div className="flex gap-8 p-6">
-        <div className="flex-1 max-w-xl mx-auto lg:mx-0">
+      <div className="flex justify-center p-4 sm:p-6">
+        <div className="w-full max-w-md">
           {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold text-charcoal">Family Mode</h1>
+          <div className="flex items-center justify-between mb-3">
+            <h1 className="text-2xl font-bold text-charcoal">{t('family.familyMode')}</h1>
             {members.length > 0 && (
               <Button variant="danger" size="sm" icon={<AlertTriangle className="w-4 h-4" />} onClick={() => setShowRevokeModal(true)}>
-                Revoke All
+                {t('family.revokeAll')}
               </Button>
             )}
           </div>
 
           {/* Invite card */}
-          <div className="bg-white rounded-2xl shadow-card p-5 mb-6">
+          <div className="bg-white rounded-2xl shadow-card p-5 mb-3">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-xl bg-rose/10 flex items-center justify-center">
                 <Users className="w-5 h-5 text-rose" />
               </div>
               <div>
-                <h2 className="font-semibold text-charcoal text-sm">Invite family to help</h2>
-                <p className="text-xs text-textLight">They can view profiles and suggest matches</p>
+                <h2 className="font-semibold text-charcoal text-sm">{t('family.inviteFamily')}</h2>
+                <p className="text-xs text-textLight">{t('family.viewProfileAndSuggest')}</p>
               </div>
             </div>
             <div className="flex gap-2">
-              <Button size="sm" icon={<UserPlus className="w-4 h-4" />} onClick={() => setShowInviteModal(true)}>Invite</Button>
-              <Button variant="secondary" size="sm" icon={<Share2 className="w-4 h-4" />} onClick={copyCode}>Share Code</Button>
+              <Button size="sm" icon={<UserPlus className="w-4 h-4" />} onClick={() => setShowInviteModal(true)}>{t('family.invite')}</Button>
+              <Button variant="secondary" size="sm" icon={<Share2 className="w-4 h-4" />} onClick={copyCode}>{t('family.shareCode')}</Button>
             </div>
           </div>
 
           {/* Tabs */}
-          <div className="flex bg-gray-100 rounded-2xl p-1 mb-6">
+          <div className="flex bg-gray-100 rounded-2xl p-1 mb-3">
             {(['members', 'suggestions'] as const).map((tab) => (
               <button
                 key={tab}
@@ -269,7 +275,7 @@ export default function FamilyPage() {
                   activeTab === tab ? 'bg-rose text-white shadow-sm' : 'text-textLight hover:text-charcoal'
                 }`}
               >
-                {tab === 'members' ? `Members (${members.length})` : `Suggestions (${suggestions.length})`}
+                {tab === 'members' ? `${t('family.members')} (${members.length})` : `${t('family.suggestions')} (${suggestions.length})`}
               </button>
             ))}
           </div>
@@ -282,9 +288,9 @@ export default function FamilyPage() {
                     <div className="w-14 h-14 rounded-full bg-rose/10 flex items-center justify-center mb-4">
                       <Users className="w-7 h-7 text-rose" />
                     </div>
-                    <h3 className="text-lg font-bold text-charcoal mb-2">No family members yet</h3>
-                    <p className="text-textLight text-sm max-w-xs mb-5">Invite your family to help you find the perfect match.</p>
-                    <Button size="sm" icon={<UserPlus className="w-4 h-4" />} onClick={() => setShowInviteModal(true)}>Invite Family Member</Button>
+                    <h3 className="text-lg font-bold text-charcoal mb-2">{t('family.noMembersYet')}</h3>
+                    <p className="text-textLight text-sm max-w-xs mb-5">{t('family.inviteHelpText')}</p>
+                    <Button size="sm" icon={<UserPlus className="w-4 h-4" />} onClick={() => setShowInviteModal(true)}>{t('family.inviteFamilyMember')}</Button>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -304,10 +310,10 @@ export default function FamilyPage() {
                             <div className="flex items-center gap-2">
                               <h4 className="font-semibold text-charcoal">{member.name}</h4>
                               <Badge variant={member.status === 'active' ? 'green' : 'orange'} size="sm">
-                                {member.status === 'active' ? 'Active' : 'Pending'}
+                                {member.status === 'active' ? t('family.active') : t('family.pendingStatus')}
                               </Badge>
                             </div>
-                            <p className="text-xs text-textLight mt-0.5">{member.relationship} · {activePerms}/{permissionLabels.length} permissions</p>
+                            <p className="text-xs text-textLight mt-0.5">{member.relationship} · {activePerms}/{permissionLabels.length} {t('family.permissions_')}</p>
                           </div>
                           <ChevronRight className="w-5 h-5 text-textLight shrink-0" />
                         </motion.button>
@@ -323,8 +329,8 @@ export default function FamilyPage() {
                     <div className="w-14 h-14 rounded-full bg-amber-50 flex items-center justify-center mb-4">
                       <Heart className="w-7 h-7 text-gold" />
                     </div>
-                    <h3 className="text-lg font-bold text-charcoal mb-2">No suggestions yet</h3>
-                    <p className="text-textLight text-sm max-w-xs">Your family hasn&apos;t suggested anyone yet.</p>
+                    <h3 className="text-lg font-bold text-charcoal mb-2">{t('family.noSuggestionsYet')}</h3>
+                    <p className="text-textLight text-sm max-w-xs">{t('family.familyNotSuggested')}</p>
                   </div>
                 ) : (
                   <>
@@ -332,7 +338,7 @@ export default function FamilyPage() {
                     <div className="mb-3">
                       <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-700 text-sm font-medium rounded-full border border-amber-200">
                         <Users className="w-3.5 h-3.5" />
-                        Suggested by {suggestions[0].from}
+                        {t('family.suggestedBy')} {suggestions[0].from}
                       </span>
                     </div>
 
@@ -352,13 +358,9 @@ export default function FamilyPage() {
                           transition={{ type: 'spring', stiffness: 300, damping: 28 }}
                         >
                           <div className="bg-white rounded-3xl overflow-hidden shadow-card">
-                            {/* Avatar area */}
-                            <div className="relative aspect-[4/5] gradient-rose flex items-center justify-center">
-                              <div className="w-28 h-28 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border-4 border-white/30">
-                                <span className="text-5xl font-bold text-white">
-                                  {suggestions[0].name.charAt(0)}
-                                </span>
-                              </div>
+                            {/* Photo area */}
+                            <div className="relative aspect-[4/5]">
+                              <img src={suggestions[0].photo} alt={suggestions[0].name} className="w-full h-full object-cover" />
                               <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
                               <div className="absolute bottom-0 left-0 right-0 p-5">
                                 <h2 className="text-2xl font-bold text-white">
@@ -374,7 +376,7 @@ export default function FamilyPage() {
                             {/* Family note */}
                             {suggestions[0].note && (
                               <div className="px-5 py-4 bg-amber-50/50 border-b border-amber-100">
-                                <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-1">Note from {suggestions[0].from}</p>
+                                <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-1">{t('family.noteFrom')} {suggestions[0].from}</p>
                                 <p className="text-sm text-charcoal italic">&quot;{suggestions[0].note}&quot;</p>
                               </div>
                             )}
@@ -387,7 +389,7 @@ export default function FamilyPage() {
                                 onClick={() => {
                                   setExitDirection('left');
                                   setTimeout(() => setSuggestions((prev) => prev.slice(1)), 10);
-                                  showToast.info('Passed');
+                                  showToast.info(t('family.passed'));
                                 }}
                                 className="w-14 h-14 rounded-full bg-white border-2 border-gray-200 flex items-center justify-center hover:border-gray-300 transition-colors shadow-md"
                               >
@@ -413,21 +415,19 @@ export default function FamilyPage() {
 
                     {/* Up next */}
                     {suggestions.length > 1 && (
-                      <div className="mt-8">
+                      <div className="mt-5">
                         <div className="mb-3">
-                          <h3 className="text-base font-bold text-charcoal">Up next</h3>
-                          <p className="text-xs text-textLight mt-0.5">More suggestions from your family</p>
+                          <h3 className="text-base font-bold text-charcoal">{t('inbox.upNext')}</h3>
+                          <p className="text-xs text-textLight mt-0.5">{t('family.moreSuggestions')}</p>
                         </div>
                         <div className="flex gap-3">
                           {suggestions.slice(1, 4).map((s) => (
-                            <div key={s.id} className="flex-1 aspect-[4/5] rounded-2xl overflow-hidden relative gradient-rose">
-                              <div className="absolute inset-0 flex items-center justify-center">
-                                <span className="text-3xl font-bold text-white/60">{s.name.charAt(0)}</span>
-                              </div>
+                            <div key={s.id} className="flex-1 aspect-[4/5] rounded-2xl overflow-hidden relative">
+                              <img src={s.photo} alt={s.name} className="w-full h-full object-cover" />
                               <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
                               <div className="absolute bottom-0 left-0 right-0 p-3">
                                 <p className="text-white font-semibold text-sm truncate">{s.name}</p>
-                                <p className="text-white/60 text-[10px]">via {s.from}</p>
+                                <p className="text-white/60 text-[10px]">{t('family.via')} {s.from}</p>
                               </div>
                             </div>
                           ))}
@@ -441,49 +441,46 @@ export default function FamilyPage() {
           </AnimatePresence>
 
           {/* Privacy note */}
-          <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 mt-6">
-            <div className="flex gap-3">
-              <Shield className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
-              <div>
-                <h4 className="text-sm font-semibold text-charcoal mb-1">Your Privacy</h4>
-                <p className="text-xs text-textLight leading-relaxed">
-                  Family members can only see what you allow. Your messages and chat history remain private. You can revoke access at any time.
-                </p>
-              </div>
+          <div className="mt-3 mb-0">
+            <div className="bg-blue-50/90 backdrop-blur-sm border border-blue-100 rounded-2xl shadow-card px-5 py-3.5 flex items-center gap-3">
+              <Shield className="w-5 h-5 text-blue-500 shrink-0" />
+              <p className="text-sm text-textLight">
+                <span className="font-semibold text-charcoal">{t('family.yourPrivacy')}</span> — {t('family.privacyNote')}
+              </p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Invite Modal */}
-      <Modal isOpen={showInviteModal} onClose={() => setShowInviteModal(false)} title="Invite Family" size="sm">
+      <Modal isOpen={showInviteModal} onClose={() => setShowInviteModal(false)} title={t('family.inviteModalTitle')} size="sm">
         <div className="text-center">
-          <p className="text-sm text-textLight mb-4">Share this code with your family member to join your family circle.</p>
+          <p className="text-sm text-textLight mb-4">{t('family.inviteModalText')}</p>
           <div className="bg-gray-50 rounded-2xl p-6 mb-4">
             <p className="text-3xl font-bold text-charcoal tracking-widest">{inviteCode}</p>
           </div>
           <div className="flex gap-3">
             <Button fullWidth variant="secondary" icon={copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />} onClick={copyCode}>
-              {copied ? 'Copied!' : 'Copy Code'}
+              {copied ? t('family.copied') : t('family.copyCode')}
             </Button>
             <Button fullWidth icon={<Share2 className="w-4 h-4" />} onClick={() => { if (navigator.share) { navigator.share({ title: 'Join my MitiMaiti Family', text: `Use code ${inviteCode} to join my family circle!` }); } else { copyCode(); } }}>
-              Share
+              {t('family.share')}
             </Button>
           </div>
         </div>
       </Modal>
 
       {/* Revoke All Modal */}
-      <Modal isOpen={showRevokeModal} onClose={() => setShowRevokeModal(false)} title="Revoke All Access" size="sm">
+      <Modal isOpen={showRevokeModal} onClose={() => setShowRevokeModal(false)} title={t('family.revokeAllAccess')} size="sm">
         <div className="text-center">
           <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
             <AlertTriangle className="w-8 h-8 text-red-500" />
           </div>
-          <h3 className="text-lg font-bold text-charcoal mb-2">Revoke all family access?</h3>
-          <p className="text-sm text-textLight mb-6">This will immediately remove all permissions from all family members.</p>
+          <h3 className="text-lg font-bold text-charcoal mb-2">{t('family.revokeConfirmTitle')}</h3>
+          <p className="text-sm text-textLight mb-6">{t('family.revokeConfirmText')}</p>
           <div className="flex gap-3">
-            <Button fullWidth variant="secondary" onClick={() => setShowRevokeModal(false)}>Cancel</Button>
-            <Button fullWidth variant="danger" onClick={handleRevokeAll}>Revoke All</Button>
+            <Button fullWidth variant="secondary" onClick={() => setShowRevokeModal(false)}>{t('common.cancel')}</Button>
+            <Button fullWidth variant="danger" onClick={handleRevokeAll}>{t('family.revokeAll')}</Button>
           </div>
         </div>
       </Modal>

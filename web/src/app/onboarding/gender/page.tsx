@@ -4,16 +4,18 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import OnboardingShell from '@/components/onboarding/OnboardingShell';
-
-const genderOptions = [
-  { value: 'man', label: 'Man', emoji: '👨' },
-  { value: 'woman', label: 'Woman', emoji: '👩' },
-  { value: 'nonbinary', label: 'Non-binary', emoji: '🧑' },
-];
+import { useTranslation } from '@/lib/i18n';
 
 export default function GenderPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [selected, setSelected] = useState('');
+
+  const genderOptions = [
+    { value: 'man', label: t('onboarding.man'), emoji: '👨' },
+    { value: 'woman', label: t('onboarding.woman'), emoji: '👩' },
+    { value: 'nonbinary', label: t('onboarding.nonBinary'), emoji: '🧑' },
+  ];
 
   const handleContinue = () => {
     if (!selected) return;
@@ -27,7 +29,7 @@ export default function GenderPage() {
   return (
     <OnboardingShell
       step={3}
-      title="How do you identify?"
+      title={t('onboarding.howDoYouIdentify')}
       canContinue={!!selected}
       onContinue={handleContinue}
     >

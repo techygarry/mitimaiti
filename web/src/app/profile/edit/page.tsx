@@ -19,6 +19,7 @@ import Input from '@/components/ui/Input';
 import Badge from '@/components/ui/Badge';
 import { showToast } from '@/components/ui/Toast';
 import { interestOptions, promptOptions } from '@/lib/mockData';
+import { useTranslation } from '@/lib/i18n';
 
 function SelectField({
   label,
@@ -31,6 +32,7 @@ function SelectField({
   options: { value: string; label: string }[];
   onChange: (v: string) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="mb-4">
       <label className="block text-sm font-medium text-textMain mb-1.5">
@@ -41,12 +43,12 @@ function SelectField({
           value={value}
           onChange={(e) => {
             onChange(e.target.value);
-            showToast.success('Saved');
+            showToast.success(t('profileEdit.saved'));
           }}
           className="w-full appearance-none bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-charcoal focus:border-rose focus:ring-2 focus:ring-rose-light outline-none transition-all pr-10"
           aria-label={label}
         >
-          <option value="">Select...</option>
+          <option value="">{t('profileEdit.select')}</option>
           {options.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
@@ -60,6 +62,7 @@ function SelectField({
 }
 
 function BasicsTab() {
+  const { t } = useTranslation();
   const [basics, setBasics] = useState({
     height: '',
     education: '',
@@ -77,46 +80,46 @@ function BasicsTab() {
   };
 
   return (
-    <div className="p-6 space-y-1">
+    <div className="p-4 space-y-1">
       <div className="mb-4">
         <Input
-          label="Height (cm)"
+          label={t('profileEdit.heightCm')}
           type="number"
           placeholder="170"
           value={basics.height}
           onChange={(e) => update('height', e.target.value)}
-          onBlur={() => basics.height && showToast.success('Saved')}
+          onBlur={() => basics.height && showToast.success(t('profileEdit.saved'))}
         />
       </div>
       <div className="mb-4">
         <Input
-          label="Education"
+          label={t('profileEdit.education')}
           placeholder="e.g., MBA, IIM Ahmedabad"
           value={basics.education}
           onChange={(e) => update('education', e.target.value)}
-          onBlur={() => basics.education && showToast.success('Saved')}
+          onBlur={() => basics.education && showToast.success(t('profileEdit.saved'))}
         />
       </div>
       <div className="mb-4">
         <Input
-          label="Job Title"
+          label={t('profileEdit.jobTitle')}
           placeholder="e.g., Product Manager"
           value={basics.work_title}
           onChange={(e) => update('work_title', e.target.value)}
-          onBlur={() => basics.work_title && showToast.success('Saved')}
+          onBlur={() => basics.work_title && showToast.success(t('profileEdit.saved'))}
         />
       </div>
       <div className="mb-4">
         <Input
-          label="Company"
+          label={t('profileEdit.company')}
           placeholder="e.g., Google"
           value={basics.company}
           onChange={(e) => update('company', e.target.value)}
-          onBlur={() => basics.company && showToast.success('Saved')}
+          onBlur={() => basics.company && showToast.success(t('profileEdit.saved'))}
         />
       </div>
       <SelectField
-        label="Drinking"
+        label={t('profileEdit.drinking')}
         value={basics.drinking}
         onChange={(v) => update('drinking', v)}
         options={[
@@ -126,7 +129,7 @@ function BasicsTab() {
         ]}
       />
       <SelectField
-        label="Smoking"
+        label={t('profileEdit.smoking')}
         value={basics.smoking}
         onChange={(v) => update('smoking', v)}
         options={[
@@ -136,7 +139,7 @@ function BasicsTab() {
         ]}
       />
       <SelectField
-        label="Want Kids?"
+        label={t('profileEdit.wantKids')}
         value={basics.wants_kids}
         onChange={(v) => update('wants_kids', v)}
         options={[
@@ -148,7 +151,7 @@ function BasicsTab() {
         ]}
       />
       <SelectField
-        label="Settling Timeline"
+        label={t('profileEdit.settlingTimeline')}
         value={basics.settling}
         onChange={(v) => update('settling', v)}
         options={[
@@ -163,6 +166,7 @@ function BasicsTab() {
 }
 
 function SindhiTab() {
+  const { t } = useTranslation();
   const [sindhi, setSindhi] = useState({
     fluency: '',
     religion: '',
@@ -177,9 +181,9 @@ function SindhiTab() {
   };
 
   return (
-    <div className="p-6 space-y-1">
+    <div className="p-4 space-y-1">
       <SelectField
-        label="Sindhi Fluency"
+        label={t('profileEdit.sindhiFluency')}
         value={sindhi.fluency}
         onChange={(v) => update('fluency', v)}
         options={[
@@ -191,7 +195,7 @@ function SindhiTab() {
         ]}
       />
       <SelectField
-        label="Religion"
+        label={t('profileEdit.religion')}
         value={sindhi.religion}
         onChange={(v) => update('religion', v)}
         options={[
@@ -205,15 +209,15 @@ function SindhiTab() {
       />
       <div className="mb-4">
         <Input
-          label="Gotra"
+          label={t('profileEdit.gotra')}
           placeholder="e.g., Lohana, Amil, Bhatia"
           value={sindhi.gotra}
           onChange={(e) => update('gotra', e.target.value)}
-          onBlur={() => sindhi.gotra && showToast.success('Saved')}
+          onBlur={() => sindhi.gotra && showToast.success(t('profileEdit.saved'))}
         />
       </div>
       <SelectField
-        label="Generation"
+        label={t('profileEdit.generation')}
         value={sindhi.generation}
         onChange={(v) => update('generation', v)}
         options={[
@@ -224,7 +228,7 @@ function SindhiTab() {
         ]}
       />
       <SelectField
-        label="Dietary Preference"
+        label={t('profileEdit.dietaryPreference')}
         value={sindhi.dietary}
         onChange={(v) => update('dietary', v)}
         options={[
@@ -240,6 +244,7 @@ function SindhiTab() {
 }
 
 function ChattiTab() {
+  const { t } = useTranslation();
   const [chatti, setChatti] = useState({
     chatti_name: '',
     chatti_dob: '',
@@ -255,31 +260,31 @@ function ChattiTab() {
   };
 
   return (
-    <div className="p-6 space-y-1">
+    <div className="p-4 space-y-1">
       <Card variant="filled" padding="md" className="mb-4">
         <p className="text-sm text-textLight">
-          Chatti details are used for Kundli matching. They help match you with compatible partners based on traditional astrological calculations.
+          {t('profileEdit.chattiDetails')}
         </p>
       </Card>
       <div className="mb-4">
-        <Input label="Chatti Name" placeholder="Enter your chatti name" value={chatti.chatti_name} onChange={(e) => update('chatti_name', e.target.value)} onBlur={() => chatti.chatti_name && showToast.success('Saved')} />
+        <Input label={t('profileEdit.chattiName')} placeholder="Enter your chatti name" value={chatti.chatti_name} onChange={(e) => update('chatti_name', e.target.value)} onBlur={() => chatti.chatti_name && showToast.success(t('profileEdit.saved'))} />
       </div>
       <div className="mb-4">
-        <Input label="Chatti Date of Birth" type="date" value={chatti.chatti_dob} onChange={(e) => { update('chatti_dob', e.target.value); showToast.success('Saved'); }} />
+        <Input label={t('profileEdit.chattiDob')} type="date" value={chatti.chatti_dob} onChange={(e) => { update('chatti_dob', e.target.value); showToast.success(t('profileEdit.saved')); }} />
       </div>
       <div className="mb-4">
-        <Input label="Time of Birth" type="time" value={chatti.time_of_birth} onChange={(e) => { update('time_of_birth', e.target.value); showToast.success('Saved'); }} />
+        <Input label={t('profileEdit.timeOfBirth')} type="time" value={chatti.time_of_birth} onChange={(e) => { update('time_of_birth', e.target.value); showToast.success(t('profileEdit.saved')); }} />
       </div>
       <div className="mb-4">
-        <Input label="Place of Birth" placeholder="e.g., Mumbai, India" value={chatti.place_of_birth} onChange={(e) => update('place_of_birth', e.target.value)} onBlur={() => chatti.place_of_birth && showToast.success('Saved')} />
+        <Input label={t('profileEdit.placeOfBirth')} placeholder="e.g., Mumbai, India" value={chatti.place_of_birth} onChange={(e) => update('place_of_birth', e.target.value)} onBlur={() => chatti.place_of_birth && showToast.success(t('profileEdit.saved'))} />
       </div>
-      <SelectField label="Nakshatra" value={chatti.nakshatra} onChange={(v) => update('nakshatra', v)} options={[
+      <SelectField label={t('profileEdit.nakshatra')} value={chatti.nakshatra} onChange={(v) => update('nakshatra', v)} options={[
         { value: 'ashwini', label: 'Ashwini' }, { value: 'bharani', label: 'Bharani' }, { value: 'krittika', label: 'Krittika' }, { value: 'rohini', label: 'Rohini' }, { value: 'mrigashira', label: 'Mrigashira' }, { value: 'ardra', label: 'Ardra' }, { value: 'punarvasu', label: 'Punarvasu' }, { value: 'pushya', label: 'Pushya' }, { value: 'ashlesha', label: 'Ashlesha' }, { value: 'magha', label: 'Magha' }, { value: 'purva_phalguni', label: 'Purva Phalguni' }, { value: 'uttara_phalguni', label: 'Uttara Phalguni' }, { value: 'hasta', label: 'Hasta' }, { value: 'chitra', label: 'Chitra' }, { value: 'swati', label: 'Swati' }, { value: 'vishakha', label: 'Vishakha' }, { value: 'anuradha', label: 'Anuradha' }, { value: 'jyeshtha', label: 'Jyeshtha' }, { value: 'mula', label: 'Mula' }, { value: 'purva_ashadha', label: 'Purva Ashadha' }, { value: 'uttara_ashadha', label: 'Uttara Ashadha' }, { value: 'shravana', label: 'Shravana' }, { value: 'dhanishta', label: 'Dhanishta' }, { value: 'shatabhisha', label: 'Shatabhisha' }, { value: 'purva_bhadrapada', label: 'Purva Bhadrapada' }, { value: 'uttara_bhadrapada', label: 'Uttara Bhadrapada' }, { value: 'revati', label: 'Revati' },
       ]} />
-      <SelectField label="Rashi" value={chatti.rashi} onChange={(v) => update('rashi', v)} options={[
+      <SelectField label={t('profileEdit.rashi')} value={chatti.rashi} onChange={(v) => update('rashi', v)} options={[
         { value: 'mesh', label: 'Mesh (Aries)' }, { value: 'vrishabh', label: 'Vrishabh (Taurus)' }, { value: 'mithun', label: 'Mithun (Gemini)' }, { value: 'kark', label: 'Kark (Cancer)' }, { value: 'sinh', label: 'Sinh (Leo)' }, { value: 'kanya', label: 'Kanya (Virgo)' }, { value: 'tula', label: 'Tula (Libra)' }, { value: 'vrishchik', label: 'Vrishchik (Scorpio)' }, { value: 'dhanu', label: 'Dhanu (Sagittarius)' }, { value: 'makar', label: 'Makar (Capricorn)' }, { value: 'kumbh', label: 'Kumbh (Aquarius)' }, { value: 'meen', label: 'Meen (Pisces)' },
       ]} />
-      <SelectField label="Manglik" value={chatti.manglik} onChange={(v) => update('manglik', v)} options={[
+      <SelectField label={t('profileEdit.manglik')} value={chatti.manglik} onChange={(v) => update('manglik', v)} options={[
         { value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'partial', label: 'Partial (Anshik)' }, { value: 'not_sure', label: 'Not sure' },
       ]} />
     </div>
@@ -287,6 +292,7 @@ function ChattiTab() {
 }
 
 function CultureTab() {
+  const { t } = useTranslation();
   const [culture, setCulture] = useState({
     mother_tongue: '',
     community_org: '',
@@ -298,21 +304,22 @@ function CultureTab() {
   };
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-4 space-y-4">
       <div>
-        <Input label="Mother Tongue" placeholder="e.g., Sindhi, Hindi" value={culture.mother_tongue} onChange={(e) => update('mother_tongue', e.target.value)} onBlur={() => culture.mother_tongue && showToast.success('Saved')} />
+        <Input label={t('profileEdit.motherTongue')} placeholder="e.g., Sindhi, Hindi" value={culture.mother_tongue} onChange={(e) => update('mother_tongue', e.target.value)} onBlur={() => culture.mother_tongue && showToast.success(t('profileEdit.saved'))} />
       </div>
       <div>
-        <Input label="Community Organization" placeholder="e.g., Sindhi Panchayat, SWAS" value={culture.community_org} onChange={(e) => update('community_org', e.target.value)} onBlur={() => culture.community_org && showToast.success('Saved')} helperText="Any Sindhi community group you belong to" />
+        <Input label={t('profileEdit.communityOrg')} placeholder="e.g., Sindhi Panchayat, SWAS" value={culture.community_org} onChange={(e) => update('community_org', e.target.value)} onBlur={() => culture.community_org && showToast.success(t('profileEdit.saved'))} helperText={t('profileEdit.communityOrgHelper')} />
       </div>
       <div>
-        <Input label="Cultural Events" placeholder="e.g., Chaliha Sahib, Thadri, Jhulelal" value={culture.cultural_events} onChange={(e) => update('cultural_events', e.target.value)} onBlur={() => culture.cultural_events && showToast.success('Saved')} helperText="Comma-separated festivals and events you celebrate" />
+        <Input label={t('profileEdit.culturalEvents')} placeholder="e.g., Chaliha Sahib, Thadri, Jhulelal" value={culture.cultural_events} onChange={(e) => update('cultural_events', e.target.value)} onBlur={() => culture.cultural_events && showToast.success(t('profileEdit.saved'))} helperText={t('profileEdit.culturalEventsHelper')} />
       </div>
     </div>
   );
 }
 
 function PersonalityTab() {
+  const { t } = useTranslation();
   const [bio, setBio] = useState('');
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [prompts, setPrompts] = useState<{ question: string; answer: string }[]>([]);
@@ -336,18 +343,18 @@ function PersonalityTab() {
     setSelectedPrompt('');
     setPromptAnswer('');
     setAddingPrompt(false);
-    showToast.success('Prompt added!');
+    showToast.success(t('profileEdit.promptAdded'));
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 space-y-4">
       <div>
-        <label className="block text-sm font-medium text-textMain mb-1.5">Bio</label>
+        <label className="block text-sm font-medium text-textMain mb-1.5">{t('profileEdit.bio')}</label>
         <textarea
           value={bio}
           onChange={(e) => setBio(e.target.value)}
-          onBlur={() => bio && showToast.success('Saved')}
-          placeholder="Tell people about yourself..."
+          onBlur={() => bio && showToast.success(t('profileEdit.saved'))}
+          placeholder={t('profileEdit.bioPlaceholder')}
           maxLength={500}
           rows={4}
           className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-charcoal placeholder:text-textLight/50 focus:border-rose focus:ring-2 focus:ring-rose-light outline-none transition-all resize-none"
@@ -358,9 +365,9 @@ function PersonalityTab() {
 
       <div>
         <div className="flex items-center justify-between mb-3">
-          <label className="text-sm font-medium text-textMain">Prompts ({prompts.length}/3)</label>
+          <label className="text-sm font-medium text-textMain">{t('profileEdit.prompts')} ({prompts.length}/3)</label>
           {prompts.length < 3 && (
-            <button onClick={() => setAddingPrompt(true)} className="text-sm font-semibold text-rose" aria-label="Add prompt">+ Add</button>
+            <button onClick={() => setAddingPrompt(true)} className="text-sm font-semibold text-rose" aria-label="Add prompt">+ {t('profileEdit.add')}</button>
           )}
         </div>
         {prompts.map((prompt, i) => (
@@ -370,7 +377,7 @@ function PersonalityTab() {
                 <p className="text-xs font-semibold text-rose uppercase tracking-wide mb-1">{prompt.question}</p>
                 <p className="text-textMain text-sm">{prompt.answer}</p>
               </div>
-              <button onClick={() => { setPrompts((prev) => prev.filter((_, idx) => idx !== i)); showToast.success('Prompt removed'); }} className="text-textLight hover:text-red-500 transition-colors ml-2 touch-target" aria-label="Remove prompt">
+              <button onClick={() => { setPrompts((prev) => prev.filter((_, idx) => idx !== i)); showToast.success(t('profileEdit.promptRemoved')); }} className="text-textLight hover:text-red-500 transition-colors ml-2 touch-target" aria-label="Remove prompt">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -379,20 +386,20 @@ function PersonalityTab() {
         {addingPrompt && (
           <Card variant="outlined" padding="md" className="mt-2">
             <select value={selectedPrompt} onChange={(e) => setSelectedPrompt(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-charcoal mb-2 outline-none focus:border-rose" aria-label="Choose a prompt">
-              <option value="">Choose a prompt...</option>
+              <option value="">{t('profileEdit.choosePrompt')}</option>
               {promptOptions.map((p) => (<option key={p} value={p}>{p}</option>))}
             </select>
-            <textarea value={promptAnswer} onChange={(e) => setPromptAnswer(e.target.value)} placeholder="Your answer..." rows={3} maxLength={200} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-charcoal placeholder:text-textLight/50 outline-none focus:border-rose resize-none mb-2" aria-label="Prompt answer" />
+            <textarea value={promptAnswer} onChange={(e) => setPromptAnswer(e.target.value)} placeholder={t('profileEdit.yourAnswer')} rows={3} maxLength={200} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-charcoal placeholder:text-textLight/50 outline-none focus:border-rose resize-none mb-2" aria-label="Prompt answer" />
             <div className="flex gap-2">
-              <button onClick={() => setAddingPrompt(false)} className="flex-1 py-2 text-sm font-medium text-textLight bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors touch-target">Cancel</button>
-              <button onClick={addPrompt} disabled={!selectedPrompt || !promptAnswer.trim()} className="flex-1 py-2 text-sm font-medium text-white bg-rose rounded-xl hover:bg-rose-dark transition-colors disabled:opacity-50 touch-target">Add</button>
+              <button onClick={() => setAddingPrompt(false)} className="flex-1 py-2 text-sm font-medium text-textLight bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors touch-target">{t('common.cancel')}</button>
+              <button onClick={addPrompt} disabled={!selectedPrompt || !promptAnswer.trim()} className="flex-1 py-2 text-sm font-medium text-white bg-rose rounded-xl hover:bg-rose-dark transition-colors disabled:opacity-50 touch-target">{t('profileEdit.add')}</button>
             </div>
           </Card>
         )}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-textMain mb-3">Interests ({selectedInterests.length}/10)</label>
+        <label className="block text-sm font-medium text-textMain mb-3">{t('profileEdit.interests')} ({selectedInterests.length}/10)</label>
         <div className="flex flex-wrap gap-2">
           {interestOptions.map((interest) => {
             const isSelected = selectedInterests.includes(interest);
@@ -414,11 +421,11 @@ function PersonalityTab() {
       </div>
 
       <div>
-        <Input label="Languages (comma-separated)" placeholder="e.g., Sindhi, Hindi, English" helperText="List the languages you speak" onBlur={() => showToast.success('Saved')} />
+        <Input label={t('profileEdit.languages')} placeholder="e.g., Sindhi, Hindi, English" helperText={t('profileEdit.languagesHelper')} onBlur={() => showToast.success(t('profileEdit.saved'))} />
       </div>
 
       <div>
-        <Input label="Voice Intro URL" placeholder="Upload a voice introduction" helperText="Optional: add a short voice intro to your profile" onBlur={() => showToast.success('Saved')} />
+        <Input label={t('profileEdit.voiceIntro')} placeholder="Upload a voice introduction" helperText={t('profileEdit.voiceIntroHelper')} onBlur={() => showToast.success(t('profileEdit.saved'))} />
       </div>
     </div>
   );
@@ -426,25 +433,26 @@ function PersonalityTab() {
 
 export default function EditProfilePage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('basics');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isNonSindhi = typeof window !== 'undefined' && localStorage.getItem('onboarding_non_sindhi') === 'true';
 
   return (
     <AppShell>
-      <div className="p-6">
-        <div className="max-w-5xl mx-auto">
-          <div className="flex items-center gap-4 mb-6">
+      <div className="flex justify-center p-4 sm:p-6">
+        <div className="w-full max-w-md">
+          <div className="flex items-center gap-4 mb-3">
             <button onClick={() => router.back()} className="p-2 rounded-full hover:bg-gray-100 transition-colors touch-target" aria-label="Go back">
               <ArrowLeft className="w-5 h-5 text-charcoal" />
             </button>
-            <h1 className="text-2xl font-bold text-charcoal">Edit Profile</h1>
+            <h1 className="text-2xl font-bold text-charcoal">{t('profileEdit.editProfile')}</h1>
           </div>
 
-          <div className="max-w-xl mx-auto lg:mx-0 space-y-6">
+          <div className="space-y-4">
             {/* Photos */}
-            <div className="bg-white rounded-2xl shadow-card p-6">
-              <h2 className="font-semibold text-charcoal mb-4">Photos</h2>
+            <div className="bg-white rounded-2xl shadow-card p-4">
+              <h2 className="font-semibold text-charcoal mb-4">{t('profileEdit.photos')}</h2>
               <input ref={fileInputRef} type="file" accept="image/*" className="hidden" />
               <div className="grid grid-cols-3 gap-3">
                 {Array.from({ length: 6 }).map((_, i) => (
@@ -459,7 +467,7 @@ export default function EditProfilePage() {
                         <Camera className="w-7 h-7 text-textLight/40 mb-1" />
                         <div className="flex items-center gap-0.5">
                           <Star className="w-3.5 h-3.5 text-gold" />
-                          <span className="text-xs text-textLight">Main</span>
+                          <span className="text-xs text-textLight">{t('profileEdit.main')}</span>
                         </div>
                       </>
                     ) : (
@@ -469,7 +477,7 @@ export default function EditProfilePage() {
                 ))}
               </div>
               <p className="text-xs text-textLight mt-3 text-center">
-                Add up to 6 photos. First photo is your main profile photo.
+                {t('profileEdit.addUpTo6')}
               </p>
             </div>
 
@@ -478,14 +486,14 @@ export default function EditProfilePage() {
               <div className="bg-white rounded-2xl shadow-card overflow-hidden">
                 <Tabs
                   tabs={isNonSindhi ? [
-                    { id: 'basics', label: 'My Basics' },
-                    { id: 'personality', label: 'Personality' },
+                    { id: 'basics', label: t('profileEdit.myBasics') },
+                    { id: 'personality', label: t('profileEdit.personality') },
                   ] : [
-                    { id: 'basics', label: 'My Basics' },
-                    { id: 'sindhi', label: 'Sindhi Identity' },
-                    { id: 'chatti', label: 'My Chatti' },
-                    { id: 'culture', label: 'My Culture' },
-                    { id: 'personality', label: 'Personality' },
+                    { id: 'basics', label: t('profileEdit.myBasics') },
+                    { id: 'sindhi', label: t('profileEdit.sindhiIdentity') },
+                    { id: 'chatti', label: t('profileEdit.myChatti') },
+                    { id: 'culture', label: t('profileEdit.myCulture') },
+                    { id: 'personality', label: t('profileEdit.personality') },
                   ]}
                   activeTab={activeTab}
                   onChange={setActiveTab}

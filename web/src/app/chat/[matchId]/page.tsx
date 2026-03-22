@@ -18,6 +18,7 @@ import CountdownTimer from '@/components/ui/CountdownTimer';
 import { mockMatches, mockMessages, mockIcebreakers } from '@/lib/mockData';
 import { Message } from '@/types';
 import { format, isToday, isYesterday } from 'date-fns';
+import { useTranslation } from '@/lib/i18n';
 
 function formatMessageTime(dateStr: string) {
   const date = new Date(dateStr);
@@ -113,11 +114,12 @@ function TypingIndicator() {
 
 function MatchesSidebar({ currentMatchId }: { currentMatchId: string }) {
   const router = useRouter();
+  const { t } = useTranslation();
 
   return (
     <div className="h-full flex flex-col">
       <div className="px-5 py-4 border-b border-gray-100">
-        <h2 className="font-semibold text-charcoal text-base">Your Matches</h2>
+        <h2 className="font-semibold text-charcoal text-base">{t('chat.yourMatches')}</h2>
       </div>
       <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
         {mockMatches.map((match) => (
@@ -159,6 +161,7 @@ function MatchesSidebar({ currentMatchId }: { currentMatchId: string }) {
 
 export default function ChatPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const params = useParams();
   const matchId = params.matchId as string;
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -241,21 +244,16 @@ export default function ChatPage() {
   );
 
   return (
-    <AppShell>
+    <AppShell hideSidebar>
       <div className="flex h-[calc(100vh-4rem)]">
-        {/* Left Column - Matches Sidebar (desktop only) */}
-        <div className="hidden lg:block w-80 shrink-0 bg-white border-r border-gray-100">
-          <MatchesSidebar currentMatchId={matchId} />
-        </div>
-
-        {/* Right Column - Chat Area */}
+        {/* Chat Area */}
         <div className="flex-1 flex flex-col bg-white">
           {/* Chat top bar */}
           <div className="flex items-center gap-4 px-6 py-4 border-b border-gray-100 bg-white shrink-0">
             <button
-              onClick={() => router.back()}
-              className="lg:hidden p-2 rounded-full hover:bg-gray-100 transition-colors touch-target"
-              aria-label="Go back"
+              onClick={() => router.push('/matches')}
+              className="p-2 rounded-full hover:bg-gray-100 transition-colors touch-target"
+              aria-label={t('chat.backToMatches')}
             >
               <ArrowLeft className="w-5 h-5 text-charcoal" />
             </button>
@@ -272,7 +270,7 @@ export default function ChatPage() {
                 {match.user.first_name}, {match.user.age}
               </h2>
               <p className="text-sm text-textLight">
-                {match.is_online ? 'Online now' : 'Active recently'}
+                {match.is_online ? t('chat.onlineNow') : t('chat.activeRecently')}
               </p>
             </div>
 
@@ -297,10 +295,10 @@ export default function ChatPage() {
           {isLocked && (
             <div className="px-6 py-2.5 bg-rose/5 border-b border-rose-light/20 text-center">
               <p className="text-sm text-rose font-medium">
-                Waiting for reply...
+                {t('chat.waitingForReply')}...
               </p>
               <p className="text-xs text-textLight mt-0.5">
-                Your message has been sent. You can send another message once they reply.
+                {t('chat.waitingForReplyMsg')}
               </p>
             </div>
           )}
@@ -309,9 +307,9 @@ export default function ChatPage() {
           <div className="flex-1 overflow-y-auto px-6 py-6">
             {/* Icebreakers for new chat */}
             {isNewChat && (
-              <div className="mb-8">
+              <div className="mb-5">
                 <p className="text-sm text-textLight text-center mb-4">
-                  Start the conversation with an icebreaker
+                  {t('chat.icebreaker')}
                 </p>
                 <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
                   {mockIcebreakers.map((ice) => (
@@ -327,7 +325,7 @@ export default function ChatPage() {
 
             {/* Match announcement */}
             {messages.length > 0 && (
-              <div className="text-center mb-8">
+              <div className="text-center mb-5">
                 <p className="text-sm text-textLight">
                   You matched with {match.user.first_name} on{' '}
                   {format(new Date(match.matched_at), 'MMMM d, yyyy')}
@@ -357,7 +355,7 @@ export default function ChatPage() {
             {isLocked ? (
               <div className="flex items-center justify-center py-3 bg-gray-50 rounded-full">
                 <p className="text-sm text-textLight font-medium">
-                  Waiting for reply...
+                  {t('chat.waitingForReply')}...
                 </p>
               </div>
             ) : (
@@ -376,7 +374,7 @@ export default function ChatPage() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyPress}
-                    placeholder="Type a message..."
+                    placeholder={t('chat.typeMessagePlaceholder')}
                     className="w-full px-5 py-3 bg-gray-100 rounded-full text-sm text-charcoal placeholder:text-textLight/50 focus:bg-gray-50 focus:ring-2 focus:ring-rose-light outline-none transition-all"
                     aria-label="Message input"
                   />

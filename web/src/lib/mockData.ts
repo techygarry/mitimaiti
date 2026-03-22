@@ -1,7 +1,7 @@
 import { FeedCard, Match, Message, Like, Icebreaker, City, KundliTier } from '@/types';
 
 const avatarUrl = (seed: string) =>
-  `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`;
+  `https://i.pravatar.cc/400?u=${seed}`;
 
 function getCulturalBadge(score: number): 'Excellent' | 'Good' | 'Fair' {
   if (score >= 80) return 'Excellent';

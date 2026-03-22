@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import Button from '@/components/ui/Button';
 import { Heart, Users, Shield, Sparkles, Globe, MessageCircle } from 'lucide-react';
+import { useTranslation } from '@/lib/i18n';
 
 function FeatureCard({
   icon: Icon,
@@ -22,7 +23,7 @@ function FeatureCard({
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ delay, duration: 0.5 }}
-      className="bg-white rounded-2xl p-6 shadow-card hover:shadow-card-hover transition-shadow"
+      className="bg-white rounded-2xl p-4 shadow-card hover:shadow-card-hover transition-shadow"
     >
       <div className="w-12 h-12 rounded-xl bg-rose/10 flex items-center justify-center mb-4">
         <Icon className="w-6 h-6 text-rose" />
@@ -62,6 +63,7 @@ function StepCard({
 }
 
 export default function WelcomePage() {
+  const { t } = useTranslation();
   return (
     <div className="min-h-screen overflow-hidden">
       {/* Hero Section - Full viewport */}
@@ -97,7 +99,7 @@ export default function WelcomePage() {
                 className="text-2xl lg:text-3xl font-medium mb-4"
                 style={{ color: '#D4A853' }}
               >
-                Where Sindhi Hearts Meet
+                {t('welcome.tagline')}
               </motion.p>
 
               {/* Subtitle */}
@@ -105,9 +107,9 @@ export default function WelcomePage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5, duration: 0.6 }}
-                className="text-white/70 text-lg max-w-md mb-8 lg:mx-0 mx-auto"
+                className="text-white/70 text-lg max-w-md mb-5 lg:mx-0 mx-auto"
               >
-                The modern way to find love rooted in tradition. Connect with Sindhis worldwide.
+                {t('welcome.subtitle')}
               </motion.p>
 
               {/* CTAs */}
@@ -123,7 +125,7 @@ export default function WelcomePage() {
                     className="bg-white text-rose hover:bg-white/90 active:bg-white/80 shadow-lg text-lg font-bold px-10"
                     aria-label="Get started with MitiMaiti"
                   >
-                    Get Started
+                    {t('welcome.getStarted')}
                   </Button>
                 </Link>
                 <Link href="/auth/phone">
@@ -133,7 +135,7 @@ export default function WelcomePage() {
                     className="border-white/30 text-white hover:bg-white/10 text-lg px-10"
                     aria-label="Sign in to your account"
                   >
-                    Sign In
+                    {t('welcome.signIn')}
                   </Button>
                 </Link>
               </motion.div>
@@ -209,30 +211,30 @@ export default function WelcomePage() {
             className="text-center mb-16"
           >
             <h2 className="text-3xl lg:text-4xl font-bold text-charcoal mb-4">
-              How It Works
+              {t('welcome.howItWorks')}
             </h2>
             <p className="text-textLight text-lg max-w-xl mx-auto">
-              Find your perfect Sindhi match in three simple steps
+              {t('welcome.howItWorksSubtitle')}
             </p>
           </motion.div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
             <StepCard
               number={1}
-              title="Create Your Profile"
-              description="Share your story, traditions, and what matters to you. Add your cultural preferences for better matches."
+              title={t('welcome.step1Title')}
+              description={t('welcome.step1Desc')}
               delay={0.1}
             />
             <StepCard
               number={2}
-              title="Discover Matches"
-              description="Our cultural compatibility algorithm finds people who share your values and traditions."
+              title={t('welcome.step2Title')}
+              description={t('welcome.step2Desc')}
               delay={0.2}
             />
             <StepCard
               number={3}
-              title="Connect & Meet"
-              description="Start meaningful conversations, get family involved if you want, and build something real."
+              title={t('welcome.step3Title')}
+              description={t('welcome.step3Desc')}
               delay={0.3}
             />
           </div>
@@ -249,48 +251,48 @@ export default function WelcomePage() {
             className="text-center mb-16"
           >
             <h2 className="text-3xl lg:text-4xl font-bold text-charcoal mb-4">
-              Built for the Sindhi Community
+              {t('welcome.builtForSindhi')}
             </h2>
             <p className="text-textLight text-lg max-w-xl mx-auto">
-              Features designed with cultural understanding at the core
+              {t('welcome.builtForSindhiSubtitle')}
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <FeatureCard
               icon={Sparkles}
-              title="Cultural Compatibility"
-              description="Our algorithm considers Sindhi traditions, values, family involvement, and lifestyle preferences for meaningful matches."
+              title={t('welcome.culturalCompatibility')}
+              description={t('welcome.culturalCompatibilityDesc')}
               delay={0.1}
             />
             <FeatureCard
               icon={Users}
-              title="Family Mode"
-              description="Invite trusted family members to view profiles and suggest matches. Because in Sindhi culture, family matters."
+              title={t('welcome.familyMode')}
+              description={t('welcome.familyModeDesc')}
               delay={0.15}
             />
             <FeatureCard
               icon={Shield}
-              title="Verified Profiles"
-              description="Phone verification and photo checks ensure you are connecting with real people who are serious about finding love."
+              title={t('welcome.verifiedProfiles')}
+              description={t('welcome.verifiedProfilesDesc')}
               delay={0.2}
             />
             <FeatureCard
               icon={Globe}
-              title="Global Sindhi Network"
-              description="Connect with Sindhis across India, UAE, UK, USA, Singapore and beyond. Find someone who shares your roots."
+              title={t('welcome.globalNetwork')}
+              description={t('welcome.globalNetworkDesc')}
               delay={0.25}
             />
             <FeatureCard
               icon={Heart}
-              title="Kundli Matching"
-              description="Optional chatti-based compatibility scoring for families who value traditional astrological matching."
+              title={t('welcome.kundliMatching')}
+              description={t('welcome.kundliMatchingDesc')}
               delay={0.3}
             />
             <FeatureCard
               icon={MessageCircle}
-              title="Respectful Conversations"
-              description="Built-in conversation starters and cultural icebreakers help you make genuine connections."
+              title={t('welcome.respectfulConversations')}
+              description={t('welcome.respectfulConversationsDesc')}
               delay={0.35}
             />
           </div>
@@ -309,16 +311,16 @@ export default function WelcomePage() {
             viewport={{ once: true }}
             className="text-3xl lg:text-4xl font-bold text-white mb-4"
           >
-            Ready to find your Sindhi soulmate?
+            {t('welcome.readyToFind')}
           </motion.h2>
           <motion.p
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.1 }}
-            className="text-white/70 text-lg mb-8"
+            className="text-white/70 text-lg mb-5"
           >
-            Join thousands of Sindhis who have found meaningful connections on MitiMaiti.
+            {t('welcome.joinThousands')}
           </motion.p>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -331,7 +333,7 @@ export default function WelcomePage() {
                 size="lg"
                 className="bg-white text-rose hover:bg-white/90 shadow-lg text-lg font-bold px-12"
               >
-                Get Started
+                {t('welcome.getStarted')}
               </Button>
             </Link>
           </motion.div>
@@ -351,9 +353,9 @@ export default function WelcomePage() {
               </span>
             </div>
             <div className="flex items-center gap-6 text-white/50 text-sm">
-              <span className="hover:text-white/80 cursor-pointer transition-colors">Terms of Service</span>
-              <span className="hover:text-white/80 cursor-pointer transition-colors">Privacy Policy</span>
-              <span className="hover:text-white/80 cursor-pointer transition-colors">Contact</span>
+              <span className="hover:text-white/80 cursor-pointer transition-colors">{t('welcome.termsOfService')}</span>
+              <span className="hover:text-white/80 cursor-pointer transition-colors">{t('welcome.privacyPolicy')}</span>
+              <span className="hover:text-white/80 cursor-pointer transition-colors">{t('welcome.contact')}</span>
             </div>
             <p className="text-white/30 text-sm">
               &copy; 2026 MitiMaiti. All rights reserved.

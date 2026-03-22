@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { differenceInYears } from 'date-fns';
 import OnboardingShell from '@/components/onboarding/OnboardingShell';
 import { motion } from 'framer-motion';
+import { useTranslation } from '@/lib/i18n';
 
 const months = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -17,6 +18,7 @@ const days = Array.from({ length: 31 }, (_, i) => i + 1);
 
 export default function BirthdayPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [day, setDay] = useState('');
   const [month, setMonth] = useState('');
   const [year, setYear] = useState('');
@@ -46,12 +48,12 @@ export default function BirthdayPage() {
   return (
     <OnboardingShell
       step={2}
-      title="When's your birthday?"
-      subtitle="Your age shows on your profile. Birthday won't be shared."
+      title={t('onboarding.birthdayTitle')}
+      subtitle={t('onboarding.birthdaySubtitle')}
       canContinue={isValid}
       onContinue={handleContinue}
     >
-      <div className="space-y-6 mt-4">
+      <div className="space-y-4 mt-4">
         {/* Date selectors */}
         <div className="flex gap-3">
           <select
@@ -59,7 +61,7 @@ export default function BirthdayPage() {
             onChange={(e) => setDay(e.target.value)}
             className={selectClass}
           >
-            <option value="">Day</option>
+            <option value="">{t('onboarding.day')}</option>
             {days.map((d) => (
               <option key={d} value={String(d)}>
                 {d}
@@ -72,7 +74,7 @@ export default function BirthdayPage() {
             onChange={(e) => setMonth(e.target.value)}
             className={selectClass}
           >
-            <option value="">Month</option>
+            <option value="">{t('onboarding.month')}</option>
             {months.map((m, i) => (
               <option key={m} value={String(i + 1)}>
                 {m}
@@ -85,7 +87,7 @@ export default function BirthdayPage() {
             onChange={(e) => setYear(e.target.value)}
             className={selectClass}
           >
-            <option value="">Year</option>
+            <option value="">{t('onboarding.year')}</option>
             {years.map((y) => (
               <option key={y} value={String(y)}>
                 {y}
@@ -108,10 +110,10 @@ export default function BirthdayPage() {
             {isUnder18 ? (
               <div>
                 <p className="text-red-600 font-semibold text-lg">
-                  You must be 18 or older
+                  {t('onboarding.mustBe18')}
                 </p>
                 <p className="text-red-500 text-sm mt-1">
-                  You need to be at least 18 years old to use MitiMaiti.
+                  {t('onboarding.needToBe18')}
                 </p>
               </div>
             ) : (

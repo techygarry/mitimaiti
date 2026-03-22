@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { ArrowLeft, ChevronDown, Phone } from 'lucide-react';
 import Button from '@/components/ui/Button';
+import { useTranslation } from '@/lib/i18n';
 
 const countryCodes = [
   { code: '+91', country: 'India', flag: '🇮🇳' },
@@ -21,6 +22,7 @@ const countryCodes = [
 
 export default function PhoneAuthPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
   const [phone, setPhone] = useState('');
   const [selectedCountry, setSelectedCountry] = useState(countryCodes[0]);
@@ -60,9 +62,9 @@ export default function PhoneAuthPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-cream px-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
+      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-6">
         {/* Header */}
-        <div className="flex items-center mb-6">
+        <div className="flex items-center mb-3">
           <button
             onClick={() => router.back()}
             className="p-2 -ml-2 rounded-full hover:bg-gray-100 transition-colors"
@@ -84,10 +86,10 @@ export default function PhoneAuthPage() {
           transition={{ duration: 0.5 }}
         >
           <h1 className="text-2xl font-bold text-charcoal mb-2">
-            What&apos;s your phone number?
+            {t('auth.whatsYourPhone')}
           </h1>
-          <p className="text-textLight mb-8">
-            We&apos;ll send you a verification code to get started.
+          <p className="text-textLight mb-5">
+            {t('auth.sendVerificationCode')}
           </p>
 
           {/* Phone Input */}
@@ -160,12 +162,12 @@ export default function PhoneAuthPage() {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
-            We&apos;ll send you a verification code. Standard SMS rates may apply.
+            {t('auth.verificationCodeNote')}
           </p>
         </motion.div>
 
         {/* Bottom CTA */}
-        <div className="mt-8">
+        <div className="mt-5">
           <Button
             fullWidth
             size="lg"
@@ -173,14 +175,14 @@ export default function PhoneAuthPage() {
             loading={loading}
             onClick={handleContinue}
           >
-            Continue
+            {t('auth.continue')}
           </Button>
         </div>
 
         {/* Divider */}
-        <div className="flex items-center gap-3 my-6">
+        <div className="flex items-center gap-3 my-4">
           <div className="flex-1 h-px bg-gray-200" />
-          <span className="text-textLight text-sm font-medium">or continue with</span>
+          <span className="text-textLight text-sm font-medium">{t('auth.orContinueWith')}</span>
           <div className="flex-1 h-px bg-gray-200" />
         </div>
 

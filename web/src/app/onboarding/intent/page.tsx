@@ -4,31 +4,18 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import OnboardingShell from '@/components/onboarding/OnboardingShell';
-
-const intentOptions = [
-  {
-    value: 'casual',
-    label: 'Something Casual',
-    emoji: '☕',
-    description: 'Keep it light and see where things go',
-  },
-  {
-    value: 'open',
-    label: 'Open to Anything',
-    emoji: '✨',
-    description: 'Let fate decide, open to all possibilities',
-  },
-  {
-    value: 'marriage',
-    label: 'Marriage',
-    emoji: '💍',
-    description: 'Looking for a life partner',
-  },
-];
+import { useTranslation } from '@/lib/i18n';
 
 export default function IntentPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [selected, setSelected] = useState('');
+
+  const intentOptions = [
+    { value: 'casual', label: t('onboarding.somethingCasual'), emoji: '☕', description: t('onboarding.casualDesc') },
+    { value: 'open', label: t('onboarding.openToAnything'), emoji: '✨', description: t('onboarding.openDesc') },
+    { value: 'marriage', label: t('onboarding.marriageLabel'), emoji: '💍', description: t('onboarding.marriageDesc') },
+  ];
 
   const handleContinue = () => {
     if (!selected) return;
@@ -41,7 +28,7 @@ export default function IntentPage() {
   return (
     <OnboardingShell
       step={5}
-      title="What are you looking for?"
+      title={t('onboarding.lookingFor')}
       canContinue={!!selected}
       onContinue={handleContinue}
     >

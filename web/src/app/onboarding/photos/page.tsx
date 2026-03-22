@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Plus, X, Star, ImagePlus } from 'lucide-react';
 import OnboardingShell from '@/components/onboarding/OnboardingShell';
+import { useTranslation } from '@/lib/i18n';
 
 interface PhotoSlot {
   file: File | null;
@@ -13,6 +14,7 @@ interface PhotoSlot {
 
 export default function PhotosPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [photos, setPhotos] = useState<PhotoSlot[]>(
     Array(6).fill({ file: null, preview: null })
@@ -70,8 +72,8 @@ export default function PhotosPage() {
   return (
     <OnboardingShell
       step={4}
-      title="Add your best photos"
-      subtitle="Upload at least 1 photo. Your first photo will be your main profile picture."
+      title={t('onboarding.addBestPhotos')}
+      subtitle={t('onboarding.photosSubtitle')}
       canContinue={canContinue}
       onContinue={handleContinue}
     >
@@ -159,7 +161,7 @@ export default function PhotosPage() {
       </div>
 
       <p className="text-xs text-textLight mt-3 text-center">
-        Tip: Profiles with 3+ photos get 4x more matches
+        {t('onboarding.photosTip')}
       </p>
     </OnboardingShell>
   );

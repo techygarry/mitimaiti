@@ -4,16 +4,18 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import OnboardingShell from '@/components/onboarding/OnboardingShell';
-
-const showMeOptions = [
-  { value: 'men', label: 'Men', emoji: '👨' },
-  { value: 'women', label: 'Women', emoji: '👩' },
-  { value: 'everyone', label: 'Everyone', emoji: '🌈' },
-];
+import { useTranslation } from '@/lib/i18n';
 
 export default function ShowMePage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [selected, setSelected] = useState('');
+
+  const showMeOptions = [
+    { value: 'men', label: t('onboarding.men'), emoji: '👨' },
+    { value: 'women', label: t('onboarding.women'), emoji: '👩' },
+    { value: 'everyone', label: t('onboarding.everyone'), emoji: '🌈' },
+  ];
 
   const handleContinue = () => {
     if (!selected) return;
@@ -27,8 +29,8 @@ export default function ShowMePage() {
   return (
     <OnboardingShell
       step={6}
-      title="Show me"
-      subtitle="You can always change this later."
+      title={t('onboarding.showMe')}
+      subtitle={t('onboarding.showMeSubtitle')}
       canContinue={!!selected}
       onContinue={handleContinue}
     >

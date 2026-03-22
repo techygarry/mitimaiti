@@ -6,9 +6,11 @@ import { motion } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { showToast } from '@/components/ui/Toast';
+import { useTranslation } from '@/lib/i18n';
 
 export default function OtpPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [otp, setOtp] = useState<string[]>(Array(6).fill(''));
   const [loading, setLoading] = useState(false);
   const [countdown, setCountdown] = useState(30);
@@ -93,11 +95,11 @@ export default function OtpPage() {
     await new Promise((r) => setTimeout(r, 1000));
 
     if (code.length === 6) {
-      showToast.success('Phone verified successfully!');
+      showToast.success(t('auth.phoneVerified'));
       // For demo, treat as new user
       router.push('/onboarding/name');
     } else {
-      showToast.error('Invalid code. Please try again.');
+      showToast.error(t('auth.invalidCode'));
       setOtp(Array(6).fill(''));
       inputRefs.current[0]?.focus();
     }
@@ -109,16 +111,16 @@ export default function OtpPage() {
     if (countdown > 0 || resendCount >= 3) return;
     setResendCount((prev) => prev + 1);
     setCountdown(30);
-    showToast.info('New code sent!');
+    showToast.info(t('auth.newCodeSent'));
   };
 
   const otpComplete = otp.every((d) => d !== '');
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-cream px-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
+      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-6">
         {/* Header */}
-        <div className="flex items-center mb-6">
+        <div className="flex items-center mb-3">
           <button
             onClick={() => router.back()}
             className="p-2 -ml-2 rounded-full hover:bg-gray-100 transition-colors"
@@ -140,15 +142,15 @@ export default function OtpPage() {
           transition={{ duration: 0.5 }}
         >
           <h1 className="text-2xl font-bold text-charcoal mb-2">
-            Enter the code we sent
+            {t('auth.enterCode')}
           </h1>
-          <p className="text-textLight mb-8">
-            Verification code sent to{' '}
+          <p className="text-textLight mb-5">
+            {t('auth.codeSentTo')}{' '}
             <span className="font-medium text-charcoal">{phoneDisplay}</span>
           </p>
 
           {/* OTP Inputs */}
-          <div className="flex gap-3 justify-center mb-8">
+          <div className="flex gap-3 justify-center mb-5">
             {otp.map((digit, index) => (
               <motion.input
                 key={index}
@@ -176,7 +178,7 @@ export default function OtpPage() {
           <div className="text-center space-y-3">
             {countdown > 0 ? (
               <p className="text-sm text-textLight">
-                Resend code in{' '}
+                {t('auth.resendCodeIn')}{' '}
                 <span className="font-semibold text-charcoal">
                   {countdown}s
                 </span>
@@ -184,13 +186,13 @@ export default function OtpPage() {
             ) : resendCount >= 3 ? (
               <div>
                 <p className="text-sm text-red-500 mb-2">
-                  Maximum resend attempts reached.
+                  {t('auth.maxResendReached')}
                 </p>
                 <a
                   href="mailto:support@mitimaiti.com"
                   className="text-sm font-semibold text-rose hover:text-rose-dark transition-colors"
                 >
-                  Contact Support for help
+                  {t('auth.contactSupport')}
                 </a>
               </div>
             ) : (
@@ -198,18 +200,18 @@ export default function OtpPage() {
                 onClick={handleResend}
                 className="text-sm font-semibold text-rose hover:text-rose-dark transition-colors"
               >
-                Resend OTP
+                {t('auth.resendOtp')}
               </button>
             )}
 
             {resendCount >= 2 && resendCount < 3 && (
               <p className="text-xs text-textLight">
-                Still not received?{' '}
+                {t('auth.stillNotReceived')}{' '}
                 <a
                   href="mailto:support@mitimaiti.com"
                   className="text-rose font-medium hover:underline"
                 >
-                  Get help
+                  {t('auth.getHelp')}
                 </a>
               </p>
             )}
@@ -217,7 +219,7 @@ export default function OtpPage() {
         </motion.div>
 
         {/* Bottom CTA */}
-        <div className="mt-8">
+        <div className="mt-5">
           <Button
             fullWidth
             size="lg"
@@ -225,7 +227,7 @@ export default function OtpPage() {
             loading={loading}
             onClick={() => handleVerify(otp.join(''))}
           >
-            Verify
+            {t('auth.verify')}
           </Button>
         </div>
       </div>

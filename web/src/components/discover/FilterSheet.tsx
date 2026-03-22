@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, RotateCcw, ChevronRight, Check, Plus, Minus } from 'lucide-react';
 import Button from '@/components/ui/Button';
+import { useTranslation } from '@/lib/i18n';
 
 interface FilterSheetProps {
   isOpen: boolean;
@@ -235,6 +236,7 @@ function ExpandableFilter({
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(isActive);
+  const { t } = useTranslation();
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
@@ -251,7 +253,7 @@ function ExpandableFilter({
               onClick={(e) => { e.stopPropagation(); onClear(); }}
               className="text-xs text-textLight hover:text-rose transition-colors"
             >
-              Clear
+              {t('filter.clear')}
             </button>
           )}
           <motion.div animate={{ rotate: open ? 90 : 0 }} transition={{ duration: 0.2 }}>
@@ -293,11 +295,12 @@ function EssentialsTab({
   filters: FilterState;
   update: <K extends keyof FilterState>(key: K, value: FilterState[K]) => void;
 }) {
+  const { t } = useTranslation();
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Age */}
       <div className="bg-white rounded-2xl border border-gray-100 p-5">
-        <SectionLabel>Age range</SectionLabel>
+        <SectionLabel>{t('filter.ageRange')}</SectionLabel>
         <DualRangeSlider
           min={18}
           max={60}
@@ -307,14 +310,14 @@ function EssentialsTab({
           label={`Between ${filters.ageMin} and ${filters.ageMax}`}
         />
         <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-50">
-          <span className="text-sm text-textLight">Expand range if few results</span>
+          <span className="text-sm text-textLight">{t('filter.expandRange')}</span>
           <Toggle on={filters.ageFlexible} onChange={(v) => update('ageFlexible', v)} />
         </div>
       </div>
 
       {/* Height */}
       <div className="bg-white rounded-2xl border border-gray-100 p-5">
-        <SectionLabel>Height</SectionLabel>
+        <SectionLabel>{t('filter.height')}</SectionLabel>
         <DualRangeSlider
           min={120}
           max={220}
@@ -325,14 +328,14 @@ function EssentialsTab({
           step={2}
         />
         <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-50">
-          <span className="text-sm text-textLight">Flexible on height</span>
+          <span className="text-sm text-textLight">{t('filter.flexibleOnHeight')}</span>
           <Toggle on={filters.heightFlexible} onChange={(v) => update('heightFlexible', v)} />
         </div>
       </div>
 
       {/* Looking for */}
       <div className="bg-white rounded-2xl border border-gray-100 p-5">
-        <SectionLabel>Looking for</SectionLabel>
+        <SectionLabel>{t('filter.lookingFor')}</SectionLabel>
         <ChipGroup
           options={INTENTS}
           selected={filters.intent}
@@ -340,15 +343,15 @@ function EssentialsTab({
           multi
         />
         <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-50">
-          <span className="text-sm text-textLight">Include others if few results</span>
+          <span className="text-sm text-textLight">{t('filter.includeOthers')}</span>
           <Toggle on={filters.intentFlexible} onChange={(v) => update('intentFlexible', v)} />
         </div>
       </div>
 
       {/* Interests */}
       <div className="bg-white rounded-2xl border border-gray-100 p-5">
-        <SectionLabel>Shared interests</SectionLabel>
-        <p className="text-sm text-textLight mb-3">Tap to prioritize people who share these</p>
+        <SectionLabel>{t('filter.sharedInterests')}</SectionLabel>
+        <p className="text-sm text-textLight mb-3">{t('filter.sharedInterestsDesc')}</p>
         <ChipGroup
           options={INTERESTS.map((i) => ({ value: i.toLowerCase(), label: i }))}
           selected={filters.interests}
@@ -360,8 +363,8 @@ function EssentialsTab({
       {/* Verified */}
       <div className="bg-white rounded-2xl border border-gray-100 p-5 flex items-center justify-between">
         <div>
-          <p className="text-sm font-semibold text-charcoal">Verified profiles only</p>
-          <p className="text-xs text-textLight mt-0.5">Photo-verified members</p>
+          <p className="text-sm font-semibold text-charcoal">{t('filter.verifiedOnly')}</p>
+          <p className="text-xs text-textLight mt-0.5">{t('filter.verifiedDesc')}</p>
         </div>
         <Toggle on={filters.verifiedOnly} onChange={(v) => update('verifiedOnly', v)} />
       </div>
@@ -376,193 +379,77 @@ function LifestyleTab({
   filters: FilterState;
   update: <K extends keyof FilterState>(key: K, value: FilterState[K]) => void;
 }) {
+  const { t } = useTranslation();
   const isNonSindhi = typeof window !== 'undefined' && localStorage.getItem('onboarding_non_sindhi') === 'true';
 
   return (
-    <div className="space-y-4">
-      {/* Culture — hidden for non-Sindhi users */}
+    <div className="space-y-3">
+      {/* Sindhi Identity — clubbed */}
       {!isNonSindhi && (
-      <>
-      <p className="text-xs font-semibold text-textLight uppercase tracking-wider mb-1 px-1">Culture</p>
-
-      <ExpandableFilter
-        label="Sindhi fluency"
-        isActive={!!filters.fluency}
-        onClear={() => update('fluency', '')}
-      >
-        <ChipGroup
-          options={[
-            { value: 'fluent', label: 'Fluent' },
-            { value: 'conversational', label: 'Conversational' },
-            { value: 'basic', label: 'Basic' },
-            { value: 'learning', label: 'Learning' },
-          ]}
-          selected={filters.fluency}
-          onChange={(v) => update('fluency', v as string)}
-        />
-      </ExpandableFilter>
-
-      <ExpandableFilter
-        label="Religion"
-        isActive={!!filters.religion}
-        onClear={() => update('religion', '')}
-      >
-        <ChipGroup
-          options={[
-            { value: 'hindu', label: 'Hindu' },
-            { value: 'sikh', label: 'Sikh' },
-            { value: 'muslim', label: 'Muslim' },
-            { value: 'christian', label: 'Christian' },
-            { value: 'spiritual', label: 'Spiritual' },
-            { value: 'other', label: 'Other' },
-          ]}
-          selected={filters.religion}
-          onChange={(v) => update('religion', v as string)}
-        />
-      </ExpandableFilter>
-
-      <ExpandableFilter
-        label="Dietary preference"
-        isActive={!!filters.dietary}
-        onClear={() => update('dietary', '')}
-      >
-        <ChipGroup
-          options={[
-            { value: 'vegetarian', label: 'Vegetarian' },
-            { value: 'non_vegetarian', label: 'Non-Veg' },
-            { value: 'eggetarian', label: 'Eggetarian' },
-            { value: 'vegan', label: 'Vegan' },
-            { value: 'jain', label: 'Jain' },
-          ]}
-          selected={filters.dietary}
-          onChange={(v) => update('dietary', v as string)}
-        />
-      </ExpandableFilter>
-
-      <ExpandableFilter
-        label="Generation"
-        isActive={!!filters.generation}
-        onClear={() => update('generation', '')}
-      >
-        <ChipGroup
-          options={[
-            { value: 'sindhi_born', label: 'Sindhi-born' },
-            { value: '2nd_gen', label: '2nd Generation' },
-            { value: '3rd_gen', label: '3rd Generation' },
-            { value: 'mixed', label: 'Mixed heritage' },
-          ]}
-          selected={filters.generation}
-          onChange={(v) => update('generation', v as string)}
-        />
-      </ExpandableFilter>
-
-      <ExpandableFilter
-        label="Gotra"
-        isActive={!!filters.gotra}
-        onClear={() => update('gotra', '')}
-      >
-        <ChipGroup
-          options={[
-            { value: 'Lohana', label: 'Lohana' },
-            { value: 'Amil', label: 'Amil' },
-            { value: 'Bhatia', label: 'Bhatia' },
-            { value: 'Chhapru', label: 'Chhapru' },
-            { value: 'Sahiti', label: 'Sahiti' },
-            { value: 'Dadu', label: 'Dadu' },
-          ]}
-          selected={filters.gotra}
-          onChange={(v) => update('gotra', v as string)}
-        />
-      </ExpandableFilter>
-      </>
+        <ExpandableFilter
+          label={t('filter.culture')}
+          isActive={!!filters.fluency || !!filters.religion || !!filters.dietary || !!filters.generation || !!filters.gotra}
+          onClear={() => { update('fluency', ''); update('religion', ''); update('dietary', ''); update('generation', ''); update('gotra', ''); }}
+        >
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs font-semibold text-textLight uppercase tracking-wider mb-2">{t('filter.sindhiFluency')}</p>
+              <ChipGroup options={[{ value: 'fluent', label: 'Fluent' }, { value: 'conversational', label: 'Conversational' }, { value: 'basic', label: 'Basic' }, { value: 'learning', label: 'Learning' }]} selected={filters.fluency} onChange={(v) => update('fluency', v as string)} />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-textLight uppercase tracking-wider mb-2">{t('filter.religion')}</p>
+              <ChipGroup options={[{ value: 'hindu', label: 'Hindu' }, { value: 'sikh', label: 'Sikh' }, { value: 'muslim', label: 'Muslim' }, { value: 'other', label: 'Other' }]} selected={filters.religion} onChange={(v) => update('religion', v as string)} />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-textLight uppercase tracking-wider mb-2">{t('filter.dietaryPreference')}</p>
+              <ChipGroup options={[{ value: 'vegetarian', label: 'Veg' }, { value: 'non_vegetarian', label: 'Non-Veg' }, { value: 'vegan', label: 'Vegan' }, { value: 'jain', label: 'Jain' }]} selected={filters.dietary} onChange={(v) => update('dietary', v as string)} />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-textLight uppercase tracking-wider mb-2">{t('filter.gotra')}</p>
+              <ChipGroup options={[{ value: 'Lohana', label: 'Lohana' }, { value: 'Amil', label: 'Amil' }, { value: 'Bhatia', label: 'Bhatia' }, { value: 'Sahiti', label: 'Sahiti' }, { value: 'Chhapru', label: 'Chhapru' }]} selected={filters.gotra} onChange={(v) => update('gotra', v as string)} />
+            </div>
+          </div>
+        </ExpandableFilter>
       )}
 
-      {/* Lifestyle */}
-      <div className="pt-2">
-        <p className="text-xs font-semibold text-textLight uppercase tracking-wider mb-3 px-1">Lifestyle</p>
-      </div>
-
+      {/* Education & Career */}
       <ExpandableFilter
-        label="Wants kids"
-        isActive={!!filters.wantsKids}
-        onClear={() => update('wantsKids', '')}
-      >
-        <ChipGroup
-          options={[
-            { value: 'want', label: 'Wants kids' },
-            { value: 'dont_want', label: 'Does not want' },
-            { value: 'open', label: 'Open to it' },
-            { value: 'has_kids', label: 'Already has' },
-          ]}
-          selected={filters.wantsKids}
-          onChange={(v) => update('wantsKids', v as string)}
-        />
-      </ExpandableFilter>
-
-      <ExpandableFilter
-        label="Education"
+        label={t('filter.educationLabel')}
         isActive={!!filters.education}
         onClear={() => update('education', '')}
       >
-        <ChipGroup
-          options={[
-            { value: 'bachelors', label: 'Bachelors' },
-            { value: 'masters', label: 'Masters' },
-            { value: 'doctorate', label: 'Doctorate' },
-            { value: 'professional', label: 'Professional (CA/MD/LLB)' },
-          ]}
-          selected={filters.education}
-          onChange={(v) => update('education', v as string)}
-        />
+        <ChipGroup options={[{ value: 'bachelors', label: 'Bachelors' }, { value: 'masters', label: 'Masters' }, { value: 'doctorate', label: 'PhD' }, { value: 'professional', label: 'Professional' }]} selected={filters.education} onChange={(v) => update('education', v as string)} />
       </ExpandableFilter>
 
+      {/* Habits — smoking & drinking clubbed */}
       <ExpandableFilter
-        label="Exercise"
-        isActive={!!filters.exercise}
-        onClear={() => update('exercise', '')}
+        label={t('settings.habits')}
+        isActive={!!filters.smoking || !!filters.drinking || !!filters.exercise}
+        onClear={() => { update('smoking', ''); update('drinking', ''); update('exercise', ''); }}
       >
-        <ChipGroup
-          options={[
-            { value: 'daily', label: 'Daily' },
-            { value: 'often', label: 'Often' },
-            { value: 'sometimes', label: 'Sometimes' },
-            { value: 'never', label: 'Never' },
-          ]}
-          selected={filters.exercise}
-          onChange={(v) => update('exercise', v as string)}
-        />
+        <div className="space-y-4">
+          <div>
+            <p className="text-xs font-semibold text-textLight uppercase tracking-wider mb-2">{t('filter.smokingLabel')}</p>
+            <ChipGroup options={[{ value: 'never', label: 'Never' }, { value: 'socially', label: 'Social' }, { value: 'regularly', label: 'Regular' }]} selected={filters.smoking} onChange={(v) => update('smoking', v as string)} />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-textLight uppercase tracking-wider mb-2">{t('filter.drinkingLabel')}</p>
+            <ChipGroup options={[{ value: 'never', label: 'Never' }, { value: 'socially', label: 'Social' }, { value: 'regularly', label: 'Regular' }]} selected={filters.drinking} onChange={(v) => update('drinking', v as string)} />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-textLight uppercase tracking-wider mb-2">{t('filter.exercise')}</p>
+            <ChipGroup options={[{ value: 'daily', label: 'Daily' }, { value: 'often', label: 'Often' }, { value: 'sometimes', label: 'Sometimes' }, { value: 'never', label: 'Never' }]} selected={filters.exercise} onChange={(v) => update('exercise', v as string)} />
+          </div>
+        </div>
       </ExpandableFilter>
 
+      {/* Family Plans — kids */}
       <ExpandableFilter
-        label="Smoking"
-        isActive={!!filters.smoking}
-        onClear={() => update('smoking', '')}
+        label={t('settings.familyPlans')}
+        isActive={!!filters.wantsKids}
+        onClear={() => update('wantsKids', '')}
       >
-        <ChipGroup
-          options={[
-            { value: 'never', label: 'Never' },
-            { value: 'socially', label: 'Socially' },
-            { value: 'regularly', label: 'Regularly' },
-          ]}
-          selected={filters.smoking}
-          onChange={(v) => update('smoking', v as string)}
-        />
-      </ExpandableFilter>
-
-      <ExpandableFilter
-        label="Drinking"
-        isActive={!!filters.drinking}
-        onClear={() => update('drinking', '')}
-      >
-        <ChipGroup
-          options={[
-            { value: 'never', label: 'Never' },
-            { value: 'socially', label: 'Socially' },
-            { value: 'regularly', label: 'Regularly' },
-          ]}
-          selected={filters.drinking}
-          onChange={(v) => update('drinking', v as string)}
-        />
+        <ChipGroup options={[{ value: 'want', label: 'Yes' }, { value: 'dont_want', label: 'No' }, { value: 'open', label: 'Open to it' }, { value: 'has_kids', label: 'Already has' }]} selected={filters.wantsKids} onChange={(v) => update('wantsKids', v as string)} />
       </ExpandableFilter>
     </div>
   );
@@ -570,14 +457,12 @@ function LifestyleTab({
 
 // ── Main FilterSheet ─────────────────────────────────────────────────
 
-const TABS = [
-  { id: 'essentials', label: 'Essentials' },
-  { id: 'lifestyle', label: 'Lifestyle' },
-] as const;
+const TABS_IDS = ['essentials', 'lifestyle'] as const;
 
-type TabId = typeof TABS[number]['id'];
+type TabId = typeof TABS_IDS[number];
 
 export default function FilterSheet({ isOpen, onClose, onApply }: FilterSheetProps) {
+  const { t } = useTranslation();
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
   const [activeTab, setActiveTab] = useState<TabId>('essentials');
 
@@ -648,7 +533,7 @@ export default function FilterSheet({ isOpen, onClose, onApply }: FilterSheetPro
                 <X className="w-5 h-5 text-charcoal" />
               </button>
               <h2 className="text-lg font-bold text-charcoal">
-                Refine Discovery
+                {t('filter.refineDiscovery')}
               </h2>
               <button
                 onClick={handleReset}
@@ -656,14 +541,14 @@ export default function FilterSheet({ isOpen, onClose, onApply }: FilterSheetPro
                 aria-label="Reset all filters"
               >
                 <RotateCcw className="w-4 h-4" />
-                Reset
+                {t('filter.reset')}
               </button>
             </div>
 
             {/* Tab bar */}
             <div className="px-6 pt-4 pb-2 bg-white">
               <div className="flex bg-gray-100 rounded-2xl p-1">
-                {TABS.map((tab) => (
+                {([{ id: 'essentials' as TabId, label: t('filter.essentials') }, { id: 'lifestyle' as TabId, label: t('filter.lifestyle') }]).map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
@@ -680,7 +565,7 @@ export default function FilterSheet({ isOpen, onClose, onApply }: FilterSheetPro
             </div>
 
             {/* Scrollable content */}
-            <div className="flex-1 overflow-y-auto px-6 py-5">
+            <div className="flex-1 overflow-y-auto px-6 py-4">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={activeTab}
@@ -698,7 +583,7 @@ export default function FilterSheet({ isOpen, onClose, onApply }: FilterSheetPro
             {/* Footer */}
             <div className="px-6 py-4 bg-white border-t border-gray-100">
               <Button fullWidth size="lg" onClick={handleApply}>
-                Show Results{activeCount > 0 ? ` (${activeCount} filters)` : ''}
+                {t('filter.showResults')}{activeCount > 0 ? ` (${activeCount} ${t('filter.filters')})` : ''}
               </Button>
             </div>
           </motion.div>

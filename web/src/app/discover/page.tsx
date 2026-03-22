@@ -9,11 +9,13 @@ import FilterSheet from '@/components/discover/FilterSheet';
 import Button from '@/components/ui/Button';
 import { getFilteredMockProfiles } from '@/lib/mockData';
 import { showToast } from '@/components/ui/Toast';
+import { useProfileCompleteness } from '@/lib/useProfileCompleteness';
+import { useTranslation } from '@/lib/i18n';
 
 function ShimmerCard() {
   return (
-    <div className="bg-white rounded-3xl overflow-hidden shadow-card mb-6">
-      <div className="aspect-[4/5] max-h-[500px] shimmer" />
+    <div className="bg-white rounded-3xl overflow-hidden shadow-card mb-3">
+      <div className="aspect-[3/4] shimmer" />
       <div className="p-5 space-y-3">
         <div className="h-6 w-40 shimmer rounded-lg" />
         <div className="h-4 w-24 shimmer rounded-lg" />
@@ -24,20 +26,21 @@ function ShimmerCard() {
 }
 
 function EmptyState() {
+  const { t } = useTranslation();
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="flex flex-col items-center justify-center py-20 text-center"
+      className="flex flex-col items-center justify-center py-12 text-center"
     >
-      <div className="w-20 h-20 rounded-full bg-rose/10 flex items-center justify-center mb-6">
+      <div className="w-20 h-20 rounded-full bg-rose/10 flex items-center justify-center mb-3">
         <Users className="w-10 h-10 text-rose" />
       </div>
       <h2 className="text-xl font-bold text-charcoal mb-2">
-        No more profiles nearby
+        {t('discover.noMoreProfiles')}
       </h2>
-      <p className="text-textLight max-w-xs mb-6">
-        Invite your Sindhi friends to MitiMaiti and grow the community!
+      <p className="text-textLight max-w-xs mb-3">
+        {t('discover.inviteFriendsText')}
       </p>
       <Button
         variant="outline"
@@ -50,11 +53,11 @@ function EmptyState() {
               url: 'https://mitimaiti.com',
             });
           } else {
-            showToast.info('Share link copied!');
+            showToast.info(t('discover.shareLinkCopied'));
           }
         }}
       >
-        Invite Sindhi Friends
+        {t('discover.inviteFriends')}
       </Button>
     </motion.div>
   );
@@ -65,6 +68,7 @@ function getFilteredProfiles() {
 }
 
 export default function DiscoverPage() {
+  const { t } = useTranslation();
   const [profiles, setProfiles] = useState(() => {
     // Triple the deck for continuous engagement
     const base = getFilteredProfiles();
@@ -73,6 +77,7 @@ export default function DiscoverPage() {
   const [likesUsed, setLikesUsed] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
   const [exitDirection, setExitDirection] = useState<'left' | 'right'>('left');
+  const completeness = useProfileCompleteness();
 
   const handleAction = useCallback(
     (profileId: string, action: 'like' | 'pass') => {
@@ -81,11 +86,11 @@ export default function DiscoverPage() {
 
       if (action === 'like') {
         if (likesUsed >= 50) {
-          showToast.warning('You have used all 50 likes for today. Come back tomorrow!');
+          showToast.warning(t('discover.likesUsedUp'));
           return;
         }
         setLikesUsed((prev) => prev + 1);
-        showToast.success(`You liked ${profile.user.first_name}!`);
+        showToast.success(`${t('discover.like')} ${profile.user.first_name}!`);
       }
 
       // Set direction first, then remove card after a tick so AnimatePresence picks up the exit direction
@@ -102,7 +107,7 @@ export default function DiscoverPage() {
         });
       }, 10);
     },
-    [profiles, likesUsed]
+    [profiles, likesUsed, t]
   );
 
   // Show top 6 cards in the deck for a "many matches" illusion
@@ -110,25 +115,24 @@ export default function DiscoverPage() {
 
   return (
     <AppShell>
-      <div className="flex gap-8 p-6">
-        {/* Left Column - Card Deck */}
-        <div className="flex-1 max-w-xl mx-auto lg:mx-0">
+      <div className="flex justify-center px-4 sm:px-6 pt-4 sm:pt-6 pb-0">
+        <div className="w-full max-w-md">
           {/* Filter bar */}
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold text-charcoal">Discover</h1>
+          <div className="flex items-center justify-between mb-3">
+            <h1 className="text-2xl font-bold text-charcoal">{t('discover.title')}</h1>
             <button
               onClick={() => setShowFilters(true)}
               className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl border border-gray-200 hover:border-rose-light hover:bg-rose/5 transition-all text-sm font-medium text-charcoal shadow-soft touch-target"
               aria-label="Open filters"
             >
               <SlidersHorizontal className="w-4 h-4 text-rose" />
-              Filters
+              {t('discover.filters')}
             </button>
           </div>
 
           {/* Card deck — padded right to show edge layers */}
           <div className="relative" style={{ marginRight: '48px' }}>
-            {/* 5 stacked edge layers peeking from the right */}
+            {/* Stacked edge layers peeking from the right */}
             {profiles.length > 0 && [1, 2, 3, 4, 5].map((i) => (
               <div
                 key={`edge-${i}`}
@@ -173,27 +177,27 @@ export default function DiscoverPage() {
               </AnimatePresence>
             </div>
           </div>
-        </div>
 
-        {/* Right Column - Sidebar */}
-        <div className="hidden lg:block w-80 shrink-0">
-          <div className="sticky top-24 space-y-6">
-            {/* Quick tip */}
-            <div className="bg-white rounded-2xl shadow-card p-5">
-              <h3 className="font-semibold text-charcoal mb-2">Complete Your Profile</h3>
-              <p className="text-sm text-textLight leading-relaxed">
-                Profiles with Sindhi Identity and Chatti details get 3x more matches. Fill yours out today!
-              </p>
-            </div>
-          </div>
         </div>
       </div>
+
+      {/* Complete profile annotation — fixed above bottom nav */}
+      {completeness < 90 && (
+        <div className="fixed bottom-16 left-0 right-0 z-30 flex justify-center px-4 mb-1">
+          <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-card px-5 py-3.5 flex items-center gap-3 max-w-md w-full border border-rose-light/20">
+            <div className="w-3 h-3 rounded-full bg-rose shrink-0" />
+            <p className="text-sm text-textLight">
+              <span className="font-semibold text-charcoal">{t('discover.completeProfile')}</span> — {t('discover.completeProfileHint')}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Filter Sheet */}
       <FilterSheet
         isOpen={showFilters}
         onClose={() => setShowFilters(false)}
-        onApply={() => showToast.success('Filters applied!')}
+        onApply={() => showToast.success(t('discover.filtersApplied'))}
       />
     </AppShell>
   );

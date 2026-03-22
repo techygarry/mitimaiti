@@ -15,6 +15,7 @@ import ScoreTag from './ScoreTag';
 import ScoreBreakdownSheet from './ScoreBreakdownSheet';
 import { FeedCard } from '@/types';
 import { getDisplayName } from '@/lib/mockData';
+import { useTranslation } from '@/lib/i18n';
 
 
 // ── Hinge-style profile section with optional like button ────────────
@@ -22,7 +23,7 @@ import { getDisplayName } from '@/lib/mockData';
 function ProfilePhoto({ url, children }: { url: string; children?: React.ReactNode }) {
   return (
     <div className="relative">
-      <div className="aspect-[4/5] bg-gray-100 overflow-hidden">
+      <div className="aspect-[3/4] bg-gray-100 overflow-hidden">
         <img src={url} alt="Profile photo" className="w-full h-full object-cover" />
       </div>
       {children && (
@@ -72,6 +73,7 @@ interface DiscoveryCardProps {
 export default function DiscoveryCard({ card, onAction }: DiscoveryCardProps) {
   const { user, photos, basics, personality, cultural_score, cultural_badge, cultural_breakdown, kundli_score, kundli_tier, kundli_breakdown, common_interests } = card;
   const [sheetType, setSheetType] = useState<'cultural' | 'kundli' | null>(null);
+  const { t } = useTranslation();
 
   const intentLabel = user.intent === 'marriage' ? 'Marriage' : user.intent === 'casual' ? 'Casual' : 'Open';
 
@@ -89,7 +91,7 @@ export default function DiscoveryCard({ card, onAction }: DiscoveryCardProps) {
         aria-label={`Profile of ${user.first_name}, ${user.age}`}
       >
         {/* Scrollable profile content */}
-        <div className="max-h-[75vh] overflow-y-auto no-scrollbar">
+        <div className="max-h-[calc(100vh-18rem)] overflow-y-auto no-scrollbar">
 
           {/* Hero photo with name overlay */}
           <ProfilePhoto url={photos[0].url}>
@@ -143,7 +145,7 @@ export default function DiscoveryCard({ card, onAction }: DiscoveryCardProps) {
           <InfoSection>
             <div className="flex flex-wrap gap-2">
               <ScoreTag
-                label="Cultural"
+                label={t('discoveryCard.cultural')}
                 value={`${cultural_score}%`}
                 variant="cultural"
                 badge={cultural_badge}
@@ -151,7 +153,7 @@ export default function DiscoveryCard({ card, onAction }: DiscoveryCardProps) {
               />
               {kundli_score !== undefined && kundli_tier && (
                 <ScoreTag
-                  label="Kundli"
+                  label={t('discoveryCard.kundli')}
                   value={`${kundli_score}/36`}
                   variant="kundli"
                   badge={kundli_tier}
@@ -160,10 +162,10 @@ export default function DiscoveryCard({ card, onAction }: DiscoveryCardProps) {
               )}
               {common_interests.length > 0 && (
                 <ScoreTag
-                  label="Common"
+                  label={t('discoveryCard.common')}
                   value={`${common_interests.length}`}
                   variant="interests"
-                  badge={common_interests.length === 1 ? 'interest' : 'interests'}
+                  badge={common_interests.length === 1 ? t('discoveryCard.interest') : t('discoveryCard.interestsLabel')}
                 />
               )}
             </div>
@@ -182,7 +184,7 @@ export default function DiscoveryCard({ card, onAction }: DiscoveryCardProps) {
           {/* Interests */}
           {personality?.interests && personality.interests.length > 0 && (
             <InfoSection>
-              <p className="text-xs font-bold text-textLight uppercase tracking-wider mb-3">Interests</p>
+              <p className="text-xs font-bold text-textLight uppercase tracking-wider mb-3">{t('discoveryCard.interests')}</p>
               <div className="flex flex-wrap gap-2">
                 {personality.interests.map((interest) => {
                   const isCommon = common_interests.includes(interest);
@@ -206,7 +208,7 @@ export default function DiscoveryCard({ card, onAction }: DiscoveryCardProps) {
           {/* Languages */}
           {personality?.languages && personality.languages.length > 0 && (
             <InfoSection>
-              <p className="text-xs font-bold text-textLight uppercase tracking-wider mb-3">Languages</p>
+              <p className="text-xs font-bold text-textLight uppercase tracking-wider mb-3">{t('discoveryCard.languages')}</p>
               <div className="flex flex-wrap gap-2">
                 {personality.languages.map((lang) => (
                   <span key={lang} className="px-3 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-charcoal">
@@ -222,7 +224,7 @@ export default function DiscoveryCard({ card, onAction }: DiscoveryCardProps) {
         </div>
 
         {/* Floating action buttons — pinned at bottom */}
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white/95 to-transparent pt-8 pb-5 px-6">
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white/95 to-transparent pt-6 pb-12 px-6">
           <div className="flex items-center justify-center gap-5">
             <motion.button
               whileHover={{ scale: 1.1 }}

@@ -6,9 +6,11 @@ import { motion } from 'framer-motion';
 import { MapPin, Search, Navigation } from 'lucide-react';
 import OnboardingShell from '@/components/onboarding/OnboardingShell';
 import { cities } from '@/lib/mockData';
+import { useTranslation } from '@/lib/i18n';
 
 export default function LocationPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [selectedCity, setSelectedCity] = useState('');
   const [detecting, setDetecting] = useState(false);
@@ -59,8 +61,8 @@ export default function LocationPage() {
   return (
     <OnboardingShell
       step={7}
-      title="Where are you?"
-      subtitle="MitiMaiti uses your city to show nearby Sindhis."
+      title={t('onboarding.whereAreYou')}
+      subtitle={t('onboarding.locationSubtitle')}
       canContinue={!!selectedCity}
       onContinue={handleContinue}
     >
@@ -76,9 +78,9 @@ export default function LocationPage() {
           </div>
           <div className="text-left flex-1">
             <p className="text-sm font-semibold text-rose">
-              {detecting ? 'Detecting...' : 'Use my current location'}
+              {detecting ? t('onboarding.detecting') : t('onboarding.useCurrentLocation')}
             </p>
-            <p className="text-xs text-textLight">Auto-detect your city</p>
+            <p className="text-xs text-textLight">{t('onboarding.autoDetectCity')}</p>
           </div>
         </button>
 
@@ -92,7 +94,7 @@ export default function LocationPage() {
               setQuery(e.target.value);
               setSelectedCity('');
             }}
-            placeholder="Search for a city..."
+            placeholder={t('onboarding.searchCity')}
             className="w-full pl-10 pr-4 py-3.5 bg-gray-50 rounded-xl border border-gray-200 text-charcoal placeholder:text-textLight/50 focus:border-rose focus:ring-2 focus:ring-rose-light outline-none transition-all"
           />
         </div>
@@ -113,7 +115,7 @@ export default function LocationPage() {
               }}
               className="ml-auto text-xs text-textLight hover:text-rose transition-colors"
             >
-              Change
+              {t('onboarding.change')}
             </button>
           </motion.div>
         )}
@@ -143,7 +145,7 @@ export default function LocationPage() {
             ))}
             {filteredCities.length === 0 && (
               <div className="px-4 py-8 text-center text-textLight text-sm">
-                No cities found. Try a different search.
+                {t('onboarding.noCitiesFound')}
               </div>
             )}
           </div>
