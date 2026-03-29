@@ -1,74 +1,44 @@
 import SwiftUI
 
-struct GlassCard<Content: View>: View {
-    let cornerRadius: CGFloat
+// MARK: - Content Card Container
+// Clean solid card for content — NO glass effect. Glass is reserved for navigation only.
+
+struct ContentCard<Content: View>: View {
     let content: Content
 
-    init(cornerRadius: CGFloat = AppTheme.glassCornerRadius, @ViewBuilder content: () -> Content) {
-        self.cornerRadius = cornerRadius
+    init(@ViewBuilder content: () -> Content) {
         self.content = content()
     }
 
     var body: some View {
         content
             .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .fill(.ultraThinMaterial)
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.12),
-                                    Color.white.opacity(0.04)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.35),
-                                    Color.white.opacity(0.1),
-                                    Color.white.opacity(0.05)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 0.5
-                        )
-                }
+                RoundedRectangle(cornerRadius: AppTheme.radiusCard)
+                    .fill(AppTheme.cardDark)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppTheme.radiusCard)
+                            .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
+                    )
             )
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-            .shadow(color: Color.black.opacity(0.25), radius: 20, x: 0, y: 10)
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusCard))
+            .shadow(color: Color.black.opacity(0.25), radius: 12, x: 0, y: 6)
     }
 }
 
-// MARK: - Glass Button
-struct GlassButton: View {
+// MARK: - Primary Button
+// Rose gradient capsule with glow shadow and haptic feedback
+
+struct PrimaryButton: View {
     let title: String
-    let icon: String?
-    let style: Style
-    let isLoading: Bool
+    var icon: String?
+    var isLoading: Bool = false
     let action: () -> Void
 
-    enum Style {
-        case primary, secondary, danger, small
-    }
-
-    init(_ title: String, icon: String? = nil, style: Style = .primary, isLoading: Bool = false, action: @escaping () -> Void) {
-        self.title = title
-        self.icon = icon
-        self.style = style
-        self.isLoading = isLoading
-        self.action = action
-    }
+    @State private var tapTrigger: Bool = false
 
     var body: some View {
         Button(action: {
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            tapTrigger.toggle()
             action()
         }) {
             HStack(spacing: 8) {
@@ -79,78 +49,200 @@ struct GlassButton: View {
                 } else {
                     if let icon {
                         Image(systemName: icon)
-                            .font(.system(size: style == .small ? 14 : 16, weight: .semibold))
+                            .font(.system(size: 16, weight: .semibold))
                     }
                     Text(title)
-                        .font(.system(size: style == .small ? 14 : 16, weight: .semibold))
+                        .font(.system(size: 16, weight: .semibold))
                 }
             }
             .foregroundColor(.white)
-            .frame(maxWidth: style == .small ? nil : .infinity)
-            .padding(.horizontal, style == .small ? 20 : 24)
-            .padding(.vertical, style == .small ? 10 : 16)
-            .background(
-                Group {
-                    switch style {
-                    case .primary:
-                        AppTheme.roseGradient
-                    case .secondary:
-                        LinearGradient(colors: [Color.white.opacity(0.15), Color.white.opacity(0.05)], startPoint: .top, endPoint: .bottom)
-                    case .danger:
-                        LinearGradient(colors: [AppTheme.error, AppTheme.error.opacity(0.8)], startPoint: .top, endPoint: .bottom)
-                    case .small:
-                        AppTheme.roseGradient
-                    }
-                }
-            )
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+            .background(AppTheme.roseGradient)
             .clipShape(Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(Color.white.opacity(style == .secondary ? 0.2 : 0.1), lineWidth: 0.5)
-            )
-            .shadow(color: style == .primary ? AppTheme.rose.opacity(0.4) : Color.clear, radius: 12, x: 0, y: 6)
+            .shadow(color: AppTheme.rose.opacity(0.45), radius: 14, x: 0, y: 6)
         }
+        .sensoryFeedback(.impact, trigger: tapTrigger)
         .disabled(isLoading)
     }
 }
 
-// MARK: - Glass Text Field
-struct GlassTextField: View {
+// MARK: - Secondary Button
+// Outline style with rose border, clear background
+
+struct SecondaryButton: View {
+    let title: String
+    var icon: String?
+    var isLoading: Bool = false
+    let action: () -> Void
+
+    @State private var tapTrigger: Bool = false
+
+    var body: some View {
+        Button(action: {
+            tapTrigger.toggle()
+            action()
+        }) {
+            HStack(spacing: 8) {
+                if isLoading {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: AppTheme.rose))
+                        .scaleEffect(0.8)
+                } else {
+                    if let icon {
+                        Image(systemName: icon)
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    Text(title)
+                        .font(.system(size: 16, weight: .semibold))
+                }
+            }
+            .foregroundColor(AppTheme.rose)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+            .background(Color.clear)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(AppTheme.rose, lineWidth: 1.5)
+            )
+        }
+        .sensoryFeedback(.impact, trigger: tapTrigger)
+        .disabled(isLoading)
+    }
+}
+
+// MARK: - Danger Button
+// Error color gradient for destructive actions
+
+struct DangerButton: View {
+    let title: String
+    var icon: String?
+    var isLoading: Bool = false
+    let action: () -> Void
+
+    @State private var tapTrigger: Bool = false
+
+    var body: some View {
+        Button(action: {
+            tapTrigger.toggle()
+            action()
+        }) {
+            HStack(spacing: 8) {
+                if isLoading {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(0.8)
+                } else {
+                    if let icon {
+                        Image(systemName: icon)
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    Text(title)
+                        .font(.system(size: 16, weight: .semibold))
+                }
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+            .background(
+                LinearGradient(
+                    colors: [AppTheme.error, AppTheme.error.opacity(0.8)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .clipShape(Capsule())
+            .shadow(color: AppTheme.error.opacity(0.35), radius: 14, x: 0, y: 6)
+        }
+        .sensoryFeedback(.impact, trigger: tapTrigger)
+        .disabled(isLoading)
+    }
+}
+
+// MARK: - Small Button
+// Compact rose gradient capsule
+
+struct SmallButton: View {
+    let title: String
+    var icon: String?
+    let action: () -> Void
+
+    @State private var tapTrigger: Bool = false
+
+    var body: some View {
+        Button(action: {
+            tapTrigger.toggle()
+            action()
+        }) {
+            HStack(spacing: 6) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+            .background(AppTheme.roseGradient)
+            .clipShape(Capsule())
+            .shadow(color: AppTheme.rose.opacity(0.35), radius: 10, x: 0, y: 4)
+        }
+        .sensoryFeedback(.impact, trigger: tapTrigger)
+    }
+}
+
+// MARK: - App Text Field
+// surfaceMedium background with rose highlight on focus
+
+struct AppTextField: View {
     let placeholder: String
     @Binding var text: String
     var icon: String?
     var keyboardType: UIKeyboardType = .default
+    @FocusState private var isFocused: Bool
 
     var body: some View {
         HStack(spacing: 12) {
             if let icon {
                 Image(systemName: icon)
-                    .foregroundColor(AppTheme.textMuted)
+                    .foregroundColor(isFocused ? AppTheme.rose : AppTheme.textMuted)
                     .frame(width: 20)
+                    .animation(.easeInOut(duration: 0.2), value: isFocused)
             }
             TextField(placeholder, text: $text)
                 .foregroundColor(.white)
                 .keyboardType(keyboardType)
                 .autocorrectionDisabled()
+                .focused($isFocused)
         }
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: AppTheme.radiusMD)
-                .fill(.ultraThinMaterial)
+                .fill(AppTheme.surfaceMedium)
                 .overlay(
                     RoundedRectangle(cornerRadius: AppTheme.radiusMD)
-                        .fill(Color.white.opacity(0.06))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.radiusMD)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
+                        .stroke(
+                            isFocused
+                                ? AppTheme.rose.opacity(0.6)
+                                : Color.white.opacity(0.08),
+                            lineWidth: isFocused ? 1.2 : 0.5
+                        )
+                        .animation(.easeInOut(duration: 0.2), value: isFocused)
                 )
         )
     }
 }
 
-// MARK: - Glass Toggle Row
-struct GlassToggleRow: View {
+// MARK: - Toggle Row
+// Icon in rose, toggle tinted rose
+
+struct ToggleRow: View {
     let title: String
     let icon: String
     @Binding var isOn: Bool
@@ -174,18 +266,13 @@ struct GlassToggleRow: View {
 }
 
 // MARK: - Score Tag
-struct ScoreTagView: View {
+// Capsule with color background at 0.15 opacity
+
+struct ScoreTag: View {
     let label: String
     let value: String
     let color: Color
-    let icon: String?
-
-    init(label: String, value: String, color: Color, icon: String? = nil) {
-        self.label = label
-        self.value = value
-        self.color = color
-        self.icon = icon
-    }
+    var icon: String?
 
     var body: some View {
         HStack(spacing: 4) {
@@ -213,7 +300,9 @@ struct ScoreTagView: View {
     }
 }
 
-// MARK: - Countdown Timer Badge
+// MARK: - Countdown Badge
+// Live timer that changes color by urgency
+
 struct CountdownBadge: View {
     let expiresAt: Date
     @State private var remaining: TimeInterval = 0
@@ -248,6 +337,8 @@ struct CountdownBadge: View {
 }
 
 // MARK: - Profile Avatar
+// Rose gradient circle with initials, online green dot
+
 struct ProfileAvatar: View {
     let url: String?
     let name: String
@@ -260,7 +351,10 @@ struct ProfileAvatar: View {
             Circle()
                 .fill(
                     LinearGradient(
-                        colors: [AppTheme.rose.opacity(0.6), AppTheme.roseDark.opacity(0.4)],
+                        colors: [
+                            AppTheme.rose.opacity(0.7),
+                            AppTheme.roseDark.opacity(0.5)
+                        ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -272,17 +366,17 @@ struct ProfileAvatar: View {
                         .foregroundColor(.white)
                 )
                 .overlay(
-                    showBorder ?
-                    Circle()
-                        .stroke(
-                            LinearGradient(
-                                colors: [AppTheme.rose, AppTheme.gold],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 2
-                        )
-                    : nil
+                    showBorder
+                        ? Circle()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [AppTheme.rose, AppTheme.gold],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 2
+                            )
+                        : nil
                 )
 
             if isOnline {
@@ -296,20 +390,18 @@ struct ProfileAvatar: View {
 }
 
 // MARK: - Message Bubble
-struct MessageBubbleView: View {
-    let message: Message
-    let showTimestamp: Bool
+// "My" messages = rose gradient, "Their" = surfaceMedium, Icebreaker label in gold
 
-    init(_ message: Message, showTimestamp: Bool = true) {
-        self.message = message
-        self.showTimestamp = showTimestamp
-    }
+struct MessageBubble: View {
+    let message: Message
+    var showTimestamp: Bool = true
 
     var body: some View {
         HStack {
             if message.isFromMe { Spacer(minLength: 60) }
 
             VStack(alignment: message.isFromMe ? .trailing : .leading, spacing: 4) {
+                // Icebreaker label
                 if message.msgType == .icebreaker {
                     HStack(spacing: 4) {
                         Image(systemName: "sparkles")
@@ -320,27 +412,43 @@ struct MessageBubbleView: View {
                     .foregroundColor(AppTheme.gold)
                 }
 
-                Text(message.content)
-                    .font(.system(size: 15))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(
-                        message.isFromMe
-                        ? AnyShapeStyle(AppTheme.roseGradient)
-                        : AnyShapeStyle(Color.white.opacity(0.1))
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 18))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18)
-                            .stroke(
-                                message.isFromMe
-                                ? Color.clear
-                                : Color.white.opacity(0.1),
-                                lineWidth: 0.5
-                            )
-                    )
+                // System message styling
+                if message.msgType == .system {
+                    Text(message.content)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(AppTheme.textMuted)
+                        .italic()
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                } else {
+                    // Regular message bubble
+                    Text(message.content)
+                        .font(.system(size: 15))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(bubbleBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: 18))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18)
+                                .stroke(
+                                    message.isFromMe
+                                        ? Color.white.opacity(0.1)
+                                        : Color.white.opacity(0.06),
+                                    lineWidth: 0.5
+                                )
+                        )
+                        .shadow(
+                            color: message.isFromMe
+                                ? AppTheme.rose.opacity(0.15)
+                                : Color.clear,
+                            radius: 8,
+                            x: 0,
+                            y: 4
+                        )
+                }
 
+                // Timestamp row
                 if showTimestamp {
                     HStack(spacing: 4) {
                         Text(message.createdAt.messageTime)
@@ -360,7 +468,18 @@ struct MessageBubbleView: View {
         }
     }
 
-    var statusIcon: String {
+    @ViewBuilder
+    private var bubbleBackground: some View {
+        if message.isFromMe {
+            // "My" messages: rose gradient
+            AppTheme.roseGradient
+        } else {
+            // "Their" messages: solid surfaceMedium — no glass
+            AppTheme.surfaceMedium
+        }
+    }
+
+    private var statusIcon: String {
         switch message.status {
         case .sending: return "clock"
         case .sent: return "checkmark"
@@ -369,12 +488,13 @@ struct MessageBubbleView: View {
         }
     }
 
-    var statusColor: Color {
-        message.status == .read ? AppTheme.info : AppTheme.textMuted
+    private var statusColor: Color {
+        message.status == .read ? AppTheme.rose : AppTheme.textMuted
     }
 }
 
-// MARK: - Empty State
+// MARK: - Empty State View
+
 struct EmptyStateView: View {
     let icon: String
     let title: String
@@ -386,7 +506,13 @@ struct EmptyStateView: View {
         VStack(spacing: 16) {
             Image(systemName: icon)
                 .font(.system(size: 48))
-                .foregroundColor(AppTheme.textMuted)
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [AppTheme.rose.opacity(0.6), AppTheme.gold.opacity(0.4)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
 
             Text(title)
                 .font(.system(size: 20, weight: .semibold))
@@ -399,7 +525,7 @@ struct EmptyStateView: View {
                 .padding(.horizontal, 40)
 
             if let actionTitle, let action {
-                GlassButton(actionTitle, style: .small, action: action)
+                SmallButton(title: actionTitle, action: action)
                     .padding(.top, 8)
             }
         }
@@ -408,6 +534,8 @@ struct EmptyStateView: View {
 }
 
 // MARK: - Typing Indicator
+// Three animated dots
+
 struct TypingIndicator: View {
     @State private var dotScale: [CGFloat] = [1, 1, 1]
 
@@ -423,8 +551,12 @@ struct TypingIndicator: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
-            .background(Color.white.opacity(0.1))
+            .background(AppTheme.surfaceMedium)
             .clipShape(RoundedRectangle(cornerRadius: 18))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18)
+                    .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
+            )
             Spacer()
         }
         .onAppear { animate() }
@@ -432,7 +564,11 @@ struct TypingIndicator: View {
 
     private func animate() {
         for i in 0..<3 {
-            withAnimation(.easeInOut(duration: 0.4).repeatForever().delay(Double(i) * 0.15)) {
+            withAnimation(
+                .easeInOut(duration: 0.4)
+                .repeatForever()
+                .delay(Double(i) * 0.15)
+            ) {
                 dotScale[i] = 1.5
             }
         }

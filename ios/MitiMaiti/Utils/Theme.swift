@@ -7,22 +7,23 @@ struct AppTheme {
     static let roseLight = Color(hex: "E8A0BE")
     static let gold = Color(hex: "D4A853")
     static let goldLight = Color(hex: "F0DEB0")
+    static let saffron = Color(hex: "ED9C16")
 
-    // MARK: - Backgrounds
-    static let background = Color(hex: "0A0A0F")
-    static let surfaceDark = Color(hex: "1A1A2E")
-    static let surfaceMedium = Color(hex: "16213E")
-    static let cardDark = Color(hex: "1E1E30")
+    // MARK: - Backgrounds (Deep Indigo, NOT pure black)
+    static let background = Color(hex: "0D0D2B")
+    static let surfaceDark = Color(hex: "161633")
+    static let surfaceMedium = Color(hex: "1C1C40")
+    static let cardDark = Color(hex: "1E1E45")
 
     // MARK: - Text
     static let textPrimary = Color.white
-    static let textSecondary = Color(hex: "A0A0B0")
-    static let textMuted = Color(hex: "6A6A80")
+    static let textSecondary = Color(hex: "A0A0B8")
+    static let textMuted = Color(hex: "6A6A85")
 
     // MARK: - Status
     static let success = Color(hex: "4CAF50")
     static let warning = Color(hex: "FFA726")
-    static let error = Color(hex: "D32F2F")
+    static let error = Color(hex: "EF4444")
     static let info = Color(hex: "42A5F5")
 
     // MARK: - Score Colors
@@ -43,17 +44,14 @@ struct AppTheme {
         endPoint: .bottomTrailing
     )
 
-    static let glassGradient = LinearGradient(
-        colors: [
-            Color.white.opacity(0.15),
-            Color.white.opacity(0.05)
-        ],
+    static let saffronGradient = LinearGradient(
+        colors: [saffron, Color(hex: "D4850E")],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
 
     static let backgroundGradient = LinearGradient(
-        colors: [background, surfaceDark, Color(hex: "0D1B2A")],
+        colors: [background, surfaceDark, Color(hex: "0A0A22")],
         startPoint: .top,
         endPoint: .bottom
     )
@@ -61,18 +59,12 @@ struct AppTheme {
     static let shimmerGradient = LinearGradient(
         colors: [
             Color.white.opacity(0.0),
-            Color.white.opacity(0.1),
+            Color.white.opacity(0.08),
             Color.white.opacity(0.0)
         ],
         startPoint: .leading,
         endPoint: .trailing
     )
-
-    // MARK: - Glass Properties
-    static let glassOpacity: Double = 0.12
-    static let glassBorderOpacity: Double = 0.2
-    static let glassBlur: CGFloat = 20
-    static let glassCornerRadius: CGFloat = 20
 
     // MARK: - Spacing
     static let spacingXS: CGFloat = 4

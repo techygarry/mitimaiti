@@ -6,125 +6,158 @@ struct InboxView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                AppTheme.backgroundGradient.ignoresSafeArea()
-
-                VStack(spacing: 0) {
-                    // Header
-                    HStack {
-                        Text("Inbox")
-                            .font(.system(size: 28, weight: .bold))
-                            .foregroundColor(.white)
-                        Spacer()
-                    }
-                    .padding(.horizontal)
-                    .padding(.top, 8)
-
-                    // Tab Selector
-                    HStack(spacing: 0) {
-                        TabButton(title: "Likes (\(inboxVM.totalLikes))", isSelected: selectedTab == 0) {
-                            withAnimation { selectedTab = 0 }
-                        }
-                        TabButton(title: "Matches (\(inboxVM.totalMatches))", isSelected: selectedTab == 1) {
-                            withAnimation { selectedTab = 1 }
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.top, 8)
-
-                    if inboxVM.isLoading {
-                        Spacer()
-                        ProgressView().tint(AppTheme.rose)
-                        Spacer()
-                    } else {
-                        TabView(selection: $selectedTab) {
-                            // Likes Tab
-                            LikesTabContent(likes: inboxVM.likes, onLike: inboxVM.likeBack, onPass: inboxVM.passLike)
-                                .tag(0)
-
-                            // Matches Tab
-                            MatchesTabContent(matches: inboxVM.matches)
-                                .tag(1)
-                        }
-                        .tabViewStyle(.page(indexDisplayMode: .never))
-                    }
-                }
-                .padding(.bottom, 70)
+            VStack(spacing: 0) {
+                inboxHeader
+                segmentedControl
+                tabContent
             }
+            .appBackground()
+            .navigationDestination(for: Match.self) { match in
+                ChatView(match: match)
+            }
+            .onAppear {
+                inboxVM.loadInbox()
+            }
+        }
+    }
+
+    // MARK: - Header
+
+    private var inboxHeader: some View {
+        HStack {
+            Text("Inbox")
+                .font(.system(size: 28, weight: .bold))
+                .foregroundColor(.white)
+            Spacer()
+        }
+        .padding(.horizontal)
+        .padding(.top, 8)
+    }
+
+    // MARK: - Segmented Control
+
+    private var segmentedControl: some View {
+        HStack(spacing: 0) {
+            InboxSegmentButton(
+                title: "Liked You",
+                count: inboxVM.totalLikes,
+                isSelected: selectedTab == 0
+            ) {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    selectedTab = 0
+                }
+            }
+
+            InboxSegmentButton(
+                title: "Matches",
+                count: inboxVM.totalMatches,
+                isSelected: selectedTab == 1
+            ) {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    selectedTab = 1
+                }
+            }
+        }
+        .padding(4)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(AppTheme.surfaceDark)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
+                )
+        )
+        .padding(.horizontal)
+        .padding(.top, 12)
+    }
+
+    // MARK: - Tab Content
+
+    @ViewBuilder
+    private var tabContent: some View {
+        if inboxVM.isLoading {
+            Spacer()
+            ProgressView()
+                .tint(AppTheme.rose)
+            Spacer()
+        } else {
+            TabView(selection: $selectedTab) {
+                LikedYouTabView(likes: inboxVM.likes)
+                    .tag(0)
+
+                MatchesTabView(matches: inboxVM.matches)
+                    .tag(1)
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
         }
     }
 }
 
-// MARK: - Tab Button
-struct TabButton: View {
+// MARK: - Segment Button
+
+private struct InboxSegmentButton: View {
     let title: String
+    let count: Int
     let isSelected: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Text(title)
-                    .font(.system(size: 15, weight: isSelected ? .semibold : .regular))
-                    .foregroundColor(isSelected ? .white : AppTheme.textMuted)
+                    .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
 
-                Rectangle()
-                    .fill(isSelected ? AppTheme.rose : Color.clear)
-                    .frame(height: 2)
+                if count > 0 {
+                    Text("\(count)")
+                        .font(.system(size: 11, weight: .bold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule()
+                                .fill(isSelected ? AppTheme.rose.opacity(0.3) : Color.white.opacity(0.1))
+                        )
+                }
             }
+            .foregroundColor(isSelected ? .white : AppTheme.textSecondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                Group {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 11)
+                            .fill(AppTheme.rose)
+                    }
+                }
+            )
         }
-        .frame(maxWidth: .infinity)
     }
 }
 
-// MARK: - Likes Tab
-struct LikesTabContent: View {
+// MARK: - Liked You Tab
+
+private struct LikedYouTabView: View {
     let likes: [LikedYouCard]
-    let onLike: (String) -> Void
-    let onPass: (String) -> Void
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12)
+    ]
 
     var body: some View {
         if likes.isEmpty {
-            EmptyStateView(icon: "heart", title: "No likes yet", message: "When someone likes you, they'll appear here")
+            EmptyStateView(
+                icon: "heart",
+                title: "No likes yet",
+                message: "When someone likes your profile, they will appear here. Keep your profile fresh!"
+            )
         } else {
             ScrollView {
-                VStack(spacing: 16) {
-                    // Main card
-                    if let first = likes.first {
-                        LikeProfileCard(like: first, onLike: onLike, onPass: onPass)
-                            .padding(.horizontal)
-                    }
-
-                    // Up next
-                    if likes.count > 1 {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Up next")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(AppTheme.textSecondary)
-                                .padding(.horizontal)
-
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 12) {
-                                    ForEach(likes.dropFirst().prefix(3)) { like in
-                                        GlassCard(cornerRadius: 14) {
-                                            VStack(spacing: 8) {
-                                                ProfileAvatar(url: nil, name: like.user.displayName, size: 56)
-                                                Text(like.user.displayName)
-                                                    .font(.system(size: 13, weight: .medium))
-                                                    .foregroundColor(.white)
-                                                Text("\(like.user.age)")
-                                                    .font(.system(size: 11))
-                                                    .foregroundColor(AppTheme.textSecondary)
-                                            }
-                                            .padding(12)
-                                        }
-                                    }
-                                }
-                                .padding(.horizontal)
-                            }
-                        }
+                LazyVGrid(columns: columns, spacing: 14) {
+                    ForEach(likes) { like in
+                        LikedYouCardView(like: like)
                     }
                 }
+                .padding(.horizontal)
                 .padding(.top, 16)
                 .padding(.bottom, 100)
             }
@@ -132,194 +165,180 @@ struct LikesTabContent: View {
     }
 }
 
-struct LikeProfileCard: View {
+// MARK: - Liked You Card
+
+private struct LikedYouCardView: View {
     let like: LikedYouCard
-    let onLike: (String) -> Void
-    let onPass: (String) -> Void
 
     var body: some View {
-        GlassCard(cornerRadius: 20) {
-            VStack(spacing: 0) {
-                // Photo area
-                ZStack(alignment: .bottom) {
-                    RoundedRectangle(cornerRadius: 0)
-                        .fill(
-                            LinearGradient(
-                                colors: [AppTheme.rose.opacity(0.3), AppTheme.surfaceDark],
-                                startPoint: .top, endPoint: .bottom
-                            )
-                        )
-                        .frame(height: 280)
-                        .overlay(
-                            Image(systemName: "person.fill")
-                                .font(.system(size: 50))
-                                .foregroundColor(.white.opacity(0.3))
-                        )
-
-                    // Like label
-                    Text(like.likeLabel)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(AppTheme.roseGradient)
-                        .clipShape(Capsule())
-                        .padding(.bottom, 60)
-
-                    // Name overlay
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("\(like.user.displayName), \(like.user.age)")
-                                .font(.system(size: 22, weight: .bold))
-                                .foregroundColor(.white)
-                            Text(like.user.city ?? "")
-                                .font(.system(size: 13))
-                                .foregroundColor(.white.opacity(0.7))
-                        }
-                        Spacer()
-                        ScoreTagView(label: "Cultural", value: "\(like.culturalScore)%",
-                                    color: like.culturalBadge == .gold ? AppTheme.scoreGold : AppTheme.scoreGreen)
-                    }
-                    .padding(16)
-                    .background(LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom))
-                }
-
-                // Action buttons
-                HStack(spacing: 24) {
-                    ActionCircle(icon: "xmark", color: AppTheme.textMuted, size: 52) {
-                        onPass(like.id)
-                    }
-                    ActionCircle(icon: "heart.fill", color: AppTheme.rose, size: 52) {
-                        onLike(like.id)
-                    }
-                }
-                .padding(.vertical, 16)
-            }
+        Button {
+            print("Tapped profile: \(like.user.displayName)")
+        } label: {
+            likeCardBody
         }
+        .buttonStyle(.plain)
+    }
+
+    private var likeCardBody: some View {
+        ContentCard {
+            VStack(spacing: 10) {
+                ProfileAvatar(
+                    url: nil,
+                    name: like.user.displayName,
+                    size: 60,
+                    isOnline: like.user.isOnline,
+                    showBorder: true
+                )
+
+                VStack(spacing: 2) {
+                    Text(like.user.displayName)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+
+                    Text("\(like.user.age)")
+                        .font(.system(size: 13))
+                        .foregroundColor(AppTheme.textSecondary)
+                }
+
+                culturalBadge
+
+                Text(like.likeLabel)
+                    .font(.system(size: 11))
+                    .foregroundColor(AppTheme.textMuted)
+                    .lineLimit(1)
+
+                Text(like.likedAt.timeAgoShort)
+                    .font(.system(size: 10))
+                    .foregroundColor(AppTheme.textMuted)
+            }
+            .padding(.vertical, 14)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private var culturalBadge: some View {
+        let badgeColor: Color = {
+            switch like.culturalBadge {
+            case .gold: return AppTheme.scoreGold
+            case .green: return AppTheme.scoreGreen
+            case .orange: return AppTheme.scoreOrange
+            case .none: return AppTheme.textMuted
+            }
+        }()
+
+        return ScoreTag(
+            label: "Cultural",
+            value: "\(like.culturalScore)%",
+            color: badgeColor
+        )
     }
 }
 
 // MARK: - Matches Tab
-struct MatchesTabContent: View {
+
+private struct MatchesTabView: View {
     let matches: [Match]
 
     var body: some View {
         if matches.isEmpty {
-            EmptyStateView(icon: "person.2", title: "No matches yet", message: "Start liking profiles to get matches!")
+            EmptyStateView(
+                icon: "person.2",
+                title: "No matches yet",
+                message: "Start swiping on profiles to find your perfect match!"
+            )
         } else {
-            ScrollView {
-                VStack(spacing: 12) {
-                    // Pending matches: awaiting first message OR locked (waiting for reply)
-                    let pending = matches.filter { $0.showCountdown }
-                    if !pending.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("New Matches")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(AppTheme.textSecondary)
-                                .padding(.horizontal)
+            matchList
+        }
+    }
 
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 12) {
-                                    ForEach(pending) { match in
-                                        NavigationLink(value: match) {
-                                            VStack(spacing: 6) {
-                                                ZStack {
-                                                    // Circular timer ring around avatar
-                                                    ProfileAvatar(url: nil, name: match.otherUser.displayName, size: 64, isOnline: match.otherUser.isOnline, showBorder: true)
-
-                                                    // Lock icon if I sent first and waiting
-                                                    if match.firstMsgLocked && match.firstMsgBy == "current-user-id" {
-                                                        Image(systemName: "lock.fill")
-                                                            .font(.system(size: 10))
-                                                            .foregroundColor(AppTheme.rose)
-                                                            .padding(4)
-                                                            .background(AppTheme.background)
-                                                            .clipShape(Circle())
-                                                            .offset(x: 24, y: -24)
-                                                    }
-
-                                                    if let exp = match.expiresAt {
-                                                        CountdownBadge(expiresAt: exp)
-                                                            .offset(y: 30)
-                                                    }
-                                                }
-                                                Text(match.otherUser.displayName)
-                                                    .font(.system(size: 12, weight: .medium))
-                                                    .foregroundColor(.white)
-                                            }
-                                        }
-                                    }
-                                }
-                                .padding(.horizontal)
-                            }
-                        }
-                    }
-
-                    // Active chats: unlocked conversations (both users have exchanged messages)
-                    let active = matches.filter { !$0.showCountdown && $0.hasFirstMessage }
-                    if !active.isEmpty {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Conversations")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(AppTheme.textSecondary)
-                                .padding(.horizontal)
-
-                            ForEach(active) { match in
-                                NavigationLink(value: match) {
-                                    MatchRow(match: match)
-                                }
-                            }
-                        }
+    private var matchList: some View {
+        ScrollView {
+            LazyVStack(spacing: 10) {
+                ForEach(matches) { match in
+                    NavigationLink(value: match) {
+                        MatchRowView(match: match)
                     }
                 }
-                .padding(.top, 12)
-                .padding(.bottom, 100)
             }
-            .navigationDestination(for: Match.self) { match in
-                ChatView(match: match)
+            .padding(.top, 12)
+            .padding(.bottom, 100)
+        }
+    }
+}
+
+// MARK: - Match Row
+
+private struct MatchRowView: View {
+    let match: Match
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ProfileAvatar(
+                url: nil,
+                name: match.otherUser.displayName,
+                size: 52,
+                isOnline: match.otherUser.isOnline
+            )
+
+            matchInfo
+
+            Spacer()
+
+            matchTrailing
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .cardStyle()
+        .padding(.horizontal)
+    }
+
+    private var matchInfo: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(match.otherUser.displayName)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.white)
+
+            Text(match.lastMessage?.content ?? "Send the first message!")
+                .font(.system(size: 13))
+                .foregroundColor(AppTheme.textSecondary)
+                .lineLimit(1)
+        }
+    }
+
+    private var matchTrailing: some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            if let lastMsg = match.lastMessage {
+                Text(lastMsg.createdAt.timeAgoShort)
+                    .font(.system(size: 11))
+                    .foregroundColor(AppTheme.textMuted)
+            }
+
+            if match.showCountdown, let exp = match.expiresAt {
+                CountdownBadge(expiresAt: exp)
+            }
+
+            if match.unreadCount > 0 {
+                MatchUnreadBadge(count: match.unreadCount)
             }
         }
     }
 }
 
-struct MatchRow: View {
-    let match: Match
+// MARK: - Unread Badge
+
+private struct MatchUnreadBadge: View {
+    let count: Int
 
     var body: some View {
-        HStack(spacing: 12) {
-            ProfileAvatar(url: nil, name: match.otherUser.displayName, size: 52, isOnline: match.otherUser.isOnline)
-
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(match.otherUser.displayName)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white)
-                    if match.otherUser.isVerified {
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 12))
-                            .foregroundColor(AppTheme.info)
-                    }
-                }
-
-                Text(match.lastMessage?.content ?? "Say hello!")
-                    .font(.system(size: 13))
-                    .foregroundColor(AppTheme.textSecondary)
-                    .lineLimit(1)
-            }
-
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 6) {
-                Text(match.lastMessage?.createdAt.timeAgoShort ?? "")
-                    .font(.system(size: 11))
-                    .foregroundColor(AppTheme.textMuted)
-
-                if match.unreadCount > 0 {
-                    BadgeView(count: match.unreadCount)
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        Text("\(min(count, 99))")
+            .font(.system(size: 10, weight: .bold))
+            .foregroundColor(.white)
+            .frame(minWidth: 20, minHeight: 20)
+            .background(
+                Circle()
+                    .fill(AppTheme.rose)
+            )
     }
 }

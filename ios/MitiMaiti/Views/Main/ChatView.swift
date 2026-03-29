@@ -2,132 +2,37 @@ import SwiftUI
 
 struct ChatView: View {
     let match: Match
-    @StateObject private var vm = ChatViewModel()
+    @StateObject private var chatVM = ChatViewModel()
     @FocusState private var isInputFocused: Bool
     @State private var showUnlockToast = false
 
     var body: some View {
-        ZStack {
-            AppTheme.backgroundGradient.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                // MARK: - Countdown Banner
-                // Shows when: waiting for first message OR waiting for reply (timer active)
-                // Hides when: both users have exchanged messages (chat unlocked)
-                if vm.showCountdown, let exp = vm.match?.expiresAt {
-                    CountdownBannerView(
-                        expiresAt: exp,
-                        bannerMessage: vm.lockBannerMessage,
-                        isLocked: vm.isLockedForMe
-                    )
-                }
-
-                // MARK: - Lock Status Banner (after first message sent, waiting for reply)
-                if vm.isLockedForMe, !vm.showCountdown {
-                    // Fallback lock banner when countdown is gone but still locked
-                    lockBanner
-                }
-
-                // MARK: - Chat Unlocked Toast
-                if showUnlockToast {
-                    HStack(spacing: 8) {
-                        Image(systemName: "lock.open.fill")
-                            .font(.system(size: 12))
-                        Text("Chat unlocked! You can now message freely")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .foregroundColor(AppTheme.success)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(AppTheme.success.opacity(0.1))
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                }
-
-                // MARK: - Messages
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(spacing: 8) {
-                            // System message for new matches
-                            if vm.match?.hasFirstMessage == false {
-                                systemMessage("You matched! Send a message to start the conversation.")
-                            }
-
-                            ForEach(vm.messages) { msg in
-                                MessageBubbleView(msg)
-                                    .id(msg.id)
-                            }
-
-                            // Lock indicator after first message
-                            if vm.isLockedForMe {
-                                systemMessage("Waiting for \(match.otherUser.displayName) to reply...")
-                            }
-
-                            if vm.isOtherTyping {
-                                TypingIndicator()
-                                    .id("typing")
-                            }
-                        }
-                        .padding(.horizontal)
-                        .padding(.top, 12)
-                        .padding(.bottom, 8)
-                    }
-                    .onChange(of: vm.messages.count) { _, _ in
-                        withAnimation {
-                            proxy.scrollTo(vm.messages.last?.id ?? "typing", anchor: .bottom)
-                        }
-                    }
-                }
-
-                // MARK: - Icebreakers (only when no messages yet)
-                if !vm.hasMessages && !vm.isLockedForMe {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(MockData.icebreakers.prefix(4)) { ice in
-                                Button {
-                                    vm.sendIcebreaker(ice.question)
-                                } label: {
-                                    Text(ice.question)
-                                        .font(.system(size: 13))
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 14)
-                                        .padding(.vertical, 8)
-                                        .background(
-                                            Capsule()
-                                                .fill(.ultraThinMaterial)
-                                                .overlay(Capsule().stroke(AppTheme.gold.opacity(0.3), lineWidth: 0.5))
-                                        )
-                                }
-                            }
-                        }
-                        .padding(.horizontal)
-                        .padding(.vertical, 8)
-                    }
-                }
-
-                // MARK: - Input Bar
-                inputBar
-            }
+        VStack(spacing: 0) {
+            chatBannerSection
+            unlockToastView
+            messageListSection
+            icebreakerView
+            inputBarSection
         }
+        .appBackground()
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                chatHeader
+                ChatHeaderPrincipal(match: match, chatVM: chatVM)
             }
-
             ToolbarItem(placement: .navigationBarTrailing) {
-                chatMenu
+                ChatTrailingButtons(match: match, callsUnlocked: chatVM.match?.callsUnlocked ?? false)
             }
         }
         .onAppear {
-            vm.loadMessages(for: match)
+            chatVM.loadMessages(for: match)
         }
-        .onChange(of: vm.chatUnlocked) { _, unlocked in
+        .onChange(of: chatVM.chatUnlocked) { _, unlocked in
             if unlocked {
                 withAnimation(.spring(response: 0.4)) {
                     showUnlockToast = true
                 }
-                // Hide toast after 3 seconds
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                     withAnimation { showUnlockToast = false }
                 }
@@ -135,180 +40,282 @@ struct ChatView: View {
         }
     }
 
-    // MARK: - Lock Banner
-    var lockBanner: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "lock.fill")
-                .font(.system(size: 14))
-                .foregroundColor(AppTheme.rose)
+    // MARK: - Banner Section
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Waiting for reply...")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.white)
-                Text("You can send another message once \(match.otherUser.displayName) replies")
-                    .font(.system(size: 11))
-                    .foregroundColor(AppTheme.textSecondary)
-            }
-
-            Spacer()
-
-            Image(systemName: "hourglass")
-                .font(.system(size: 16))
-                .foregroundColor(AppTheme.rose.opacity(0.6))
-                .symbolEffect(.pulse)
+    @ViewBuilder
+    private var chatBannerSection: some View {
+        if chatVM.showCountdown || chatVM.isLockedForMe {
+            ChatLockBanner(
+                chatVM: chatVM,
+                otherUserName: match.otherUser.displayName
+            )
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(AppTheme.rose.opacity(0.08))
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(AppTheme.rose.opacity(0.15)).frame(height: 0.5)
+    }
+
+    // MARK: - Unlock Toast
+
+    @ViewBuilder
+    private var unlockToastView: some View {
+        if showUnlockToast {
+            HStack(spacing: 8) {
+                Image(systemName: "lock.open.fill")
+                    .font(.system(size: 12))
+                Text("Chat unlocked! You can now message freely")
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .foregroundColor(AppTheme.success)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(AppTheme.success.opacity(0.1))
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
+    // MARK: - Message List
+
+    private var messageListSection: some View {
+        ChatMessageList(
+            chatVM: chatVM,
+            otherUserName: match.otherUser.displayName
+        )
+    }
+
+    // MARK: - Icebreaker
+
+    @ViewBuilder
+    private var icebreakerView: some View {
+        if chatVM.awaitingFirstMessage && !chatVM.hasMessages {
+            ChatIcebreakerSection(chatVM: chatVM)
         }
     }
 
     // MARK: - Input Bar
-    var inputBar: some View {
-        VStack(spacing: 0) {
-            if vm.isLockedForMe {
-                // Locked state: show disabled input with lock icon
-                HStack(spacing: 10) {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 16))
-                        .foregroundColor(AppTheme.textMuted)
 
-                    Text(vm.inputPlaceholder)
-                        .font(.system(size: 15))
-                        .foregroundColor(AppTheme.textMuted)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 14)
-                .background(
-                    RoundedRectangle(cornerRadius: 22)
-                        .fill(Color.white.opacity(0.04))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 22)
-                                .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
-                        )
-                )
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(
-                    Rectangle()
-                        .fill(.ultraThinMaterial)
-                        .ignoresSafeArea()
-                )
-            } else {
-                // Active state: normal input
-                HStack(spacing: 10) {
-                    Button {} label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 24))
-                            .foregroundColor(AppTheme.textMuted)
-                    }
-
-                    HStack {
-                        TextField(vm.inputPlaceholder, text: $vm.messageText, axis: .vertical)
-                            .font(.system(size: 15))
-                            .foregroundColor(.white)
-                            .lineLimit(1...4)
-                            .focused($isInputFocused)
-
-                        if !vm.messageText.isEmpty {
-                            Button {
-                                vm.sendMessage()
-                            } label: {
-                                Image(systemName: "arrow.up.circle.fill")
-                                    .font(.system(size: 30))
-                                    .foregroundStyle(AppTheme.roseGradient)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 22)
-                            .fill(.ultraThinMaterial)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 22)
-                                    .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
-                            )
-                    )
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(
-                    Rectangle()
-                        .fill(.ultraThinMaterial)
-                        .ignoresSafeArea()
-                )
-            }
-        }
+    private var inputBarSection: some View {
+        ChatInputBar(
+            chatVM: chatVM,
+            isInputFocused: $isInputFocused
+        )
     }
+}
 
-    // MARK: - Chat Header
-    var chatHeader: some View {
+// MARK: - Toolbar Principal
+
+private struct ChatHeaderPrincipal: View {
+    let match: Match
+    @ObservedObject var chatVM: ChatViewModel
+
+    var body: some View {
         HStack(spacing: 10) {
-            ProfileAvatar(url: nil, name: match.otherUser.displayName, size: 32, isOnline: match.otherUser.isOnline)
+            ProfileAvatar(
+                url: nil,
+                name: match.otherUser.displayName,
+                size: 36,
+                isOnline: match.otherUser.isOnline
+            )
 
             VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 4) {
-                    Text(match.otherUser.displayName)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white)
-                    Text("\(match.otherUser.age)")
-                        .font(.system(size: 13))
-                        .foregroundColor(AppTheme.textSecondary)
-                }
-                HStack(spacing: 4) {
-                    Text(match.otherUser.isOnline ? "Online" : (match.otherUser.lastActive?.timeAgoShort ?? ""))
-                        .font(.system(size: 11))
-                        .foregroundColor(match.otherUser.isOnline ? AppTheme.success : AppTheme.textMuted)
+                Text(match.otherUser.displayName)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
 
-                    // Lock indicator in header
-                    if vm.isLockedForMe {
-                        Image(systemName: "lock.fill")
-                            .font(.system(size: 8))
-                            .foregroundColor(AppTheme.rose)
-                    } else if vm.match?.callsUnlocked == true {
-                        Image(systemName: "lock.open.fill")
-                            .font(.system(size: 8))
-                            .foregroundColor(AppTheme.success)
+                onlineStatus
+            }
+        }
+    }
+
+    private var onlineStatus: some View {
+        HStack(spacing: 4) {
+            if match.otherUser.isOnline {
+                Circle()
+                    .fill(AppTheme.success)
+                    .frame(width: 6, height: 6)
+                Text("Online")
+                    .font(.system(size: 11))
+                    .foregroundColor(AppTheme.success)
+            } else {
+                Text(match.otherUser.lastActive?.timeAgoShort ?? "")
+                    .font(.system(size: 11))
+                    .foregroundColor(AppTheme.textMuted)
+            }
+        }
+    }
+}
+
+// MARK: - Toolbar Trailing
+
+private struct ChatTrailingButtons: View {
+    let match: Match
+    let callsUnlocked: Bool
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Button {} label: {
+                Image(systemName: "phone.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(callsUnlocked ? AppTheme.textPrimary : AppTheme.textMuted.opacity(0.4))
+            }
+            .disabled(!callsUnlocked)
+
+            Button {} label: {
+                Image(systemName: "video.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(callsUnlocked ? AppTheme.textPrimary : AppTheme.textMuted.opacity(0.4))
+            }
+            .disabled(!callsUnlocked)
+        }
+    }
+}
+
+// MARK: - Lock / Countdown Banner
+
+private struct ChatLockBanner: View {
+    @ObservedObject var chatVM: ChatViewModel
+    let otherUserName: String
+
+    var body: some View {
+        ContentCard {
+            HStack(spacing: 10) {
+                bannerIcon
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(chatVM.lockBannerMessage?.title ?? "Timer active")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                    Text(chatVM.lockBannerMessage?.subtitle ?? "")
+                        .font(.system(size: 11))
+                        .foregroundColor(AppTheme.textSecondary)
+                        .lineLimit(2)
+                }
+
+                Spacer()
+
+                if chatVM.showCountdown, let exp = chatVM.match?.expiresAt {
+                    CountdownBadge(expiresAt: exp)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(AppTheme.rose.opacity(0.08))
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 4)
+    }
+
+    private var bannerIcon: some View {
+        Image(systemName: chatVM.isLockedForMe ? "lock.fill" : "clock.fill")
+            .font(.system(size: 14))
+            .foregroundColor(AppTheme.rose)
+    }
+}
+
+// MARK: - Message List
+
+private struct ChatMessageList: View {
+    @ObservedObject var chatVM: ChatViewModel
+    let otherUserName: String
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 8) {
+                    if chatVM.match?.hasFirstMessage == false {
+                        systemMessageText("You matched! Send a message to start the conversation.")
                     }
+
+                    ForEach(groupedMessages, id: \.date) { group in
+                        dateSectionHeader(group.dateLabel)
+
+                        ForEach(group.messages) { msg in
+                            MessageBubble(message: msg, showTimestamp: true)
+                                .id(msg.id)
+                        }
+                    }
+
+                    if chatVM.isLockedForMe {
+                        systemMessageText("Waiting for \(otherUserName) to reply...")
+                    }
+
+                    if chatVM.isOtherTyping {
+                        TypingIndicator()
+                            .id("typing")
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
+            }
+            .onChange(of: chatVM.messages.count) { _, _ in
+                let target = chatVM.messages.last?.id ?? "typing"
+                withAnimation {
+                    proxy.scrollTo(target, anchor: .bottom)
                 }
             }
         }
     }
 
-    // MARK: - Chat Menu
-    var chatMenu: some View {
-        Menu {
-            if vm.match?.callsUnlocked == true {
-                Button {} label: {
-                    Label("Voice Call", systemImage: "phone.fill")
-                }
-                Button {} label: {
-                    Label("Video Call", systemImage: "video.fill")
-                }
-                Divider()
+    // MARK: - Date Grouping
+
+    private struct MessageGroup: Hashable {
+        let date: String
+        let dateLabel: String
+        let messages: [Message]
+    }
+
+    private var groupedMessages: [MessageGroup] {
+        let keyFormatter = DateFormatter()
+        keyFormatter.dateFormat = "yyyy-MM-dd"
+
+        let calendar = Calendar.current
+        var groups: [String: [Message]] = [:]
+        var order: [String] = []
+
+        for msg in chatVM.messages {
+            let key = keyFormatter.string(from: msg.createdAt)
+            if groups[key] == nil {
+                order.append(key)
+                groups[key] = []
             }
-            Button(role: .destructive) {} label: {
-                Label("Report", systemImage: "exclamationmark.triangle")
-            }
-            Button(role: .destructive) {} label: {
-                Label("Block", systemImage: "hand.raised")
-            }
-            Button(role: .destructive) {} label: {
-                Label("Unmatch", systemImage: "person.badge.minus")
-            }
-        } label: {
-            Image(systemName: "ellipsis")
-                .foregroundColor(.white)
+            groups[key]?.append(msg)
         }
+
+        return order.compactMap { key -> MessageGroup? in
+            guard let msgs = groups[key], let first = msgs.first else { return nil }
+
+            let label: String
+            if calendar.isDateInToday(first.createdAt) {
+                label = "Today"
+            } else if calendar.isDateInYesterday(first.createdAt) {
+                label = "Yesterday"
+            } else {
+                let displayFormatter = DateFormatter()
+                displayFormatter.dateFormat = "EEEE, MMM d"
+                label = displayFormatter.string(from: first.createdAt)
+            }
+
+            return MessageGroup(date: key, dateLabel: label, messages: msgs)
+        }
+    }
+
+    // MARK: - Section Header
+
+    private func dateSectionHeader(_ label: String) -> some View {
+        Text(label)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundColor(AppTheme.textMuted)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(Color.white.opacity(0.06))
+            )
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
     }
 
     // MARK: - System Message
-    func systemMessage(_ text: String) -> some View {
+
+    private func systemMessageText(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 12, weight: .medium))
             .foregroundColor(AppTheme.textMuted)
@@ -318,65 +325,156 @@ struct ChatView: View {
     }
 }
 
-// MARK: - Countdown Banner View
-struct CountdownBannerView: View {
-    let expiresAt: Date
-    let bannerMessage: (title: String, subtitle: String)?
-    let isLocked: Bool
-    @State private var remaining: TimeInterval = 0
-    let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+// MARK: - Icebreaker Section
 
-    var bannerColor: Color {
-        if isLocked { return AppTheme.rose }
-        if remaining < 4 * 3600 { return AppTheme.error }
-        if remaining < 12 * 3600 { return AppTheme.warning }
-        return AppTheme.info
-    }
+private struct ChatIcebreakerSection: View {
+    @ObservedObject var chatVM: ChatViewModel
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: isLocked ? "lock.fill" : "clock.fill")
-                .font(.system(size: 14))
-                .foregroundColor(bannerColor)
+        VStack(alignment: .leading, spacing: 8) {
+            icebreakerHeader
+            icebreakerScroll
+        }
+        .padding(.vertical, 10)
+    }
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(bannerMessage?.title ?? "Timer active")
-                    .font(.system(size: 13, weight: .semibold))
+    private var icebreakerHeader: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 14))
+                .foregroundColor(AppTheme.gold)
+            Text("Break the ice")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(AppTheme.gold)
+        }
+        .padding(.horizontal)
+    }
+
+    private var icebreakerScroll: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(MockData.icebreakers.prefix(5)) { ice in
+                    Button {
+                        chatVM.sendIcebreaker(ice.question)
+                    } label: {
+                        IcebreakerCardView(icebreaker: ice)
+                    }
+                }
+            }
+            .padding(.horizontal)
+        }
+    }
+}
+
+// MARK: - Icebreaker Card
+
+private struct IcebreakerCardView: View {
+    let icebreaker: Icebreaker
+
+    var body: some View {
+        ContentCard {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(icebreaker.category.capitalized)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(AppTheme.gold)
+
+                Text(icebreaker.question)
+                    .font(.system(size: 13))
                     .foregroundColor(.white)
-                Text(bannerMessage?.subtitle ?? "")
-                    .font(.system(size: 11))
-                    .foregroundColor(AppTheme.textSecondary)
+                    .multilineTextAlignment(.leading)
                     .lineLimit(2)
             }
+            .padding(12)
+            .frame(width: 180, alignment: .leading)
+        }
+    }
+}
 
-            Spacer()
+// MARK: - Input Bar
 
-            // Circular countdown
-            ZStack {
-                Circle()
-                    .stroke(Color.white.opacity(0.1), lineWidth: 3)
-                    .frame(width: 40, height: 40)
+private struct ChatInputBar: View {
+    @ObservedObject var chatVM: ChatViewModel
+    var isInputFocused: FocusState<Bool>.Binding
 
-                Circle()
-                    .trim(from: 0, to: min(1, remaining / (24 * 3600)))
-                    .stroke(bannerColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                    .frame(width: 40, height: 40)
-                    .rotationEffect(.degrees(-90))
+    var body: some View {
+        if chatVM.inputDisabled {
+            disabledBar
+        } else {
+            activeBar
+        }
+    }
 
-                Text(remaining.shortCountdown)
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundColor(bannerColor)
+    private var disabledBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 16))
+                .foregroundColor(AppTheme.textMuted)
+
+            Text(chatVM.inputPlaceholder)
+                .font(.system(size: 15))
+                .foregroundColor(AppTheme.textMuted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 22)
+                .fill(AppTheme.surfaceMedium)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22)
+                        .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
+                )
+        )
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            AppTheme.surfaceDark
+                .ignoresSafeArea()
+        )
+    }
+
+    private var activeBar: some View {
+        HStack(spacing: 10) {
+            HStack {
+                TextField(chatVM.inputPlaceholder, text: $chatVM.messageText, axis: .vertical)
+                    .font(.system(size: 15))
+                    .foregroundColor(.white)
+                    .lineLimit(1...4)
+                    .focused(isInputFocused)
+
+                if !chatVM.messageText.isEmpty {
+                    sendButton
+                }
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 22)
+                    .fill(AppTheme.surfaceMedium)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 22)
+                            .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
+                    )
+            )
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(bannerColor.opacity(0.08))
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(bannerColor.opacity(0.15)).frame(height: 0.5)
-        }
-        .onAppear { remaining = max(0, expiresAt.timeIntervalSinceNow) }
-        .onReceive(timer) { _ in
-            remaining = max(0, expiresAt.timeIntervalSinceNow)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            AppTheme.surfaceDark
+                .ignoresSafeArea()
+        )
+    }
+
+    private var sendButton: some View {
+        Button {
+            chatVM.sendMessage()
+        } label: {
+            Image(systemName: "arrow.up")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: 30, height: 30)
+                .background(AppTheme.roseGradient)
+                .clipShape(Circle())
         }
     }
 }
