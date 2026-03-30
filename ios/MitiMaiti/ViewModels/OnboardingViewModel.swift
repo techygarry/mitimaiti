@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 @MainActor
 class OnboardingViewModel: ObservableObject {
@@ -10,6 +11,7 @@ class OnboardingViewModel: ObservableObject {
     @Published var birthYear = 1998
     @Published var selectedGender: Gender?
     @Published var selectedPhotos: [String] = []
+    @Published var selectedImages: [UIImage] = []
     @Published var selectedIntent: Intent?
     @Published var selectedShowMe: ShowMe?
     @Published var selectedCity: String?
@@ -35,7 +37,7 @@ class OnboardingViewModel: ObservableObject {
         case .name: return firstName.count >= 2
         case .birthday: return isAgeValid
         case .gender: return selectedGender != nil
-        case .photos: return selectedPhotos.count >= 1
+        case .photos: return selectedImages.count >= 1
         case .intent: return selectedIntent != nil
         case .showMe: return selectedShowMe != nil
         case .location: return selectedCity != nil
@@ -66,8 +68,21 @@ class OnboardingViewModel: ObservableObject {
         }
     }
 
+    func addImage(_ image: UIImage) {
+        guard selectedImages.count < 6 else { return }
+        selectedImages.append(image)
+        selectedPhotos.append("photo_\(selectedPhotos.count + 1)")
+        // Save the first photo as the profile picture
+        if selectedImages.count == 1 {
+            UserImageStore.shared.save(image)
+        }
+    }
+
     func removePhoto(at index: Int) {
         guard index < selectedPhotos.count else { return }
         selectedPhotos.remove(at: index)
+        if index < selectedImages.count {
+            selectedImages.remove(at: index)
+        }
     }
 }

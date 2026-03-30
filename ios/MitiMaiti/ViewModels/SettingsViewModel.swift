@@ -20,15 +20,71 @@ class SettingsViewModel: ObservableObject {
     @Published var fluencyFilter: SindhiFluency?
     @Published var verifiedOnly = false
 
-    // Notifications
-    @Published var notifyMatches = true
-    @Published var notifyMessages = true
-    @Published var notifyLikes = true
-    @Published var notifyFamily = true
-    @Published var notifyExpiry = true
-    @Published var notifyDailyPrompt = true
-    @Published var notifyNewFeatures = false
-    @Published var notifySafety = true
+    // Notifications - backed by NotificationManager.shared.settings
+    var notifyMatches: Bool {
+        get { NotificationManager.shared.settings.matches }
+        set {
+            NotificationManager.shared.settings.matches = newValue
+            NotificationManager.shared.saveSettings()
+            objectWillChange.send()
+        }
+    }
+    var notifyMessages: Bool {
+        get { NotificationManager.shared.settings.messages }
+        set {
+            NotificationManager.shared.settings.messages = newValue
+            NotificationManager.shared.saveSettings()
+            objectWillChange.send()
+        }
+    }
+    var notifyLikes: Bool {
+        get { NotificationManager.shared.settings.likes }
+        set {
+            NotificationManager.shared.settings.likes = newValue
+            NotificationManager.shared.saveSettings()
+            objectWillChange.send()
+        }
+    }
+    var notifyFamily: Bool {
+        get { NotificationManager.shared.settings.family }
+        set {
+            NotificationManager.shared.settings.family = newValue
+            NotificationManager.shared.saveSettings()
+            objectWillChange.send()
+        }
+    }
+    var notifyExpiry: Bool {
+        get { NotificationManager.shared.settings.expiry }
+        set {
+            NotificationManager.shared.settings.expiry = newValue
+            NotificationManager.shared.saveSettings()
+            objectWillChange.send()
+        }
+    }
+    var notifyDailyPrompt: Bool {
+        get { NotificationManager.shared.settings.dailyPrompt }
+        set {
+            NotificationManager.shared.settings.dailyPrompt = newValue
+            NotificationManager.shared.saveSettings()
+            objectWillChange.send()
+        }
+    }
+    var notifyNewFeatures: Bool {
+        get { NotificationManager.shared.settings.newFeatures }
+        set {
+            NotificationManager.shared.settings.newFeatures = newValue
+            NotificationManager.shared.saveSettings()
+            objectWillChange.send()
+        }
+    }
+    var notifySafety: Bool {
+        get { NotificationManager.shared.settings.safety }
+        set {
+            NotificationManager.shared.settings.safety = newValue
+            NotificationManager.shared.saveSettings()
+            objectWillChange.send()
+        }
+    }
 
     // Appearance
     @Published var theme: AppearanceTheme = .auto

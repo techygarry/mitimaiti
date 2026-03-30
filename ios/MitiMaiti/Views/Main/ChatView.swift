@@ -3,6 +3,8 @@ import SwiftUI
 struct ChatView: View {
     let match: Match
     @StateObject private var chatVM = ChatViewModel()
+    @Environment(\.adaptiveColors) private var colors
+    private let localization = LocalizationManager.shared
     @FocusState private var isInputFocused: Bool
     @State private var showUnlockToast = false
 
@@ -60,7 +62,7 @@ struct ChatView: View {
             HStack(spacing: 8) {
                 Image(systemName: "lock.open.fill")
                     .font(.system(size: 12))
-                Text("Chat unlocked! You can now message freely")
+                Text(localization.t("chat.chatUnlocked"))
                     .font(.system(size: 12, weight: .medium))
             }
             .foregroundColor(AppTheme.success)
@@ -104,6 +106,7 @@ struct ChatView: View {
 private struct ChatHeaderPrincipal: View {
     let match: Match
     @ObservedObject var chatVM: ChatViewModel
+    @Environment(\.adaptiveColors) private var colors
 
     var body: some View {
         HStack(spacing: 10) {
@@ -117,7 +120,7 @@ private struct ChatHeaderPrincipal: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(match.otherUser.displayName)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.textPrimary)
 
                 onlineStatus
             }
@@ -130,13 +133,13 @@ private struct ChatHeaderPrincipal: View {
                 Circle()
                     .fill(AppTheme.success)
                     .frame(width: 6, height: 6)
-                Text("Online")
+                Text(LocalizationManager.shared.t("chat.online"))
                     .font(.system(size: 11))
                     .foregroundColor(AppTheme.success)
             } else {
                 Text(match.otherUser.lastActive?.timeAgoShort ?? "")
                     .font(.system(size: 11))
-                    .foregroundColor(AppTheme.textMuted)
+                    .foregroundColor(colors.textMuted)
             }
         }
     }
@@ -147,20 +150,21 @@ private struct ChatHeaderPrincipal: View {
 private struct ChatTrailingButtons: View {
     let match: Match
     let callsUnlocked: Bool
+    @Environment(\.adaptiveColors) private var colors
 
     var body: some View {
         HStack(spacing: 16) {
             Button {} label: {
                 Image(systemName: "phone.fill")
                     .font(.system(size: 16))
-                    .foregroundColor(callsUnlocked ? AppTheme.textPrimary : AppTheme.textMuted.opacity(0.4))
+                    .foregroundColor(callsUnlocked ? colors.textPrimary : colors.textMuted.opacity(0.4))
             }
             .disabled(!callsUnlocked)
 
             Button {} label: {
                 Image(systemName: "video.fill")
                     .font(.system(size: 16))
-                    .foregroundColor(callsUnlocked ? AppTheme.textPrimary : AppTheme.textMuted.opacity(0.4))
+                    .foregroundColor(callsUnlocked ? colors.textPrimary : colors.textMuted.opacity(0.4))
             }
             .disabled(!callsUnlocked)
         }
@@ -172,6 +176,7 @@ private struct ChatTrailingButtons: View {
 private struct ChatLockBanner: View {
     @ObservedObject var chatVM: ChatViewModel
     let otherUserName: String
+    @Environment(\.adaptiveColors) private var colors
 
     var body: some View {
         ContentCard {
@@ -179,12 +184,12 @@ private struct ChatLockBanner: View {
                 bannerIcon
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(chatVM.lockBannerMessage?.title ?? "Timer active")
+                    Text(chatVM.lockBannerMessage?.title ?? LocalizationManager.shared.t("chat.timerActive"))
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(colors.textPrimary)
                     Text(chatVM.lockBannerMessage?.subtitle ?? "")
                         .font(.system(size: 11))
-                        .foregroundColor(AppTheme.textSecondary)
+                        .foregroundColor(colors.textSecondary)
                         .lineLimit(2)
                 }
 
@@ -214,13 +219,14 @@ private struct ChatLockBanner: View {
 private struct ChatMessageList: View {
     @ObservedObject var chatVM: ChatViewModel
     let otherUserName: String
+    @Environment(\.adaptiveColors) private var colors
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 8) {
                     if chatVM.match?.hasFirstMessage == false {
-                        systemMessageText("You matched! Send a message to start the conversation.")
+                        systemMessageText(LocalizationManager.shared.t("chat.matchedSendMessage"))
                     }
 
                     ForEach(groupedMessages, id: \.date) { group in
@@ -233,7 +239,7 @@ private struct ChatMessageList: View {
                     }
 
                     if chatVM.isLockedForMe {
-                        systemMessageText("Waiting for \(otherUserName) to reply...")
+                        systemMessageText(LocalizationManager.shared.t("chat.waitingForReplyFrom").replacingOccurrences(of: "%@", with: otherUserName))
                     }
 
                     if chatVM.isOtherTyping {
@@ -302,12 +308,12 @@ private struct ChatMessageList: View {
     private func dateSectionHeader(_ label: String) -> some View {
         Text(label)
             .font(.system(size: 12, weight: .medium))
-            .foregroundColor(AppTheme.textMuted)
+            .foregroundColor(colors.textMuted)
             .padding(.horizontal, 14)
             .padding(.vertical, 6)
             .background(
                 Capsule()
-                    .fill(Color.white.opacity(0.06))
+                    .fill(colors.border)
             )
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
@@ -318,7 +324,7 @@ private struct ChatMessageList: View {
     private func systemMessageText(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 12, weight: .medium))
-            .foregroundColor(AppTheme.textMuted)
+            .foregroundColor(colors.textMuted)
             .multilineTextAlignment(.center)
             .padding(.horizontal, 30)
             .padding(.vertical, 8)
@@ -343,7 +349,7 @@ private struct ChatIcebreakerSection: View {
             Image(systemName: "sparkles")
                 .font(.system(size: 14))
                 .foregroundColor(AppTheme.gold)
-            Text("Break the ice")
+            Text(LocalizationManager.shared.t("chat.breakTheIce"))
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(AppTheme.gold)
         }
@@ -370,6 +376,7 @@ private struct ChatIcebreakerSection: View {
 
 private struct IcebreakerCardView: View {
     let icebreaker: Icebreaker
+    @Environment(\.adaptiveColors) private var colors
 
     var body: some View {
         ContentCard {
@@ -380,7 +387,7 @@ private struct IcebreakerCardView: View {
 
                 Text(icebreaker.question)
                     .font(.system(size: 13))
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.textPrimary)
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)
             }
@@ -395,6 +402,7 @@ private struct IcebreakerCardView: View {
 private struct ChatInputBar: View {
     @ObservedObject var chatVM: ChatViewModel
     var isInputFocused: FocusState<Bool>.Binding
+    @Environment(\.adaptiveColors) private var colors
 
     var body: some View {
         if chatVM.inputDisabled {
@@ -408,59 +416,80 @@ private struct ChatInputBar: View {
         HStack(spacing: 10) {
             Image(systemName: "lock.fill")
                 .font(.system(size: 16))
-                .foregroundColor(AppTheme.textMuted)
+                .foregroundColor(colors.textMuted)
 
             Text(chatVM.inputPlaceholder)
                 .font(.system(size: 15))
-                .foregroundColor(AppTheme.textMuted)
+                .foregroundColor(colors.textMuted)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 14)
         .background(
             RoundedRectangle(cornerRadius: 22)
-                .fill(AppTheme.surfaceMedium)
+                .fill(colors.surfaceMedium)
                 .overlay(
                     RoundedRectangle(cornerRadius: 22)
-                        .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
+                        .stroke(colors.border, lineWidth: 0.5)
                 )
         )
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(
-            AppTheme.surfaceDark
+            colors.surfaceDark
                 .ignoresSafeArea()
         )
     }
 
     private var activeBar: some View {
         HStack(spacing: 10) {
+            // Camera button
+            Button {} label: {
+                Image(systemName: "camera.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(colors.textMuted)
+            }
+
             HStack {
                 TextField(chatVM.inputPlaceholder, text: $chatVM.messageText, axis: .vertical)
                     .font(.system(size: 15))
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.textPrimary)
                     .lineLimit(1...4)
                     .focused(isInputFocused)
 
-                if !chatVM.messageText.isEmpty {
-                    sendButton
+                // Emoji button
+                Button {} label: {
+                    Image(systemName: "face.smiling")
+                        .font(.system(size: 20))
+                        .foregroundColor(colors.textMuted)
                 }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 22)
-                    .fill(AppTheme.surfaceMedium)
+                    .fill(colors.surfaceMedium)
                     .overlay(
                         RoundedRectangle(cornerRadius: 22)
-                            .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
+                            .stroke(colors.border, lineWidth: 0.5)
                     )
             )
+
+            if chatVM.messageText.isEmpty {
+                // Mic button (shown when no text)
+                Button {} label: {
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(colors.textMuted)
+                }
+            } else {
+                sendButton
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(
-            AppTheme.surfaceDark
+            colors.surfaceDark
                 .ignoresSafeArea()
         )
     }

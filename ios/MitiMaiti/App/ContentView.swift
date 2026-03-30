@@ -29,6 +29,10 @@ struct ContentView: View {
                         insertion: .scale(scale: 0.95).combined(with: .opacity),
                         removal: .opacity
                     ))
+                    .onAppear {
+                        // Request notification permission after onboarding
+                        NotificationManager.shared.requestPermission()
+                    }
             }
         }
         .animation(.easeInOut(duration: 0.5), value: showSplash)

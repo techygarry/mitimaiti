@@ -4,38 +4,19 @@ import SwiftUI
 
 extension View {
 
-    /// Full-screen deep indigo background gradient, ignoring safe area
+    /// Full-screen adaptive background gradient, ignoring safe area
     func appBackground() -> some View {
-        self.background(AppTheme.backgroundGradient.ignoresSafeArea())
+        self.modifier(AppBackgroundModifier())
     }
 
-    /// Standard content card: cardDark fill, radiusCard corners, subtle border, soft shadow
+    /// Standard content card: adaptive fill, radiusCard corners, subtle border, soft shadow
     func cardStyle() -> some View {
-        self
-            .background(
-                RoundedRectangle(cornerRadius: AppTheme.radiusCard)
-                    .fill(AppTheme.cardDark)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppTheme.radiusCard)
-                            .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
-                    )
-                    .shadow(color: Color.black.opacity(0.25), radius: 12, x: 0, y: 6)
-            )
+        self.modifier(CardStyleModifier())
     }
 
-    /// Elevated content card: surfaceMedium fill, slightly more prominent shadow
+    /// Elevated content card: adaptive fill, slightly more prominent shadow
     func elevatedCard() -> some View {
-        self
-            .background(
-                RoundedRectangle(cornerRadius: AppTheme.radiusCard)
-                    .fill(AppTheme.surfaceMedium)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppTheme.radiusCard)
-                            .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
-                    )
-                    .shadow(color: Color.black.opacity(0.35), radius: 20, x: 0, y: 10)
-                    .shadow(color: AppTheme.rose.opacity(0.04), radius: 30, x: 0, y: 5)
-            )
+        self.modifier(ElevatedCardModifier())
     }
 
     /// Shimmer loading animation overlay
@@ -44,18 +25,68 @@ extension View {
     }
 }
 
+// MARK: - App Background Modifier
+
+struct AppBackgroundModifier: ViewModifier {
+    @Environment(\.adaptiveColors) private var colors
+
+    func body(content: Content) -> some View {
+        content.background(colors.backgroundGradient.ignoresSafeArea())
+    }
+}
+
+// MARK: - Card Style Modifier
+
+struct CardStyleModifier: ViewModifier {
+    @Environment(\.adaptiveColors) private var colors
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: AppTheme.radiusCard)
+                    .fill(colors.cardDark)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppTheme.radiusCard)
+                            .stroke(colors.border, lineWidth: 0.5)
+                    )
+                    .shadow(color: colors.cardShadowColor, radius: 12, x: 0, y: 6)
+            )
+    }
+}
+
+// MARK: - Elevated Card Modifier
+
+struct ElevatedCardModifier: ViewModifier {
+    @Environment(\.adaptiveColors) private var colors
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: AppTheme.radiusCard)
+                    .fill(colors.surfaceMedium)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppTheme.radiusCard)
+                            .stroke(colors.borderSubtle, lineWidth: 0.5)
+                    )
+                    .shadow(color: colors.elevatedShadowColor, radius: 20, x: 0, y: 10)
+                    .shadow(color: AppTheme.rose.opacity(0.04), radius: 30, x: 0, y: 5)
+            )
+    }
+}
+
 // MARK: - Shimmer Modifier
 
 struct ShimmerModifier: ViewModifier {
     let isActive: Bool
     @State private var phase: CGFloat = 0
+    @Environment(\.adaptiveColors) private var colors
 
     func body(content: Content) -> some View {
         content
             .overlay(
                 GeometryReader { geo in
                     if isActive {
-                        AppTheme.shimmerGradient
+                        colors.shimmerGradient
                             .frame(width: geo.size.width * 2)
                             .offset(x: phase * geo.size.width * 2 - geo.size.width)
                             .mask(content)

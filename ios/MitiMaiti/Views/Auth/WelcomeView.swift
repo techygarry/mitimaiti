@@ -2,26 +2,32 @@ import SwiftUI
 
 struct WelcomeView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    private let localization = LocalizationManager.shared
+    @Environment(\.adaptiveColors) private var colors
     @State private var animateHeart = false
     @State private var animateFeatures = false
     @State private var animateSteps = false
 
     // MARK: - Data
 
-    private let features: [(icon: String, title: String, subtitle: String)] = [
-        ("sparkles", "Cultural Match", "Find your perfect cultural match"),
-        ("star.fill", "Kundli", "Astrological compatibility"),
-        ("person.3.fill", "Family Mode", "Involve your family"),
-        ("shield.fill", "Respect-First", "Safe & respectful"),
-        ("globe.americas.fill", "Sindhi Community", "Global Sindhi network"),
-        ("checkmark.seal.fill", "Real Profiles", "Verified members")
-    ]
+    private var features: [(icon: String, titleKey: String, subtitleKey: String)] {
+        [
+            ("sparkles", "welcome.culturalMatch", "welcome.culturalMatchSub"),
+            ("star.fill", "welcome.kundli", "welcome.kundliSub"),
+            ("person.3.fill", "welcome.familyMode", "welcome.familyModeSub"),
+            ("shield.fill", "welcome.respectFirst", "welcome.respectFirstSub"),
+            ("globe.americas.fill", "welcome.sindhiCommunity", "welcome.sindhiCommunitySub"),
+            ("checkmark.seal.fill", "welcome.realProfiles", "welcome.realProfilesSub")
+        ]
+    }
 
-    private let steps: [(number: String, title: String, subtitle: String)] = [
-        ("1", "Create Your Profile", "Share your story, photos & Sindhi identity"),
-        ("2", "Discover Matches", "Culturally scored compatibility with Kundli insights"),
-        ("3", "Connect Respectfully", "Meaningful conversations with 24h response windows")
-    ]
+    private var steps: [(number: String, titleKey: String, subtitleKey: String)] {
+        [
+            ("1", "welcome.step1Title", "welcome.step1Sub"),
+            ("2", "welcome.step2Title", "welcome.step2Sub"),
+            ("3", "welcome.step3Title", "welcome.step3Sub")
+        ]
+    }
 
     // MARK: - Body
 
@@ -77,11 +83,11 @@ struct WelcomeView: View {
                     )
             }
 
-            Text("MitiMaiti")
+            Text(localization.t("welcome.title"))
                 .font(.system(size: 38, weight: .bold, design: .rounded))
-                .foregroundColor(AppTheme.textPrimary)
+                .foregroundColor(colors.textPrimary)
 
-            Text("Where Sindhi Hearts Meet")
+            Text(localization.t("welcome.subtitle"))
                 .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(
                     LinearGradient(
@@ -111,7 +117,7 @@ struct WelcomeView: View {
     }
 
     private func featureCard(
-        feature: (icon: String, title: String, subtitle: String),
+        feature: (icon: String, titleKey: String, subtitleKey: String),
         index: Int
     ) -> some View {
         ContentCard {
@@ -121,13 +127,13 @@ struct WelcomeView: View {
                     .foregroundStyle(AppTheme.roseGradient)
                     .shadow(color: AppTheme.rose.opacity(0.3), radius: 6)
 
-                Text(feature.title)
+                Text(localization.t(feature.titleKey))
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(AppTheme.textPrimary)
+                    .foregroundColor(colors.textPrimary)
 
-                Text(feature.subtitle)
+                Text(localization.t(feature.subtitleKey))
                     .font(.system(size: 11))
-                    .foregroundColor(AppTheme.textSecondary)
+                    .foregroundColor(colors.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
             }
@@ -149,16 +155,16 @@ struct WelcomeView: View {
     private var howItWorksSection: some View {
         ContentCard {
             VStack(spacing: 18) {
-                Text("How It Works")
+                Text(localization.t("welcome.howItWorks"))
                     .font(.system(size: 19, weight: .bold))
-                    .foregroundColor(AppTheme.textPrimary)
+                    .foregroundColor(colors.textPrimary)
 
                 ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
                     stepRow(step: step, index: index)
 
                     if index < steps.count - 1 {
                         Divider()
-                            .background(Color.white.opacity(0.08))
+                            .background(colors.borderSubtle)
                             .padding(.leading, 44)
                     }
                 }
@@ -169,7 +175,7 @@ struct WelcomeView: View {
     }
 
     private func stepRow(
-        step: (number: String, title: String, subtitle: String),
+        step: (number: String, titleKey: String, subtitleKey: String),
         index: Int
     ) -> some View {
         HStack(spacing: 14) {
@@ -182,13 +188,13 @@ struct WelcomeView: View {
                 .shadow(color: AppTheme.rose.opacity(0.35), radius: 6, x: 0, y: 3)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(step.title)
+                Text(localization.t(step.titleKey))
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(AppTheme.textPrimary)
+                    .foregroundColor(colors.textPrimary)
 
-                Text(step.subtitle)
+                Text(localization.t(step.subtitleKey))
                     .font(.system(size: 12))
-                    .foregroundColor(AppTheme.textSecondary)
+                    .foregroundColor(colors.textSecondary)
                     .lineLimit(2)
             }
 
@@ -226,13 +232,9 @@ struct WelcomeView: View {
     }
 
     private var getStartedLabel: some View {
-        HStack(spacing: 8) {
-            Text("Get Started")
-                .font(.system(size: 16, weight: .semibold))
-            Image(systemName: "arrow.right")
-                .font(.system(size: 14, weight: .semibold))
-        }
-        .foregroundColor(.white)
+        Text(localization.t("welcome.getStarted"))
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundColor(.white)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
         .background(AppTheme.roseGradient)
@@ -241,14 +243,14 @@ struct WelcomeView: View {
     }
 
     private var haveAccountLabel: some View {
-        Text("I have an account")
+        Text(localization.t("welcome.haveAccount"))
             .font(.system(size: 14, weight: .medium))
-            .foregroundColor(AppTheme.textSecondary)
+            .foregroundColor(colors.textSecondary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
             .background(
                 Capsule()
-                    .fill(Color.white.opacity(0.08))
+                    .fill(colors.borderSubtle)
                     .overlay(
                         Capsule()
                             .stroke(AppTheme.rose.opacity(0.4), lineWidth: 1)

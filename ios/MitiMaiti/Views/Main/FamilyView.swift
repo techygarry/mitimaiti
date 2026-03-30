@@ -2,6 +2,8 @@ import SwiftUI
 
 struct FamilyView: View {
     @StateObject private var familyVM = FamilyViewModel()
+    private let localization = LocalizationManager.shared
+    @Environment(\.adaptiveColors) private var colors
     @State private var showInviteSheet = false
 
     var body: some View {
@@ -32,13 +34,13 @@ struct FamilyView: View {
                 .font(.system(size: 36))
                 .foregroundStyle(AppTheme.roseGradient)
 
-            Text("Family Mode")
+            Text(localization.t("family.familyMode"))
                 .font(.system(size: 28, weight: .bold))
-                .foregroundColor(AppTheme.textPrimary)
+                .foregroundColor(colors.textPrimary)
 
-            Text("Involve trusted family members in your match journey. They can view profiles and suggest matches based on your preferences.")
+            Text(localization.t("family.description"))
                 .font(.system(size: 14))
-                .foregroundColor(AppTheme.textSecondary)
+                .foregroundColor(colors.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, AppTheme.spacingMD)
         }
@@ -49,16 +51,16 @@ struct FamilyView: View {
 
     private var membersSection: some View {
         VStack(alignment: .leading, spacing: AppTheme.spacingSM) {
-            sectionLabel(icon: "person.2.fill", title: "Members")
+            sectionLabel(icon: "person.2.fill", title: localization.t("family.members"))
 
             if familyVM.isLoading {
                 loadingIndicator
             } else if familyVM.members.isEmpty {
                 EmptyStateView(
                     icon: "person.3",
-                    title: "No family members",
-                    message: "Invite up to 3 family members to help with your matches",
-                    actionTitle: "Send Invite",
+                    title: localization.t("family.noMembers"),
+                    message: localization.t("family.noMembersMessage"),
+                    actionTitle: localization.t("family.sendInvite"),
                     action: { showInviteSheet = true }
                 )
             } else {
@@ -66,7 +68,7 @@ struct FamilyView: View {
                 privacyNotice
             }
 
-            PrimaryButton(title: "Invite Family", icon: "person.badge.plus") {
+            PrimaryButton(title: localization.t("family.inviteFamily"), icon: "person.badge.plus") {
                 familyVM.generateInvite()
                 showInviteSheet = true
             }
@@ -96,9 +98,9 @@ struct FamilyView: View {
                     .font(.system(size: 18))
                     .foregroundColor(AppTheme.info)
 
-                Text("Family members cannot see your chats, matches, or swipe activity.")
+                Text(localization.t("family.privacyNotice"))
                     .font(.system(size: 12))
-                    .foregroundColor(AppTheme.textSecondary)
+                    .foregroundColor(colors.textSecondary)
             }
             .padding(14)
         }
@@ -108,13 +110,13 @@ struct FamilyView: View {
 
     private var suggestionsSection: some View {
         VStack(alignment: .leading, spacing: AppTheme.spacingSM) {
-            sectionLabel(icon: "lightbulb.fill", title: "Family Suggestions")
+            sectionLabel(icon: "lightbulb.fill", title: localization.t("family.familySuggestions"))
 
             if familyVM.suggestions.isEmpty {
                 EmptyStateView(
                     icon: "lightbulb",
-                    title: "No suggestions yet",
-                    message: "Family members with suggest permissions can recommend matches for you"
+                    title: localization.t("family.noSuggestionsYet"),
+                    message: localization.t("family.noSuggestionsMessage")
                 )
             } else {
                 ForEach(familyVM.suggestions) { suggestion in
@@ -137,7 +139,7 @@ struct FamilyView: View {
                 .foregroundColor(AppTheme.rose)
             Text(title)
                 .font(.system(size: 16, weight: .bold))
-                .foregroundColor(AppTheme.textPrimary)
+                .foregroundColor(colors.textPrimary)
         }
     }
 }
@@ -147,6 +149,7 @@ struct FamilyView: View {
 struct FamilyMemberCardView: View {
     let member: FamilyMember
     @ObservedObject var familyVM: FamilyViewModel
+    @Environment(\.adaptiveColors) private var colors
     @State private var showPermissions = false
 
     var body: some View {
@@ -173,14 +176,14 @@ struct FamilyMemberCardView: View {
                 HStack(spacing: 6) {
                     Text(member.name)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(AppTheme.textPrimary)
+                        .foregroundColor(colors.textPrimary)
 
                     statusBadge
                 }
 
                 Text(member.relationship)
                     .font(.system(size: 12))
-                    .foregroundColor(AppTheme.textSecondary)
+                    .foregroundColor(colors.textSecondary)
             }
 
             Spacer()
@@ -197,11 +200,11 @@ struct FamilyMemberCardView: View {
         } label: {
             Image(systemName: showPermissions ? "chevron.up" : "chevron.down")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(AppTheme.textMuted)
+                .foregroundColor(colors.textMuted)
                 .frame(width: 32, height: 32)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(AppTheme.surfaceMedium)
+                        .fill(colors.surfaceMedium)
                 )
         }
     }
@@ -237,9 +240,9 @@ struct FamilyMemberCardView: View {
             Image(systemName: "lock.open.fill")
                 .font(.system(size: 11))
                 .foregroundColor(AppTheme.gold)
-            Text("\(member.permissions.enabledCount) of 8 permissions")
+            Text("\(member.permissions.enabledCount) / 8 \(LocalizationManager.shared.t("family.permissions"))")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(AppTheme.textSecondary)
+                .foregroundColor(colors.textSecondary)
             Spacer()
         }
     }
@@ -248,50 +251,50 @@ struct FamilyMemberCardView: View {
 
     private var permissionsDetail: some View {
         VStack(spacing: 0) {
-            Divider().background(Color.white.opacity(0.1))
+            Divider().background(colors.border)
 
             ToggleRow(
-                title: "View Profile",
+                title: LocalizationManager.shared.t("family.viewProfile"),
                 icon: "person.fill",
                 isOn: permissionBinding(for: \.canViewProfile)
             )
             ToggleRow(
-                title: "View Photos",
+                title: LocalizationManager.shared.t("family.viewPhotos"),
                 icon: "photo.fill",
                 isOn: permissionBinding(for: \.canViewPhotos)
             )
             ToggleRow(
-                title: "View Basics",
+                title: LocalizationManager.shared.t("family.viewBasics"),
                 icon: "info.circle.fill",
                 isOn: permissionBinding(for: \.canViewBasics)
             )
             ToggleRow(
-                title: "View Sindhi Identity",
+                title: LocalizationManager.shared.t("family.viewSindhiIdentity"),
                 icon: "globe.asia.australia.fill",
                 isOn: permissionBinding(for: \.canViewSindhi)
             )
             ToggleRow(
-                title: "View Matches",
+                title: LocalizationManager.shared.t("family.viewMatches"),
                 icon: "heart.circle.fill",
                 isOn: permissionBinding(for: \.canViewMatches)
             )
             ToggleRow(
-                title: "Suggest Profiles",
+                title: LocalizationManager.shared.t("family.suggestProfiles"),
                 icon: "lightbulb.fill",
                 isOn: permissionBinding(for: \.canSuggest)
             )
             ToggleRow(
-                title: "Cultural Score",
+                title: LocalizationManager.shared.t("family.culturalScore"),
                 icon: "sparkles",
                 isOn: permissionBinding(for: \.canViewCulturalScore)
             )
             ToggleRow(
-                title: "Kundli Score",
+                title: LocalizationManager.shared.t("family.kundliScore"),
                 icon: "star.fill",
                 isOn: permissionBinding(for: \.canViewKundli)
             )
 
-            Divider().background(Color.white.opacity(0.1))
+            Divider().background(colors.border)
 
             removeMemberButton
         }
@@ -299,7 +302,7 @@ struct FamilyMemberCardView: View {
     }
 
     private var removeMemberButton: some View {
-        DangerButton(title: "Remove Member", icon: "hand.raised.fill") {
+        DangerButton(title: LocalizationManager.shared.t("family.removeMember"), icon: "hand.raised.fill") {
             familyVM.revokeMember(memberId: member.id)
         }
         .padding(.top, 8)
@@ -323,6 +326,7 @@ struct FamilySuggestionCardView: View {
     let suggestion: FamilySuggestion
     let onLike: () -> Void
     let onPass: () -> Void
+    @Environment(\.adaptiveColors) private var colors
 
     var body: some View {
         ContentCard {
@@ -340,11 +344,11 @@ struct FamilySuggestionCardView: View {
         HStack(spacing: 6) {
             Image(systemName: "person.fill")
                 .font(.system(size: 10))
-            Text("Suggested by \(suggestion.suggestedBy.name)")
+            Text("\(LocalizationManager.shared.t("family.suggestedBy")) \(suggestion.suggestedBy.name)")
                 .font(.system(size: 12, weight: .medium))
             Text("(\(suggestion.suggestedBy.relationship))")
                 .font(.system(size: 11))
-                .foregroundColor(AppTheme.textMuted)
+                .foregroundColor(colors.textMuted)
         }
         .foregroundColor(AppTheme.gold)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -371,12 +375,12 @@ struct FamilySuggestionCardView: View {
         HStack(spacing: 4) {
             Text(suggestion.suggestedUser.displayName)
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(AppTheme.textPrimary)
+                .foregroundColor(colors.textPrimary)
 
             if suggestion.suggestedUser.age > 0 {
                 Text(", \(suggestion.suggestedUser.age)")
                     .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(AppTheme.textSecondary)
+                    .foregroundColor(colors.textSecondary)
             }
         }
     }
@@ -390,7 +394,7 @@ struct FamilySuggestionCardView: View {
                 Text(city)
                     .font(.system(size: 13))
             }
-            .foregroundColor(AppTheme.textSecondary)
+            .foregroundColor(colors.textSecondary)
         }
     }
 
@@ -404,22 +408,22 @@ struct FamilySuggestionCardView: View {
 
                 Text(note)
                     .font(.system(size: 13).italic())
-                    .foregroundColor(AppTheme.textSecondary)
+                    .foregroundColor(colors.textSecondary)
                     .lineLimit(3)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: AppTheme.radiusSM)
-                    .fill(AppTheme.surfaceDark)
+                    .fill(colors.surfaceDark)
             )
         }
     }
 
     private var actionButtons: some View {
         HStack(spacing: 12) {
-            SecondaryButton(title: "Pass", icon: "xmark", action: onPass)
-            PrimaryButton(title: "Like", icon: "heart.fill", action: onLike)
+            SecondaryButton(title: LocalizationManager.shared.t("discover.pass"), icon: "xmark", action: onPass)
+            PrimaryButton(title: LocalizationManager.shared.t("discover.like"), icon: "heart.fill", action: onLike)
         }
     }
 }
@@ -429,11 +433,12 @@ struct FamilySuggestionCardView: View {
 struct FamilyInviteSheet: View {
     @ObservedObject var familyVM: FamilyViewModel
     @Environment(\.dismiss) var dismiss
+    @Environment(\.adaptiveColors) private var colors
 
     var body: some View {
         NavigationStack {
             ZStack {
-                AppTheme.backgroundGradient.ignoresSafeArea()
+                colors.backgroundGradient.ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: AppTheme.spacingLG) {
@@ -448,7 +453,7 @@ struct FamilyInviteSheet: View {
             }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") { dismiss() }
+                    Button(LocalizationManager.shared.t("common.done")) { dismiss() }
                         .foregroundColor(AppTheme.rose)
                 }
             }
@@ -464,13 +469,13 @@ struct FamilyInviteSheet: View {
                 .font(.system(size: 48))
                 .foregroundStyle(AppTheme.roseGradient)
 
-            Text("Invite Family Member")
+            Text(LocalizationManager.shared.t("family.inviteFamilyMember"))
                 .font(.system(size: 22, weight: .bold))
-                .foregroundColor(AppTheme.textPrimary)
+                .foregroundColor(colors.textPrimary)
 
-            Text("Share this code with a family member to join your match circle.")
+            Text(LocalizationManager.shared.t("family.inviteDescription"))
                 .font(.system(size: 14))
-                .foregroundColor(AppTheme.textSecondary)
+                .foregroundColor(colors.textSecondary)
                 .multilineTextAlignment(.center)
         }
     }
@@ -482,7 +487,7 @@ struct FamilyInviteSheet: View {
         if let invite = familyVM.currentInvite {
             inviteCodeCard(invite)
         } else {
-            PrimaryButton(title: "Generate Invite Code", icon: "plus.circle.fill") {
+            PrimaryButton(title: LocalizationManager.shared.t("family.generateInviteCode"), icon: "plus.circle.fill") {
                 familyVM.generateInvite()
             }
         }
@@ -516,7 +521,7 @@ struct FamilyInviteSheet: View {
 
             Text(invite.deepLink)
                 .font(.system(size: 12, design: .monospaced))
-                .foregroundColor(AppTheme.textSecondary)
+                .foregroundColor(colors.textSecondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
 
@@ -533,21 +538,21 @@ struct FamilyInviteSheet: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: AppTheme.radiusSM)
-                .fill(AppTheme.surfaceDark)
+                .fill(colors.surfaceDark)
                 .overlay(
                     RoundedRectangle(cornerRadius: AppTheme.radiusSM)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                        .stroke(colors.borderSubtle, lineWidth: 0.5)
                 )
         )
     }
 
     private func inviteActionButtons(_ invite: FamilyInvite) -> some View {
         VStack(spacing: AppTheme.spacingSM) {
-            SmallButton(title: "Copy Code", icon: "doc.on.doc") {
+            SmallButton(title: LocalizationManager.shared.t("family.copyCode"), icon: "doc.on.doc") {
                 UIPasteboard.general.string = invite.code
             }
 
-            SecondaryButton(title: "Share Invite", icon: "square.and.arrow.up") {
+            SecondaryButton(title: LocalizationManager.shared.t("family.shareInvite"), icon: "square.and.arrow.up") {
                 shareInvite(invite)
             }
         }
@@ -559,9 +564,9 @@ struct FamilyInviteSheet: View {
                 .font(.system(size: 14))
                 .foregroundColor(AppTheme.info)
 
-            Text("Maximum 3 family members allowed per account.")
+            Text(LocalizationManager.shared.t("family.memberLimit"))
                 .font(.system(size: 13))
-                .foregroundColor(AppTheme.textSecondary)
+                .foregroundColor(colors.textSecondary)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)

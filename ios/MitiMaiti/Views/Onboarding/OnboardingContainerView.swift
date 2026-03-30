@@ -1,76 +1,123 @@
 import SwiftUI
+import PhotosUI
 
 struct OnboardingContainerView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @Environment(\.adaptiveColors) private var colors
     @StateObject private var vm = OnboardingViewModel()
+    private let localization = LocalizationManager.shared
 
     var body: some View {
-        VStack(spacing: 0) {
-            progressSection
-            headerSection
-            stepContent
-            Spacer(minLength: 0)
-            navigationButtons
+        ZStack {
+            colors.background.ignoresSafeArea()
+
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    Spacer().frame(height: 20)
+
+                    // White card container matching web design
+                    VStack(spacing: 0) {
+                        // Progress bar at top of card
+                        progressBar
+
+                        // Card header: back + step counter
+                        cardHeader
+
+                        // Title + subtitle
+                        titleSection
+
+                        // Step content
+                        stepContentSection
+
+                        // Continue button inside card
+                        continueButton
+                    }
+                    .background(colors.cardDark)
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                    .shadow(color: colors.elevatedShadowColor, radius: 24, x: 0, y: 8)
+                    .padding(.horizontal, AppTheme.spacingMD)
+
+                    Spacer().frame(height: 40)
+                }
+            }
         }
-        .appBackground()
         .animation(.easeInOut(duration: 0.35), value: vm.currentStep)
     }
 
-    // MARK: - Progress Bar
+    // MARK: - Progress Bar (top of card)
 
-    private var progressSection: some View {
-        VStack(spacing: 8) {
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.white.opacity(0.1))
-                        .frame(height: 4)
+    private var progressBar: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Rectangle()
+                    .fill(colors.border)
+                    .frame(height: 4)
 
-                    Capsule()
-                        .fill(AppTheme.roseGradient)
-                        .frame(width: geo.size.width * vm.progress, height: 4)
-                        .animation(.spring(response: 0.4), value: vm.progress)
-                }
+                Rectangle()
+                    .fill(AppTheme.roseGradient)
+                    .frame(width: geo.size.width * vm.progress, height: 4)
+                    .animation(.spring(response: 0.4), value: vm.progress)
             }
-            .frame(height: 4)
-
-            Text("\(vm.currentStep.rawValue + 1) of \(OnboardingStep.allCases.count)")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(AppTheme.textMuted)
-                .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .padding(.horizontal, AppTheme.spacingMD)
-        .padding(.top, 12)
+        .frame(height: 4)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
     }
 
-    // MARK: - Header
+    // MARK: - Card Header
 
-    private var headerSection: some View {
-        VStack(spacing: 8) {
+    private var cardHeader: some View {
+        HStack {
+            if vm.currentStep != .name {
+                Button { vm.previousStep() } label: {
+                    Image(systemName: "arrow.left")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(colors.textPrimary)
+                        .frame(width: 36, height: 36)
+                }
+            } else {
+                Color.clear.frame(width: 36, height: 36)
+            }
+
+            Spacer()
+
+            Text("\(localization.t("onboarding.step")) \(vm.currentStep.rawValue + 1) \(localization.t("onboarding.of")) \(OnboardingStep.allCases.count)")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(colors.textMuted)
+
+            Spacer()
+
+            Color.clear.frame(width: 36, height: 36)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
+    }
+
+    // MARK: - Title Section
+
+    private var titleSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
             Text(vm.currentStep.title)
-                .font(.system(size: 28, weight: .bold))
-                .foregroundColor(.white)
-                .multilineTextAlignment(.center)
+                .font(.system(size: 26, weight: .bold))
+                .foregroundColor(colors.textPrimary)
 
             Text(vm.currentStep.subtitle)
                 .font(.system(size: 14))
-                .foregroundColor(AppTheme.textSecondary)
-                .multilineTextAlignment(.center)
+                .foregroundColor(colors.textSecondary)
         }
-        .padding(.horizontal, AppTheme.spacingMD)
-        .padding(.top, AppTheme.spacingLG)
-        .padding(.bottom, AppTheme.spacingMD)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 16)
     }
 
     // MARK: - Step Content
 
-    private var stepContent: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                stepView(for: vm.currentStep)
-            }
-            .padding(.horizontal, AppTheme.spacingMD)
+    private var stepContentSection: some View {
+        VStack(spacing: 0) {
+            stepView(for: vm.currentStep)
         }
+        .padding(.horizontal, 20)
         .transition(.asymmetric(
             insertion: .move(edge: .trailing).combined(with: .opacity),
             removal: .move(edge: .leading).combined(with: .opacity)
@@ -92,28 +139,35 @@ struct OnboardingContainerView: View {
         }
     }
 
-    // MARK: - Navigation Buttons
+    // MARK: - Continue Button (inside card)
 
     @ViewBuilder
-    private var navigationButtons: some View {
+    private var continueButton: some View {
         if vm.currentStep == .ready {
             EmptyView()
         } else {
-            HStack(spacing: 12) {
-                if vm.currentStep != .name {
-                    SecondaryButton(title: "Back", icon: "chevron.left") {
-                        vm.previousStep()
-                    }
+            Button {
+                vm.nextStep()
+            } label: {
+                if vm.isLoading {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                } else {
+                    Text(localization.t("onboarding.continue"))
+                        .font(.system(size: 17, weight: .semibold))
                 }
-
-                PrimaryButton(title: "Next", icon: "chevron.right", isLoading: vm.isLoading) {
-                    vm.nextStep()
-                }
-                .opacity(vm.canProceed ? 1.0 : 0.5)
-                .disabled(!vm.canProceed)
             }
-            .padding(.horizontal, AppTheme.spacingMD)
-            .padding(.bottom, AppTheme.spacingLG)
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(vm.canProceed ? AppTheme.rose : AppTheme.roseLight)
+            )
+            .disabled(!vm.canProceed || vm.isLoading)
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .padding(.bottom, 24)
         }
     }
 }
@@ -122,16 +176,65 @@ struct OnboardingContainerView: View {
 
 private struct NameStepContent: View {
     @ObservedObject var vm: OnboardingViewModel
+    @Environment(\.adaptiveColors) private var colors
+    @FocusState private var isFocused: Bool
 
     var body: some View {
-        VStack(spacing: AppTheme.spacingMD) {
-            AppTextField(placeholder: "First name", text: $vm.firstName, icon: "person.fill")
+        VStack(spacing: 20) {
+            // Underline-style input matching web
+            VStack(alignment: .leading, spacing: 0) {
+                TextField("Enter your first name", text: $vm.firstName)
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundColor(colors.textPrimary)
+                    .focused($isFocused)
+                    .tint(AppTheme.rose)
+                    .padding(.bottom, 12)
 
-            Text("\(vm.firstName.count)/50")
-                .font(.system(size: 12))
-                .foregroundColor(AppTheme.textMuted)
-                .frame(maxWidth: .infinity, alignment: .trailing)
+                Rectangle()
+                    .fill(isFocused ? AppTheme.rose : colors.border)
+                    .frame(height: isFocused ? 2 : 1)
+                    .animation(.easeInOut(duration: 0.2), value: isFocused)
+
+                HStack {
+                    Text("Only your first name will be visible")
+                        .font(.system(size: 12))
+                        .foregroundColor(colors.textMuted)
+                    Spacer()
+                    Text("\(vm.firstName.count)/50")
+                        .font(.system(size: 12))
+                        .foregroundColor(colors.textMuted)
+                }
+                .padding(.top, 8)
+            }
+
+            // "Not Sindhi?" toggle card
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Not Sindhi? No worries!")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(colors.textPrimary)
+                    Text("Open to vibing with the Sindhi community")
+                        .font(.system(size: 12))
+                        .foregroundColor(colors.textSecondary)
+                }
+
+                Spacer()
+
+                Toggle("", isOn: $vm.isNonSindhi)
+                    .tint(AppTheme.rose)
+                    .labelsHidden()
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(AppTheme.rose.opacity(0.05))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(AppTheme.rose.opacity(0.1), lineWidth: 1)
+                    )
+            )
         }
+        .onAppear { isFocused = true }
     }
 }
 
@@ -139,52 +242,133 @@ private struct NameStepContent: View {
 
 private struct BirthdayStepContent: View {
     @ObservedObject var vm: OnboardingViewModel
-    @State private var dateOfBirth = Calendar.current.date(
-        from: DateComponents(year: 1998, month: 6, day: 15)
-    ) ?? Date()
+    @Environment(\.adaptiveColors) private var colors
+    @State private var dayText = ""
+    @State private var monthText = ""
+    @State private var yearText = ""
+    @FocusState private var focusedField: BirthdayField?
+
+    enum BirthdayField { case day, month, year }
+
+    private let months = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    ]
 
     var body: some View {
-        VStack(spacing: AppTheme.spacingMD) {
-            DatePicker(
-                "Date of Birth",
-                selection: $dateOfBirth,
-                in: ...Date(),
-                displayedComponents: .date
-            )
-            .datePickerStyle(.wheel)
-            .labelsHidden()
-            .colorScheme(.dark)
-            .onChange(of: dateOfBirth) { _, newValue in
-                updateViewModel(from: newValue)
+        VStack(spacing: 16) {
+            // 3-field input row matching web
+            HStack(spacing: 10) {
+                birthdayField(label: "Day", text: $dayText, field: .day, keyboardType: .numberPad)
+                monthPickerField
+                birthdayField(label: "Year", text: $yearText, field: .year, keyboardType: .numberPad)
             }
 
-            ageIndicator
+            // Age validation
+            if !dayText.isEmpty && !monthText.isEmpty && !yearText.isEmpty {
+                ageIndicator
+            }
         }
         .onAppear {
-            updateViewModel(from: dateOfBirth)
+            focusedField = .day
+        }
+        .onChange(of: dayText) { _, _ in updateVM() }
+        .onChange(of: monthText) { _, _ in updateVM() }
+        .onChange(of: yearText) { _, _ in updateVM() }
+    }
+
+    private func birthdayField(label: String, text: Binding<String>, field: BirthdayField, keyboardType: UIKeyboardType) -> some View {
+        TextField(label, text: text)
+            .font(.system(size: 17, weight: .medium))
+            .foregroundColor(colors.textPrimary)
+            .keyboardType(keyboardType)
+            .focused($focusedField, equals: field)
+            .tint(AppTheme.rose)
+            .padding(.horizontal, 14)
+            .frame(height: 52)
+            .background(colors.surfaceMedium)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(
+                        focusedField == field ? AppTheme.rose : colors.border,
+                        lineWidth: focusedField == field ? 1.5 : 1
+                    )
+            )
+    }
+
+    private var monthPickerField: some View {
+        Menu {
+            ForEach(Array(months.enumerated()), id: \.offset) { index, month in
+                Button("\(index + 1) - \(month)") {
+                    monthText = "\(index + 1)"
+                    vm.birthMonth = index + 1
+                }
+            }
+        } label: {
+            HStack {
+                TextField("Month", text: $monthText)
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundColor(colors.textPrimary)
+                    .keyboardType(.numberPad)
+                    .onChange(of: monthText) { _, newValue in
+                        if let num = Int(newValue), num >= 1, num <= 12 {
+                            vm.birthMonth = num
+                        }
+                    }
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10))
+                    .foregroundColor(colors.textMuted)
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 52)
+            .background(colors.surfaceMedium)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(colors.border, lineWidth: 1)
+            )
         }
     }
 
     private var ageIndicator: some View {
         let isValid = vm.isAgeValid
         return HStack(spacing: 8) {
-            Image(systemName: isValid ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+            Image(systemName: isValid ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .font(.system(size: 14))
                 .foregroundColor(isValid ? AppTheme.success : AppTheme.error)
-            Text(isValid ? "You're \(vm.age) years old" : "Must be 18+")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(isValid ? AppTheme.textPrimary : AppTheme.error)
+            Text(isValid ? "You're \(vm.age) years old" : "Must be 18 or older")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(isValid ? colors.textSecondary : AppTheme.error)
             Spacer()
         }
-        .padding(AppTheme.spacingMD)
-        .cardStyle()
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusCard))
+        .padding(.top, 4)
     }
 
-    private func updateViewModel(from date: Date) {
-        let comps = Calendar.current.dateComponents([.year, .month, .day], from: date)
-        vm.birthYear = comps.year ?? 1998
-        vm.birthMonth = comps.month ?? 6
-        vm.birthDay = comps.day ?? 15
+    private func updateVM() {
+        if let day = Int(dayText) { vm.birthDay = day }
+        if let year = Int(yearText) { vm.birthYear = year }
+    }
+}
+
+// MARK: - Radio Indicator (reusable, matches web design)
+
+private struct RadioIndicator: View {
+    let isSelected: Bool
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(isSelected ? AppTheme.rose : Color.gray.opacity(0.4), lineWidth: 2)
+                .frame(width: 24, height: 24)
+
+            if isSelected {
+                Circle()
+                    .fill(AppTheme.rose)
+                    .frame(width: 14, height: 14)
+                    .transition(.scale.combined(with: .opacity))
+            }
+        }
     }
 }
 
@@ -210,35 +394,47 @@ private struct GenderCard: View {
     let gender: Gender
     let isSelected: Bool
     let action: () -> Void
+    @Environment(\.adaptiveColors) private var colors
+
+    private var iconName: String {
+        switch gender {
+        case .man: return "figure.stand"
+        case .woman: return "figure.stand.dress"
+        case .nonBinary: return "figure.2"
+        }
+    }
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 16) {
-                Image(systemName: gender.icon)
-                    .font(.system(size: 24))
-                    .foregroundColor(isSelected ? AppTheme.rose : AppTheme.textMuted)
-                    .frame(width: 40)
+                Image(systemName: iconName)
+                    .font(.system(size: 22))
+                    .foregroundColor(isSelected ? AppTheme.rose : colors.textMuted)
+                    .frame(width: 44, height: 44)
+                    .background(
+                        Circle()
+                            .fill(isSelected ? AppTheme.rose.opacity(0.1) : colors.surfaceMedium)
+                    )
 
                 Text(gender.display)
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundColor(.white)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(colors.textPrimary)
 
                 Spacer()
 
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(AppTheme.rose)
-                        .transition(.scale.combined(with: .opacity))
-                }
+                RadioIndicator(isSelected: isSelected)
             }
             .padding(18)
         }
-        .cardStyle()
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusCard))
-        .overlay(
+        .background(
             RoundedRectangle(cornerRadius: AppTheme.radiusCard)
-                .stroke(isSelected ? AppTheme.rose : Color.clear, lineWidth: 1.5)
+                .fill(colors.cardDark)
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.radiusCard)
+                        .stroke(isSelected ? AppTheme.rose : colors.border, lineWidth: isSelected ? 1.5 : 0.5)
+                )
         )
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusCard))
     }
 }
 
@@ -246,6 +442,9 @@ private struct GenderCard: View {
 
 private struct PhotosStepContent: View {
     @ObservedObject var vm: OnboardingViewModel
+    @Environment(\.adaptiveColors) private var colors
+    @State private var selectedItems: [PhotosPickerItem] = []
+    @State private var showPicker = false
     private let columns = [
         GridItem(.flexible(), spacing: 12),
         GridItem(.flexible(), spacing: 12),
@@ -254,88 +453,148 @@ private struct PhotosStepContent: View {
 
     var body: some View {
         VStack(spacing: AppTheme.spacingMD) {
-            LazyVGrid(columns: columns, spacing: 12) {
+            LazyVGrid(columns: columns, spacing: 10) {
                 ForEach(0..<6, id: \.self) { index in
-                    if index < vm.selectedPhotos.count {
+                    if index < vm.selectedImages.count {
                         filledPhotoSlot(at: index)
                     } else {
-                        emptyPhotoSlot
+                        emptyPhotoSlot(index: index)
                     }
                 }
             }
 
             photoCountLabel
+
+            // Progress bar
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(colors.border)
+                        .frame(height: 6)
+                    Capsule()
+                        .fill(AppTheme.rose)
+                        .frame(width: geo.size.width * (Double(vm.selectedImages.count) / 6.0), height: 6)
+                        .animation(.easeOut(duration: 0.3), value: vm.selectedImages.count)
+                }
+            }
+            .frame(height: 6)
+
+            Text("Profiles with 3+ photos get 4x more matches")
+                .font(.system(size: 12))
+                .foregroundColor(colors.textMuted)
+                .multilineTextAlignment(.center)
+        }
+        .photosPicker(
+            isPresented: $showPicker,
+            selection: $selectedItems,
+            maxSelectionCount: 6 - vm.selectedImages.count,
+            matching: .images
+        )
+        .onChange(of: selectedItems) { _, newItems in
+            Task {
+                for item in newItems {
+                    if let data = try? await item.loadTransferable(type: Data.self),
+                       let image = UIImage(data: data) {
+                        vm.addImage(image)
+                    }
+                }
+                selectedItems = []
+            }
         }
     }
 
     private func filledPhotoSlot(at index: Int) -> some View {
-        ZStack(alignment: .topTrailing) {
-            RoundedRectangle(cornerRadius: AppTheme.radiusLG)
-                .fill(
-                    LinearGradient(
-                        colors: [AppTheme.rose.opacity(0.3), AppTheme.roseDark.opacity(0.2)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+        ZStack {
+            Image(uiImage: vm.selectedImages[index])
+                .resizable()
+                .scaledToFill()
+                .frame(minWidth: 0, maxWidth: .infinity)
                 .aspectRatio(3.0 / 4.0, contentMode: .fill)
-                .overlay(
-                    Image(systemName: "person.fill")
-                        .font(.system(size: 30))
-                        .foregroundColor(.white.opacity(0.5))
-                )
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .shadow(color: colors.cardShadowColor, radius: 6, x: 0, y: 3)
 
-            Button { vm.removePhoto(at: index) } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 20))
-                    .foregroundColor(.white)
-                    .shadow(radius: 4)
+            // Remove button (top-right)
+            VStack {
+                HStack {
+                    Spacer()
+                    Button { vm.removePhoto(at: index) } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 28, height: 28)
+                            .background(Circle().fill(Color.black.opacity(0.5)))
+                    }
+                    .padding(6)
+                }
+                Spacer()
             }
-            .offset(x: 4, y: -4)
 
+            // MAIN badge (bottom-left, index 0 only)
             if index == 0 {
-                mainBadge
+                VStack {
+                    Spacer()
+                    HStack {
+                        HStack(spacing: 3) {
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 8))
+                            Text("MAIN")
+                                .font(.system(size: 10, weight: .bold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(AppTheme.gold)
+                        .clipShape(Capsule())
+                        .padding(6)
+                        Spacer()
+                    }
+                }
             }
         }
     }
 
-    private var mainBadge: some View {
-        Text("Main")
-            .font(.system(size: 10, weight: .bold))
-            .foregroundColor(.white)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(AppTheme.roseGradient)
-            .clipShape(Capsule())
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(8)
-    }
-
-    private var emptyPhotoSlot: some View {
-        Button { vm.addPhoto() } label: {
-            RoundedRectangle(cornerRadius: AppTheme.radiusLG)
-                .strokeBorder(
-                    Color.white.opacity(0.2),
-                    style: StrokeStyle(lineWidth: 1.5, dash: [8])
-                )
+    private func emptyPhotoSlot(index: Int) -> some View {
+        Button { showPicker = true } label: {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(colors.surfaceMedium.opacity(0.5))
                 .aspectRatio(3.0 / 4.0, contentMode: .fill)
                 .overlay(
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 28))
-                        .foregroundColor(AppTheme.textMuted)
+                    RoundedRectangle(cornerRadius: 16)
+                        .strokeBorder(
+                            Color.gray.opacity(0.3),
+                            style: StrokeStyle(lineWidth: 1.5, dash: [6])
+                        )
+                )
+                .overlay(
+                    VStack(spacing: 6) {
+                        if index == 0 && vm.selectedImages.isEmpty {
+                            // First slot: camera icon + Main label
+                            Image(systemName: "photo.badge.plus")
+                                .font(.system(size: 28))
+                                .foregroundColor(colors.textMuted.opacity(0.6))
+                            HStack(spacing: 3) {
+                                Image(systemName: "star")
+                                    .font(.system(size: 10))
+                                Text("Main")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .foregroundColor(AppTheme.gold)
+                        } else {
+                            // Other slots: just a + icon
+                            Image(systemName: "plus")
+                                .font(.system(size: 24, weight: .light))
+                                .foregroundColor(colors.textMuted.opacity(0.5))
+                        }
+                    }
                 )
         }
     }
 
     private var photoCountLabel: some View {
         HStack {
-            Text("\(vm.selectedPhotos.count)/6 photos")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(AppTheme.textSecondary)
-            Spacer()
-            Text("Min 1 required")
-                .font(.system(size: 12))
-                .foregroundColor(AppTheme.textMuted)
+            Text("\(vm.selectedImages.count)/6")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(colors.textSecondary)
         }
     }
 }
@@ -362,35 +621,62 @@ private struct IntentCard: View {
     let intent: Intent
     let isSelected: Bool
     let action: () -> Void
+    @Environment(\.adaptiveColors) private var colors
+
+    private var iconName: String {
+        switch intent {
+        case .casual: return "cup.and.saucer.fill"
+        case .open: return "sparkles"
+        case .marriage: return "heart.circle.fill"
+        }
+    }
+
+    private var descriptionText: String {
+        switch intent {
+        case .casual: return "Keep it light and fun"
+        case .open: return "See where it goes"
+        case .marriage: return "Looking to settle down"
+        }
+    }
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 16) {
-                Image(systemName: intent.icon)
+            HStack(alignment: .top, spacing: 16) {
+                Image(systemName: iconName)
                     .font(.system(size: 24))
-                    .foregroundColor(isSelected ? AppTheme.rose : AppTheme.textMuted)
-                    .frame(width: 40)
+                    .foregroundColor(isSelected ? AppTheme.rose : colors.textMuted)
+                    .frame(width: 44, height: 44)
+                    .background(
+                        Circle()
+                            .fill(isSelected ? AppTheme.rose.opacity(0.1) : colors.surfaceMedium)
+                    )
 
-                Text(intent.display)
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundColor(.white)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(intent.display)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(colors.textPrimary)
+
+                    Text(descriptionText)
+                        .font(.system(size: 14))
+                        .foregroundColor(colors.textSecondary)
+                }
 
                 Spacer()
 
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(AppTheme.rose)
-                        .transition(.scale.combined(with: .opacity))
-                }
+                RadioIndicator(isSelected: isSelected)
+                    .padding(.top, 6)
             }
             .padding(18)
         }
-        .cardStyle()
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusCard))
-        .overlay(
+        .background(
             RoundedRectangle(cornerRadius: AppTheme.radiusCard)
-                .stroke(isSelected ? AppTheme.rose : Color.clear, lineWidth: 1.5)
+                .fill(colors.cardDark)
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.radiusCard)
+                        .stroke(isSelected ? AppTheme.rose : colors.border, lineWidth: isSelected ? 1.5 : 0.5)
+                )
         )
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusCard))
     }
 }
 
@@ -402,7 +688,7 @@ private struct ShowMeStepContent: View {
     var body: some View {
         VStack(spacing: 12) {
             ForEach(ShowMe.allCases) { pref in
-                ShowMeCapsule(pref: pref, isSelected: vm.selectedShowMe == pref) {
+                ShowMeCard(pref: pref, isSelected: vm.selectedShowMe == pref) {
                     withAnimation(.spring(response: 0.3)) {
                         vm.selectedShowMe = pref
                     }
@@ -412,44 +698,51 @@ private struct ShowMeStepContent: View {
     }
 }
 
-private struct ShowMeCapsule: View {
+private struct ShowMeCard: View {
     let pref: ShowMe
     let isSelected: Bool
     let action: () -> Void
+    @Environment(\.adaptiveColors) private var colors
+
+    private var iconName: String {
+        switch pref {
+        case .men: return "figure.stand"
+        case .women: return "figure.stand.dress"
+        case .everyone: return "figure.2"
+        }
+    }
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: pref == .everyone ? "person.2.fill" : "person.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(isSelected ? .white : AppTheme.textSecondary)
+            HStack(spacing: 16) {
+                Image(systemName: iconName)
+                    .font(.system(size: 22))
+                    .foregroundColor(isSelected ? AppTheme.rose : colors.textMuted)
+                    .frame(width: 44, height: 44)
+                    .background(
+                        Circle()
+                            .fill(isSelected ? AppTheme.rose.opacity(0.1) : colors.surfaceMedium)
+                    )
 
                 Text(pref.display)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(isSelected ? .white : AppTheme.textSecondary)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(colors.textPrimary)
 
                 Spacer()
 
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white)
-                }
+                RadioIndicator(isSelected: isSelected)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            .background(
-                Capsule()
-                    .fill(isSelected ? AppTheme.rose : AppTheme.surfaceMedium)
-            )
-            .overlay(
-                Capsule()
-                    .stroke(
-                        isSelected ? AppTheme.rose : Color.white.opacity(0.08),
-                        lineWidth: isSelected ? 1.5 : 0.5
-                    )
-            )
+            .padding(18)
         }
+        .background(
+            RoundedRectangle(cornerRadius: AppTheme.radiusCard)
+                .fill(colors.cardDark)
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.radiusCard)
+                        .stroke(isSelected ? AppTheme.rose : colors.border, lineWidth: isSelected ? 1.5 : 0.5)
+                )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusCard))
     }
 }
 
@@ -457,20 +750,256 @@ private struct ShowMeCapsule: View {
 
 private struct LocationStepContent: View {
     @ObservedObject var vm: OnboardingViewModel
-    @State private var city = ""
-    @State private var state = ""
-    @State private var country = ""
+    @Environment(\.adaptiveColors) private var colors
+    @StateObject private var locationDetector = LocationDetector()
+    @State private var searchText = ""
+    @FocusState private var isSearchFocused: Bool
+
+    private let mockCities = [
+        "Mumbai", "Delhi", "Bangalore", "Hyderabad", "Chennai",
+        "Pune", "Ahmedabad", "Kolkata", "Jaipur", "Lucknow",
+        "Dubai", "Abu Dhabi", "London", "New York", "Toronto",
+        "Singapore", "Hong Kong", "Sydney", "Nairobi", "Lagos"
+    ]
+
+    private var filteredCities: [String] {
+        if searchText.isEmpty { return mockCities }
+        return mockCities.filter { $0.localizedCaseInsensitiveContains(searchText) }
+    }
 
     var body: some View {
         VStack(spacing: AppTheme.spacingMD) {
-            AppTextField(placeholder: "City", text: $city, icon: "mappin.circle.fill")
-                .onChange(of: city) { _, newValue in
-                    vm.selectedCity = newValue.isEmpty ? nil : newValue
+            // Auto-detect location button
+            Button {
+                locationDetector.detectLocation { detectedCity, _, _ in
+                    if let c = detectedCity {
+                        vm.selectedCity = c
+                        searchText = ""
+                        isSearchFocused = false
+                    }
                 }
+            } label: {
+                HStack(spacing: 10) {
+                    if locationDetector.isDetecting {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: AppTheme.rose))
+                            .scaleEffect(0.8)
+                    } else {
+                        Image(systemName: "location.fill")
+                            .font(.system(size: 16))
+                            .foregroundColor(AppTheme.rose)
+                    }
+                    Text(locationDetector.isDetecting ? "Detecting..." : "Use Current Location")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(AppTheme.rose)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: AppTheme.radiusMD)
+                        .fill(AppTheme.rose.opacity(0.08))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppTheme.radiusMD)
+                                .stroke(AppTheme.rose.opacity(0.2), lineWidth: 1)
+                        )
+                )
+            }
+            .disabled(locationDetector.isDetecting)
 
-            AppTextField(placeholder: "State / Province", text: $state, icon: "map.fill")
+            // Divider
+            HStack(spacing: 12) {
+                Rectangle().fill(colors.border).frame(height: 1)
+                Text("or search for a city")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(colors.textMuted)
+                Rectangle().fill(colors.border).frame(height: 1)
+            }
 
-            AppTextField(placeholder: "Country", text: $country, icon: "globe")
+            // Selected city card
+            if let selectedCity = vm.selectedCity, !selectedCity.isEmpty {
+                HStack(spacing: 12) {
+                    Image(systemName: "mappin.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(AppTheme.rose)
+
+                    Text(selectedCity)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(colors.textPrimary)
+
+                    Spacer()
+
+                    Button {
+                        vm.selectedCity = nil
+                        searchText = ""
+                        isSearchFocused = true
+                    } label: {
+                        Text("Change")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(AppTheme.rose)
+                    }
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: AppTheme.radiusMD)
+                        .fill(AppTheme.rose.opacity(0.06))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppTheme.radiusMD)
+                                .stroke(AppTheme.rose.opacity(0.15), lineWidth: 1)
+                        )
+                )
+            } else {
+                // Search field
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 16))
+                        .foregroundColor(colors.textMuted)
+
+                    TextField("Search for a city...", text: $searchText)
+                        .font(.system(size: 16))
+                        .foregroundColor(colors.textPrimary)
+                        .focused($isSearchFocused)
+                        .tint(AppTheme.rose)
+                }
+                .padding(.horizontal, 14)
+                .frame(height: 48)
+                .background(colors.surfaceMedium)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(isSearchFocused ? AppTheme.rose : colors.border, lineWidth: isSearchFocused ? 1.5 : 1)
+                )
+
+                // City list
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(filteredCities, id: \.self) { city in
+                            Button {
+                                withAnimation(.spring(response: 0.3)) {
+                                    vm.selectedCity = city
+                                    searchText = ""
+                                    isSearchFocused = false
+                                }
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "mappin")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(colors.textMuted)
+                                        .frame(width: 24)
+
+                                    Text(city)
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundColor(colors.textPrimary)
+
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 12)
+                            }
+
+                            if city != filteredCities.last {
+                                Divider()
+                                    .padding(.leading, 50)
+                            }
+                        }
+                    }
+                }
+                .frame(maxHeight: 220)
+                .background(colors.surfaceMedium)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(colors.border, lineWidth: 1)
+                )
+            }
+        }
+    }
+}
+
+// MARK: - Location Detector
+
+import CoreLocation
+
+@MainActor
+class LocationDetector: NSObject, ObservableObject, CLLocationManagerDelegate {
+    @Published var isDetecting = false
+    private let manager = CLLocationManager()
+    private var completion: ((String?, String?, String?) -> Void)?
+
+    override init() {
+        super.init()
+        manager.delegate = self
+        manager.desiredAccuracy = kCLLocationAccuracyKilometer
+    }
+
+    func detectLocation(completion: @escaping (String?, String?, String?) -> Void) {
+        self.completion = completion
+        isDetecting = true
+        manager.requestWhenInUseAuthorization()
+        manager.requestLocation()
+    }
+
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let location = locations.first else { return }
+        let geocoder = CLGeocoder()
+        geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, _ in
+            Task { @MainActor in
+                guard let self else { return }
+                let placemark = placemarks?.first
+                self.isDetecting = false
+                self.completion?(
+                    placemark?.locality,
+                    placemark?.administrativeArea,
+                    placemark?.country
+                )
+            }
+        }
+    }
+
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        Task { @MainActor in
+            self.isDetecting = false
+            self.completion?(nil, nil, nil)
+        }
+    }
+}
+
+// MARK: - Confetti Particle
+
+private struct ConfettiParticle: View {
+    let color: Color
+    let isCircle: Bool
+    @State private var xOffset: CGFloat = 0
+    @State private var yOffset: CGFloat = -60
+    @State private var rotation: Double = 0
+    @State private var opacity: Double = 1
+
+    var body: some View {
+        Group {
+            if isCircle {
+                Circle()
+                    .fill(color)
+                    .frame(width: CGFloat.random(in: 6...10), height: CGFloat.random(in: 6...10))
+            } else {
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(color)
+                    .frame(width: CGFloat.random(in: 4...8), height: CGFloat.random(in: 8...14))
+            }
+        }
+        .rotationEffect(.degrees(rotation))
+        .offset(x: xOffset, y: yOffset)
+        .opacity(opacity)
+        .onAppear {
+            let randomX = CGFloat.random(in: -140...140)
+            let randomY = CGFloat.random(in: 200...400)
+            let delay = Double.random(in: 0...0.6)
+            withAnimation(.easeOut(duration: 2.0).delay(delay)) {
+                xOffset = randomX
+                yOffset = randomY
+                rotation = Double.random(in: -360...360)
+            }
+            withAnimation(.easeIn(duration: 0.8).delay(delay + 1.2)) {
+                opacity = 0
+            }
         }
     }
 }
@@ -479,78 +1008,256 @@ private struct LocationStepContent: View {
 
 private struct ReadyStepContent: View {
     @ObservedObject var vm: OnboardingViewModel
+    @Environment(\.adaptiveColors) private var colors
     let onComplete: () -> Void
-    @State private var animateCheckmark = false
+    @State private var animateEmoji = false
+    @State private var showConfetti = false
+    @State private var showEditProfile = false
+
+    private let confettiColors: [Color] = [
+        AppTheme.rose, .pink, .orange, .yellow, .purple, .blue, .green, .red
+    ]
+
+    private var profileCompleteness: Double {
+        var score = 0.0
+        if !vm.firstName.isEmpty { score += 0.2 }
+        if vm.selectedGender != nil { score += 0.15 }
+        if vm.selectedIntent != nil { score += 0.15 }
+        if vm.selectedShowMe != nil { score += 0.1 }
+        if vm.selectedCity != nil { score += 0.15 }
+        if !vm.selectedImages.isEmpty { score += 0.25 }
+        return min(score, 1.0)
+    }
 
     var body: some View {
-        VStack(spacing: AppTheme.spacingLG) {
-            Spacer().frame(height: 40)
+        ZStack {
+            VStack(spacing: 14) {
+                // Celebration icon with spring animation
+                Image(systemName: "party.popper.fill")
+                    .font(.system(size: 44))
+                    .foregroundStyle(AppTheme.roseGradient)
+                    .scaleEffect(animateEmoji ? 1.0 : 0.3)
+                    .animation(
+                        .spring(response: 0.6, dampingFraction: 0.5),
+                        value: animateEmoji
+                    )
 
-            checkmarkCircle
+                Text("You're In!")
+                    .font(.system(size: 26, weight: .bold))
+                    .foregroundColor(colors.textPrimary)
 
-            Text("You're all set!")
-                .font(.system(size: 24, weight: .bold))
-                .foregroundColor(.white)
+                Text("Welcome to the Sindhi community, \(vm.firstName)!")
+                    .font(.system(size: 14))
+                    .foregroundColor(colors.textSecondary)
+                    .multilineTextAlignment(.center)
 
-            Text("Welcome to the Sindhi community, \(vm.firstName)!")
-                .font(.system(size: 15))
-                .foregroundColor(AppTheme.textSecondary)
-                .multilineTextAlignment(.center)
+                // Profile preview card with gradient header
+                profileCardWithGradient
 
-            profilePreview
+                // Sindhi identity prompt (tappable → edit profile)
+                Button { showEditProfile = true } label: {
+                    sindhiIdentityPrompt
+                }
+                .sheet(isPresented: $showEditProfile) {
+                    NavigationStack {
+                        EditProfileView()
+                            .environmentObject(ProfileViewModel())
+                    }
+                }
 
-            Spacer().frame(height: 20)
+                // Go to Discover button
+                Button {
+                    onComplete()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("Go to Discover")
+                            .font(.system(size: 17, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(AppTheme.roseGradient)
+                    )
+                }
+            }
 
-            PrimaryButton(title: "Start Discovering", icon: "heart.circle.fill") {
-                onComplete()
+            // Confetti overlay
+            if showConfetti {
+                ForEach(0..<30, id: \.self) { i in
+                    ConfettiParticle(
+                        color: confettiColors[i % confettiColors.count],
+                        isCircle: i % 2 == 0
+                    )
+                }
+                .allowsHitTesting(false)
             }
         }
-    }
-
-    private var checkmarkCircle: some View {
-        ZStack {
-            Circle()
-                .fill(AppTheme.rose.opacity(0.15))
-                .frame(width: 140, height: 140)
-                .scaleEffect(animateCheckmark ? 1.1 : 0.95)
-                .animation(
-                    .easeInOut(duration: 1.5).repeatForever(autoreverses: true),
-                    value: animateCheckmark
-                )
-
-            Circle()
-                .fill(AppTheme.roseGradient)
-                .frame(width: 100, height: 100)
-
-            Image(systemName: "checkmark")
-                .font(.system(size: 44, weight: .bold))
-                .foregroundColor(.white)
-                .scaleEffect(animateCheckmark ? 1.0 : 0.5)
-                .animation(
-                    .spring(response: 0.5, dampingFraction: 0.6),
-                    value: animateCheckmark
-                )
+        .onAppear {
+            animateEmoji = true
+            showConfetti = true
         }
-        .onAppear { animateCheckmark = true }
     }
 
-    private var profilePreview: some View {
-        ContentCard {
-            HStack(spacing: 14) {
-                ProfileAvatar(url: nil, name: vm.firstName, size: 56, showBorder: true)
+    private var profileCardWithGradient: some View {
+        VStack(spacing: 0) {
+            // Rose gradient header with centered avatar (matching web)
+            ZStack {
+                LinearGradient(
+                    colors: [AppTheme.rose, AppTheme.roseDark],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .frame(height: 120)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("\(vm.firstName), \(vm.age)")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(.white)
-
-                    Text(vm.selectedCity ?? "")
-                        .font(.system(size: 13))
-                        .foregroundColor(AppTheme.textSecondary)
+                // Sparkle icons
+                VStack {
+                    HStack {
+                        Spacer()
+                        Image(systemName: "sparkle")
+                            .font(.system(size: 14))
+                            .foregroundColor(.white.opacity(0.5))
+                            .padding(12)
+                    }
+                    Spacer()
+                    HStack {
+                        Image(systemName: "sparkle")
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.4))
+                            .padding(12)
+                        Spacer()
+                    }
                 }
-                Spacer()
+                .frame(height: 120)
+
+                // Centered avatar - show real photo if available
+                ZStack {
+                    Circle()
+                        .fill(Color.white.opacity(0.2))
+                        .frame(width: 72, height: 72)
+
+                    Circle()
+                        .stroke(Color.white.opacity(0.3), lineWidth: 3)
+                        .frame(width: 72, height: 72)
+
+                    if let img = UserImageStore.shared.profileImage {
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 68, height: 68)
+                            .clipShape(Circle())
+                    } else {
+                        Text(String(vm.firstName.prefix(1)).uppercased())
+                            .font(.system(size: 30, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                }
+            }
+            .clipShape(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 16,
+                    bottomLeadingRadius: 0,
+                    bottomTrailingRadius: 0,
+                    topTrailingRadius: 16
+                )
+            )
+
+            // Profile info section (white)
+            VStack(alignment: .leading, spacing: 10) {
+                // Name, age
+                Text("\(vm.firstName), \(vm.age)")
+                    .font(.system(size: 19, weight: .bold))
+                    .foregroundColor(colors.textPrimary)
+
+                // Location
+                if let city = vm.selectedCity {
+                    HStack(spacing: 4) {
+                        Image(systemName: "mappin.circle")
+                            .font(.system(size: 13))
+                        Text("\(city), India")
+                            .font(.system(size: 14))
+                    }
+                    .foregroundColor(colors.textSecondary)
+                }
+
+                // Completeness
+                VStack(spacing: 6) {
+                    HStack {
+                        Text("Profile completeness")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(colors.textMuted)
+                        Spacer()
+                        Text("\(Int(profileCompleteness * 100))%")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(AppTheme.rose)
+                    }
+
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(colors.border)
+                                .frame(height: 6)
+
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(AppTheme.roseGradient)
+                                .frame(width: geo.size.width * profileCompleteness, height: 6)
+                                .animation(.easeOut(duration: 0.8), value: profileCompleteness)
+                        }
+                    }
+                    .frame(height: 6)
+                }
+
+                Text("Fill out more to get better matches!")
+                    .font(.system(size: 12))
+                    .foregroundColor(colors.textMuted)
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
             .padding(16)
         }
+        .background(colors.cardDark)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(colors.border, lineWidth: 0.5)
+        )
+        .shadow(color: colors.cardShadowColor, radius: 8, x: 0, y: 4)
+    }
+
+    private var sindhiIdentityPrompt: some View {
+        HStack(spacing: 12) {
+            // Om icon in gold circle
+            Image(systemName: "om")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundColor(AppTheme.gold)
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(AppTheme.gold.opacity(0.15)))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Complete your Sindhi identity")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(colors.textPrimary)
+                Text("Add fluency, gotra, festivals for better cultural matching")
+                    .font(.system(size: 12))
+                    .foregroundColor(colors.textSecondary)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(colors.textMuted)
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(AppTheme.warning.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(AppTheme.warning.opacity(0.2), lineWidth: 1)
+                )
+        )
     }
 }

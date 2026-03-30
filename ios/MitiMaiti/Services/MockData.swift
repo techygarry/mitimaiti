@@ -1,10 +1,23 @@
 import Foundation
 
 struct MockData {
-    // MARK: - Photo URLs (SF Symbols as placeholders - replace with real URLs)
+    // MARK: - Photo URLs (picsum.photos for real placeholder images)
     static let photoURLs = [
-        "photo_1", "photo_2", "photo_3", "photo_4", "photo_5",
-        "photo_6", "photo_7", "photo_8", "photo_9", "photo_10"
+        "https://i.pravatar.cc/600?img=1",
+        "https://i.pravatar.cc/600?img=5",
+        "https://i.pravatar.cc/600?img=9",
+        "https://i.pravatar.cc/600?img=12",
+        "https://i.pravatar.cc/600?img=16",
+        "https://i.pravatar.cc/600?img=20",
+        "https://i.pravatar.cc/600?img=25",
+        "https://i.pravatar.cc/600?img=32",
+        "https://i.pravatar.cc/600?img=36",
+        "https://i.pravatar.cc/600?img=41",
+        "https://i.pravatar.cc/600?img=45",
+        "https://i.pravatar.cc/600?img=48",
+        "https://i.pravatar.cc/600?img=49",
+        "https://i.pravatar.cc/600?img=56",
+        "https://i.pravatar.cc/600?img=57"
     ]
 
     // MARK: - Interests
@@ -104,65 +117,80 @@ struct MockData {
     }
 
     static let mockUsers: [User] = [
-        makeUser(name: "Priya", age: 26, city: "Mumbai", gender: .woman,
-                bio: "Architect by day, dancer by night. Love exploring hidden food joints and creating art.",
-                occupation: "Architect", company: "Foster + Partners", education: "B.Arch, IIT Bombay",
-                interests: ["Dancing", "Art", "Food", "Travel", "Photography"], photoIndex: 0),
+        makeUser(name: "Aanya", age: 25, city: "Mumbai", gender: .woman,
+                bio: "Interior designer who turns spaces into stories. Weekend potter, full-time dreamer. My happy place? A chai stall at sunset.",
+                occupation: "Interior Designer", company: "Studio Naya", education: "BDes, Rachana Sansad",
+                interests: ["Art", "Travel", "Coffee", "Photography", "Cooking"], photoIndex: 0),
 
-        makeUser(name: "Arjun", age: 28, city: "Dubai", gender: .man,
-                bio: "Tech entrepreneur building the future. Chai lover, cricket fanatic, and proud Sindhi.",
-                occupation: "Founder & CEO", company: "TechVentures", education: "MBA, ISB",
-                interests: ["Tech", "Cricket", "Coffee", "Travel", "Fitness"], photoIndex: 1),
+        makeUser(name: "Reyansh", age: 28, city: "Dubai", gender: .man,
+                bio: "Building fintech for South Asia. When I'm not coding, you'll find me on a cricket pitch or planning my next trek.",
+                occupation: "Co-Founder", company: "PaySindh", education: "MBA, SP Jain",
+                interests: ["Tech", "Cricket", "Hiking", "Travel", "Fitness"], photoIndex: 1),
 
-        makeUser(name: "Kavya", age: 24, city: "Bangalore", gender: .woman,
-                bio: "Yoga instructor who believes in mindful living. Fluent in 4 languages including Sindhi!",
-                occupation: "Yoga Instructor", company: "Soul Space Studio", education: "MA Psychology",
-                interests: ["Yoga", "Meditation", "Cooking", "Reading", "Music"], intent: .open, photoIndex: 2),
+        makeUser(name: "Tara", age: 26, city: "Bangalore", gender: .woman,
+                bio: "Neuroscience researcher by day, stand-up comedy open mic-er by night. I speak fluent sarcasm and decent Sindhi.",
+                occupation: "Research Scientist", company: "IISc Bangalore", education: "PhD Neuroscience",
+                interests: ["Music", "Reading", "Coffee", "Movies", "Yoga"], intent: .open, photoIndex: 2),
 
-        makeUser(name: "Rohan", age: 30, city: "London", gender: .man,
-                bio: "Investment banker with a love for Bollywood and biryani. Family is everything to me.",
-                occupation: "VP, Investment Banking", company: "Goldman Sachs", education: "MSc Finance, LSE",
-                interests: ["Bollywood", "Food", "Cricket", "Travel", "Fitness"], photoIndex: 3),
+        makeUser(name: "Advait", age: 30, city: "London", gender: .man,
+                bio: "Architect designing homes people actually love. Vinyl collector, amateur pasta maker, and hopeless romantic.",
+                occupation: "Senior Architect", company: "Zaha Hadid Architects", education: "MArch, AA London",
+                interests: ["Art", "Cooking", "Music", "Travel", "Photography"], photoIndex: 3),
 
-        makeUser(name: "Anaya", age: 25, city: "Delhi", gender: .woman,
-                bio: "Doctor saving lives and cooking dal pakwan on weekends. Looking for my forever person.",
-                occupation: "Resident Doctor", company: "AIIMS Delhi", education: "MBBS, AIIMS",
-                interests: ["Cooking", "Reading", "Music", "Volunteering", "Travel"], photoIndex: 4),
+        makeUser(name: "Siya", age: 24, city: "Delhi", gender: .woman,
+                bio: "Documentary filmmaker telling untold stories. Currently working on a film about Sindhi diaspora. Chai > Coffee, always.",
+                occupation: "Filmmaker", company: "Independent", education: "Mass Comm, Jamia",
+                interests: ["Movies", "Travel", "Writing", "Volunteering", "Photography"], photoIndex: 4),
 
-        makeUser(name: "Vikram", age: 27, city: "Pune", gender: .man,
-                bio: "Software engineer at heart, musician by soul. Can play 3 instruments and code in 5 languages.",
-                occupation: "Senior Engineer", company: "Google", education: "B.Tech, NIT",
-                interests: ["Music", "Tech", "Gaming", "Coffee", "Photography"], intent: .open, photoIndex: 5),
+        makeUser(name: "Kabir", age: 27, city: "Pune", gender: .man,
+                bio: "ML engineer teaching machines to think. Weekend DJ and terrible dancer. Will cook biryani for you on the third date.",
+                occupation: "ML Engineer", company: "Microsoft", education: "M.Tech, IIT Pune",
+                interests: ["Tech", "Music", "Gaming", "Food", "Dancing"], intent: .open, photoIndex: 5),
 
-        makeUser(name: "Meera", age: 29, city: "Singapore", gender: .woman,
-                bio: "Consultant helping businesses grow. Weekend hiker and amateur chef. Sindhi and proud!",
-                occupation: "Strategy Consultant", company: "McKinsey", education: "MBA, INSEAD",
-                interests: ["Hiking", "Cooking", "Travel", "Reading", "Fashion"], photoIndex: 6),
+        makeUser(name: "Zara", age: 28, city: "Singapore", gender: .woman,
+                bio: "Private equity analyst with a travel obsession. 30 countries and counting. Looking for a co-pilot for the next adventure.",
+                occupation: "VP, Private Equity", company: "Temasek", education: "BCom, SRCC + CFA",
+                interests: ["Travel", "Fitness", "Reading", "Fashion", "Hiking"], photoIndex: 6),
 
-        makeUser(name: "Sahil", age: 26, city: "Toronto", gender: .man,
-                bio: "Data scientist who speaks in probabilities. Love dogs, sunset drives, and my mom's cooking.",
-                occupation: "Data Scientist", company: "Shopify", education: "MS CS, UofT",
-                interests: ["Tech", "Photography", "Cycling", "Movies", "Food"], photoIndex: 7),
+        makeUser(name: "Vivaan", age: 26, city: "Toronto", gender: .man,
+                bio: "Emergency room physician in training. Stress relief = guitar + my golden retriever named Naan. Yes, like the bread.",
+                occupation: "Medical Resident", company: "Mount Sinai Hospital", education: "MD, UofT",
+                interests: ["Music", "Fitness", "Cooking", "Photography", "Movies"], photoIndex: 7),
 
-        makeUser(name: "Isha", age: 27, city: "Mumbai", gender: .woman,
-                bio: "Fashion designer creating fusion Indo-western pieces. Believe in tradition with a modern twist.",
-                occupation: "Fashion Designer", company: "Studio Isha", education: "BDes, NIFT",
-                interests: ["Fashion", "Art", "Dancing", "Travel", "Photography"], photoIndex: 8),
+        makeUser(name: "Myra", age: 27, city: "Mumbai", gender: .woman,
+                bio: "Brand strategist for luxury labels. I believe in slow mornings, deep conversations, and spontaneous road trips.",
+                occupation: "Brand Strategist", company: "Estee Lauder", education: "MBA, IIM Ahmedabad",
+                interests: ["Fashion", "Art", "Travel", "Coffee", "Yoga"], photoIndex: 8),
 
-        makeUser(name: "Dev", age: 31, city: "Hyderabad", gender: .man,
-                bio: "Cardiologist who runs marathons. My idea of romance: cooking together and watching sunsets.",
-                occupation: "Cardiologist", company: "Apollo Hospitals", education: "MD, Cardiology",
-                interests: ["Fitness", "Cooking", "Travel", "Cricket", "Reading"], photoIndex: 9),
+        makeUser(name: "Arnav", age: 31, city: "Hyderabad", gender: .man,
+                bio: "Restaurateur who opened a modern Sindhi fusion kitchen. If food is the way to your heart, I have a reservation for two.",
+                occupation: "Chef & Owner", company: "Swaad Sindhi Kitchen", education: "Le Cordon Bleu, Paris",
+                interests: ["Cooking", "Food", "Travel", "Cricket", "Bollywood"], photoIndex: 9),
 
-        makeUser(name: "Nisha", age: 23, city: "Ahmedabad", gender: .woman,
-                bio: "Law student fighting for justice. Garba champion and chai addict. Looking for my equal.",
-                occupation: "Law Student", company: "NLU Ahmedabad", education: "BA LLB",
-                interests: ["Dancing", "Reading", "Volunteering", "Theatre", "Coffee"], intent: .casual, photoIndex: 0),
+        makeUser(name: "Kiara", age: 23, city: "Ahmedabad", gender: .woman,
+                bio: "Final year law student and moot court champion. Part-time garba instructor. Full-time believer in finding your person.",
+                occupation: "Law Student", company: "NLU Ahmedabad", education: "BA LLB (Hons)",
+                interests: ["Dancing", "Reading", "Volunteering", "Theatre", "Coffee"], intent: .casual, photoIndex: 10),
 
-        makeUser(name: "Karan", age: 29, city: "San Francisco", gender: .man,
-                bio: "Product manager at a unicorn startup. Miss home food but mastered mom's dal recipe!",
-                occupation: "Product Manager", company: "Stripe", education: "BS CS, Stanford",
-                interests: ["Tech", "Cooking", "Hiking", "Photography", "Coffee"], photoIndex: 1)
+        makeUser(name: "Dhruv", age: 29, city: "San Francisco", gender: .man,
+                bio: "Staff engineer at a Big Tech company. Weekend trail runner and home barista. Mastered mom's koki recipe — taste test available.",
+                occupation: "Staff Engineer", company: "Meta", education: "MS CS, CMU",
+                interests: ["Tech", "Cooking", "Hiking", "Photography", "Coffee"], photoIndex: 11),
+
+        makeUser(name: "Anvi", age: 26, city: "Jaipur", gender: .woman,
+                bio: "Textile designer preserving Sindhi craft traditions in modern fashion. My ajrak collection has its own room.",
+                occupation: "Textile Designer", company: "Anvi Weaves", education: "NID Ahmedabad",
+                interests: ["Fashion", "Art", "Travel", "Photography", "Music"], photoIndex: 12),
+
+        makeUser(name: "Yash", age: 32, city: "Melbourne", gender: .man,
+                bio: "Dentist who makes people smile — literally. Weekend surfer and terrible pun maker. Looking for someone who laughs at bad jokes.",
+                occupation: "Dentist", company: "SmileCraft Dental", education: "BDS, Manipal + MDS Melbourne",
+                interests: ["Fitness", "Travel", "Cooking", "Swimming", "Movies"], photoIndex: 13),
+
+        makeUser(name: "Riya", age: 25, city: "Kolkata", gender: .woman,
+                bio: "Classical Kathak dancer turned contemporary choreographer. I express through movement what words can't say.",
+                occupation: "Choreographer", company: "Nritya Academy", education: "MA Performing Arts",
+                interests: ["Dancing", "Music", "Yoga", "Art", "Meditation"], intent: .open, photoIndex: 14)
     ]
 
     // MARK: - Feed Cards

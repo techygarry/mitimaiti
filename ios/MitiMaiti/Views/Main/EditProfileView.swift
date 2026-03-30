@@ -3,13 +3,29 @@ import SwiftUI
 struct EditProfileView: View {
     @EnvironmentObject var profileVM: ProfileViewModel
     @Environment(\.dismiss) var dismiss
+    @Environment(\.adaptiveColors) private var colors
 
-    // MARK: - Section expansion state
-    @State private var basicsExpanded = true
-    @State private var sindhiExpanded = false
-    @State private var culturalExpanded = false
-    @State private var personalityExpanded = false
-    @State private var photosExpanded = false
+    // MARK: - Tab selection
+    @State private var selectedTab: EditProfileTab = .basics
+    @Namespace private var tabAnimation
+
+    enum EditProfileTab: String, CaseIterable {
+        case basics = "Basics"
+        case sindhi = "Sindhi"
+        case cultural = "Cultural"
+        case personality = "Personality"
+        case photos = "Photos"
+
+        var icon: String {
+            switch self {
+            case .basics: return "person.fill"
+            case .sindhi: return "globe.asia.australia.fill"
+            case .cultural: return "star.fill"
+            case .personality: return "paintpalette.fill"
+            case .photos: return "photo.on.rectangle.angled"
+            }
+        }
+    }
 
     // MARK: - Edit state (local copies)
     @State private var editName: String = ""
@@ -46,17 +62,16 @@ struct EditProfileView: View {
     @State private var editTravelStyle: String = ""
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: AppTheme.spacingSM) {
-                basicsSection
-                sindhiSection
-                culturalSection
-                personalitySection
-                photosSection
-                Spacer().frame(height: 100)
+        VStack(spacing: 0) {
+            tabBar
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: AppTheme.spacingSM) {
+                    selectedTabContent
+                    Spacer().frame(height: 100)
+                }
+                .padding(.horizontal, AppTheme.spacingMD)
+                .padding(.top, AppTheme.spacingSM)
             }
-            .padding(.horizontal, AppTheme.spacingMD)
-            .padding(.top, AppTheme.spacingSM)
         }
         .appBackground()
         .navigationTitle("Edit Profile")
@@ -64,7 +79,7 @@ struct EditProfileView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button("Cancel") { dismiss() }
-                    .foregroundColor(AppTheme.textSecondary)
+                    .foregroundColor(colors.textSecondary)
             }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
@@ -100,20 +115,80 @@ struct EditProfileView: View {
             .padding(.bottom, 80)
     }
 
+    // MARK: - Tab Bar
+
+    private var tabBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(EditProfileTab.allCases, id: \.self) { tab in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            selectedTab = tab
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: tab.icon)
+                                .font(.system(size: 12, weight: .semibold))
+                            Text(tab.rawValue)
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundColor(selectedTab == tab ? .white : colors.textSecondary)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(
+                            Group {
+                                if selectedTab == tab {
+                                    Capsule()
+                                        .fill(AppTheme.roseGradient)
+                                        .matchedGeometryEffect(id: "tabIndicator", in: tabAnimation)
+                                } else {
+                                    Capsule()
+                                        .fill(colors.surfaceMedium)
+                                        .overlay(
+                                            Capsule()
+                                                .stroke(colors.borderSubtle, lineWidth: 0.5)
+                                        )
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+            .padding(.horizontal, AppTheme.spacingMD)
+            .padding(.vertical, 10)
+        }
+        .background(colors.surfaceDark)
+    }
+
+    // MARK: - Selected Tab Content
+
+    @ViewBuilder
+    private var selectedTabContent: some View {
+        switch selectedTab {
+        case .basics:
+            basicsSection
+        case .sindhi:
+            sindhiSection
+        case .cultural:
+            culturalSection
+        case .personality:
+            personalitySection
+        case .photos:
+            photosSection
+        }
+    }
+
     // MARK: - Section 1: Basics
 
     private var basicsSection: some View {
-        sectionDisclosure(
-            title: "Basics",
-            icon: "person.fill",
-            isExpanded: $basicsExpanded
-        ) {
+        ContentCard {
             VStack(spacing: AppTheme.spacingSM) {
                 basicsNameBio
                 basicsDateHeight
                 basicsWorkFields
                 lifestylePickers
             }
+            .padding(AppTheme.spacingMD)
         }
     }
 
@@ -133,13 +208,13 @@ struct EditProfileView: View {
             if editBio.isEmpty {
                 Text("Tell others about yourself...")
                     .font(.system(size: 14))
-                    .foregroundColor(AppTheme.textMuted)
+                    .foregroundColor(colors.textMuted)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 20)
             }
             TextEditor(text: $editBio)
                 .font(.system(size: 14))
-                .foregroundColor(.white)
+                .foregroundColor(colors.textPrimary)
                 .frame(height: 100)
                 .scrollContentBackground(.hidden)
                 .padding(.horizontal, 12)
@@ -147,10 +222,10 @@ struct EditProfileView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: AppTheme.radiusMD)
-                .fill(AppTheme.surfaceMedium)
+                .fill(colors.surfaceMedium)
                 .overlay(
                     RoundedRectangle(cornerRadius: AppTheme.radiusMD)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                        .stroke(colors.borderSubtle, lineWidth: 0.5)
                 )
         )
     }
@@ -173,7 +248,7 @@ struct EditProfileView: View {
                 Stepper(value: $editHeight, in: 120...220) {
                     Text("\(editHeight) cm")
                         .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(AppTheme.textPrimary)
+                        .foregroundColor(colors.textPrimary)
                 }
                 .tint(AppTheme.rose)
             }
@@ -233,15 +308,12 @@ struct EditProfileView: View {
     // MARK: - Section 2: Sindhi Identity
 
     private var sindhiSection: some View {
-        sectionDisclosure(
-            title: "Sindhi Identity",
-            icon: "globe.asia.australia.fill",
-            isExpanded: $sindhiExpanded
-        ) {
+        ContentCard {
             VStack(spacing: AppTheme.spacingSM) {
                 sindhiFluencyField
                 sindhiTextFields
             }
+            .padding(AppTheme.spacingMD)
         }
     }
 
@@ -286,10 +358,10 @@ struct EditProfileView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: AppTheme.radiusMD)
-                .fill(AppTheme.surfaceMedium)
+                .fill(colors.surfaceMedium)
                 .overlay(
                     RoundedRectangle(cornerRadius: AppTheme.radiusMD)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                        .stroke(colors.borderSubtle, lineWidth: 0.5)
                 )
         )
     }
@@ -297,15 +369,12 @@ struct EditProfileView: View {
     // MARK: - Section 3: Cultural
 
     private var culturalSection: some View {
-        sectionDisclosure(
-            title: "Cultural",
-            icon: "star.fill",
-            isExpanded: $culturalExpanded
-        ) {
+        ContentCard {
             VStack(spacing: AppTheme.spacingSM) {
                 culturalPickerFields
                 culturalChipFields
             }
+            .padding(AppTheme.spacingMD)
         }
     }
 
@@ -355,10 +424,10 @@ struct EditProfileView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: AppTheme.radiusMD)
-                .fill(AppTheme.surfaceMedium)
+                .fill(colors.surfaceMedium)
                 .overlay(
                     RoundedRectangle(cornerRadius: AppTheme.radiusMD)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                        .stroke(colors.borderSubtle, lineWidth: 0.5)
                 )
         )
     }
@@ -366,15 +435,12 @@ struct EditProfileView: View {
     // MARK: - Section 4: Personality
 
     private var personalitySection: some View {
-        sectionDisclosure(
-            title: "Personality",
-            icon: "paintpalette.fill",
-            isExpanded: $personalityExpanded
-        ) {
+        ContentCard {
             VStack(spacing: AppTheme.spacingSM) {
                 personalityChipFields
                 personalityTextFields
             }
+            .padding(AppTheme.spacingMD)
         }
     }
 
@@ -404,12 +470,9 @@ struct EditProfileView: View {
     // MARK: - Section 5: Photos
 
     private var photosSection: some View {
-        sectionDisclosure(
-            title: "Photos",
-            icon: "photo.on.rectangle.angled",
-            isExpanded: $photosExpanded
-        ) {
+        ContentCard {
             photosGrid
+                .padding(AppTheme.spacingMD)
         }
     }
 
@@ -435,13 +498,13 @@ struct EditProfileView: View {
     private func photoSlot(photo: UserPhoto) -> some View {
         ZStack(alignment: .topTrailing) {
             RoundedRectangle(cornerRadius: AppTheme.radiusMD)
-                .fill(AppTheme.surfaceMedium)
+                .fill(colors.surfaceMedium)
                 .aspectRatio(3 / 4, contentMode: .fit)
                 .overlay(
                     VStack(spacing: 4) {
                         Image(systemName: "photo.fill")
                             .font(.system(size: 24))
-                            .foregroundColor(AppTheme.textMuted)
+                            .foregroundColor(colors.textMuted)
                         if photo.isPrimary {
                             Text("Primary")
                                 .font(.system(size: 10, weight: .semibold))
@@ -454,7 +517,7 @@ struct EditProfileView: View {
                         .stroke(
                             photo.isPrimary
                                 ? AppTheme.rose.opacity(0.5)
-                                : Color.white.opacity(0.1),
+                                : colors.border,
                             lineWidth: photo.isPrimary ? 1.5 : 0.5
                         )
                 )
@@ -465,7 +528,7 @@ struct EditProfileView: View {
                     .foregroundColor(AppTheme.error)
                     .background(
                         Circle()
-                            .fill(AppTheme.background)
+                            .fill(colors.background)
                             .frame(width: 18, height: 18)
                     )
             }
@@ -476,7 +539,7 @@ struct EditProfileView: View {
     private var addPhotoSlot: some View {
         Button { } label: {
             RoundedRectangle(cornerRadius: AppTheme.radiusMD)
-                .fill(AppTheme.surfaceDark)
+                .fill(colors.surfaceDark)
                 .aspectRatio(3 / 4, contentMode: .fit)
                 .overlay(
                     VStack(spacing: 6) {
@@ -485,73 +548,16 @@ struct EditProfileView: View {
                             .foregroundColor(AppTheme.rose.opacity(0.6))
                         Text("Add Photo")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(AppTheme.textMuted)
+                            .foregroundColor(colors.textMuted)
                     }
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: AppTheme.radiusMD)
                         .stroke(
-                            Color.white.opacity(0.1),
+                            colors.border,
                             style: StrokeStyle(lineWidth: 1, dash: [6, 4])
                         )
                 )
-        }
-    }
-
-    // MARK: - Reusable: Section Disclosure
-
-    private func sectionDisclosure<Content: View>(
-        title: String,
-        icon: String,
-        isExpanded: Binding<Bool>,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        ContentCard {
-            VStack(alignment: .leading, spacing: 0) {
-                disclosureHeader(title: title, icon: icon, isExpanded: isExpanded)
-
-                if isExpanded.wrappedValue {
-                    Divider()
-                        .background(Color.white.opacity(0.08))
-                        .padding(.horizontal, AppTheme.spacingMD)
-
-                    content()
-                        .padding(AppTheme.spacingMD)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-            }
-        }
-    }
-
-    private func disclosureHeader(
-        title: String,
-        icon: String,
-        isExpanded: Binding<Bool>
-    ) -> some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.25)) {
-                isExpanded.wrappedValue.toggle()
-            }
-        } label: {
-            HStack(spacing: AppTheme.spacingSM) {
-                Image(systemName: icon)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(AppTheme.rose)
-                    .frame(width: 24)
-
-                Text(title)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(AppTheme.textPrimary)
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(AppTheme.rose)
-                    .rotationEffect(.degrees(isExpanded.wrappedValue ? 90 : 0))
-                    .animation(.easeInOut(duration: 0.25), value: isExpanded.wrappedValue)
-            }
-            .padding(AppTheme.spacingMD)
         }
     }
 
@@ -569,7 +575,7 @@ struct EditProfileView: View {
                     .foregroundColor(AppTheme.rose)
                 Text(label)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(AppTheme.textSecondary)
+                    .foregroundColor(colors.textSecondary)
             }
             content()
         }
@@ -593,10 +599,10 @@ struct EditProfileView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: AppTheme.radiusMD)
-                .fill(AppTheme.surfaceMedium)
+                .fill(colors.surfaceMedium)
                 .overlay(
                     RoundedRectangle(cornerRadius: AppTheme.radiusMD)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                        .stroke(colors.borderSubtle, lineWidth: 0.5)
                 )
         )
     }
@@ -762,6 +768,7 @@ private struct ChipButton: View {
     let option: String
     let isSelected: Bool
     let action: () -> Void
+    @Environment(\.adaptiveColors) private var colors
 
     var body: some View {
         Button(action: action) {
@@ -778,17 +785,17 @@ private struct ChipButton: View {
     }
 
     private var chipForeground: Color {
-        isSelected ? .white : AppTheme.textSecondary
+        isSelected ? .white : colors.textSecondary
     }
 
     private var chipBackground: some View {
-        Capsule().fill(isSelected ? AppTheme.rose : AppTheme.surfaceMedium)
+        Capsule().fill(isSelected ? AppTheme.rose : colors.surfaceMedium)
     }
 
     private var chipBorder: some View {
         Capsule()
             .stroke(
-                isSelected ? AppTheme.rose.opacity(0.6) : Color.white.opacity(0.08),
+                isSelected ? AppTheme.rose.opacity(0.6) : colors.borderSubtle,
                 lineWidth: 0.5
             )
     }

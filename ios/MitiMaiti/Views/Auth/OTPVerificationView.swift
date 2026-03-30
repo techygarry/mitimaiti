@@ -3,6 +3,8 @@ import SwiftUI
 struct OTPVerificationView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @Environment(\.dismiss) var dismiss
+    @Environment(\.adaptiveColors) private var colors
+    private let localization = LocalizationManager.shared
 
     @FocusState private var focusedField: OTPField?
     @State private var digits: [String] = Array(repeating: "", count: 6)
@@ -19,30 +21,32 @@ struct OTPVerificationView: View {
 
     var body: some View {
         ZStack {
-            // Ambient accent glow
-            Circle()
-                .fill(AppTheme.gold.opacity(0.05))
-                .frame(width: 250, height: 250)
-                .blur(radius: 60)
-                .offset(x: 80, y: -250)
+            colors.background.ignoresSafeArea()
 
-            VStack(spacing: 28) {
-                Spacer().frame(height: 20)
-                headerSection
-                otpFieldsRow
-                demoHint
-                errorView
-                verifyButton
-                resendSection
-                Spacer()
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    Spacer().frame(height: 60)
+
+                    // White card container (matching web design)
+                    VStack(spacing: 0) {
+                        cardHeader
+                        cardContent
+                    }
+                    .background(colors.cardDark)
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                    .shadow(color: colors.elevatedShadowColor, radius: 24, x: 0, y: 8)
+                    .padding(.horizontal, AppTheme.spacingMD)
+                    .opacity(animateIn ? 1 : 0)
+                    .offset(y: animateIn ? 0 : 20)
+
+                    Spacer().frame(height: 40)
+                }
             }
         }
-        .appBackground()
         .navigationBarBackButtonHidden(true)
-        .toolbar { backButton }
         .onAppear {
             focusedField = .d0
-            withAnimation(.easeOut(duration: 0.5)) {
+            withAnimation(.easeOut(duration: 0.5).delay(0.1)) {
                 animateIn = true
             }
         }
@@ -53,54 +57,74 @@ struct OTPVerificationView: View {
         }
     }
 
-    // MARK: - Back Button
+    // MARK: - Card Header
 
-    private var backButton: some ToolbarContent {
-        ToolbarItem(placement: .navigationBarLeading) {
+    private var cardHeader: some View {
+        HStack {
             Button {
                 authVM.otpSent = false
                 dismiss()
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(AppTheme.textPrimary)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(colors.textPrimary)
                     .frame(width: 36, height: 36)
-                    .background(AppTheme.surfaceMedium)
+                    .background(colors.surfaceMedium)
                     .clipShape(Circle())
             }
+
+            Spacer()
+
+            Text("MitiMaiti")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(AppTheme.rose)
+
+            Spacer()
+
+            Color.clear.frame(width: 36, height: 36)
         }
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
+        .padding(.bottom, 8)
     }
 
-    // MARK: - Header
+    // MARK: - Card Content
 
-    private var headerSection: some View {
-        VStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(AppTheme.gold.opacity(0.12))
-                    .frame(width: 80, height: 80)
+    private var cardContent: some View {
+        VStack(spacing: 20) {
+            // Title & subtitle
+            VStack(spacing: 8) {
+                Text(localization.t("auth.verifyNumber"))
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(colors.textPrimary)
 
-                Image(systemName: "lock.shield.fill")
-                    .font(.system(size: 34))
-                    .foregroundStyle(AppTheme.goldGradient)
-                    .shadow(color: AppTheme.gold.opacity(0.4), radius: 10)
+                Text(localization.t("auth.enterCode"))
+                    .font(.system(size: 15))
+                    .foregroundColor(colors.textSecondary)
+
+                Text(maskedPhone)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(AppTheme.rose)
             }
-            .opacity(animateIn ? 1 : 0)
-            .scaleEffect(animateIn ? 1 : 0.7)
-            .animation(.spring(response: 0.6, dampingFraction: 0.7), value: animateIn)
 
-            Text("Verify your number")
-                .font(.system(size: 24, weight: .bold))
-                .foregroundColor(AppTheme.textPrimary)
+            // OTP input fields
+            otpFieldsRow
 
-            Text("Enter the 6-digit code sent to")
-                .font(.system(size: 14))
-                .foregroundColor(AppTheme.textSecondary)
+            // Demo hint
+            demoHint
 
-            Text(maskedPhone)
-                .font(.system(size: 15, weight: .semibold, design: .monospaced))
-                .foregroundColor(AppTheme.gold)
+            // Error
+            errorView
+
+            // Verify button
+            verifyButton
+
+            // Resend section
+            resendSection
         }
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 24)
     }
 
     // MARK: - OTP Fields
@@ -111,7 +135,6 @@ struct OTPVerificationView: View {
                 otpDigitBox(field: field)
             }
         }
-        .padding(.horizontal, AppTheme.spacingMD)
         .offset(x: shakeOffset)
     }
 
@@ -122,37 +145,36 @@ struct OTPVerificationView: View {
 
         let borderColor: Color = {
             if isFocused { return AppTheme.rose }
-            if hasValue { return AppTheme.rose.opacity(0.4) }
-            return Color.white.opacity(0.08)
+            if hasValue { return AppTheme.rose }
+            return colors.border
         }()
 
-        let borderWidth: CGFloat = isFocused ? 1.5 : 0.5
+        let bgColor: Color = hasValue
+            ? AppTheme.rose.opacity(0.05)
+            : colors.surfaceMedium
 
         return TextField("", text: $digits[index])
-            .font(.system(size: 26, weight: .bold, design: .monospaced))
-            .foregroundColor(AppTheme.textPrimary)
+            .font(.system(size: 24, weight: .bold))
+            .foregroundColor(colors.textPrimary)
             .multilineTextAlignment(.center)
             .keyboardType(.numberPad)
             .textContentType(.oneTimeCode)
-            .frame(width: 48, height: 58)
+            .frame(height: 52)
+            .frame(maxWidth: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(AppTheme.surfaceMedium)
+                    .fill(bgColor)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(borderColor, lineWidth: borderWidth)
-            )
-            .shadow(
-                color: isFocused ? AppTheme.rose.opacity(0.2) : Color.clear,
-                radius: 8, x: 0, y: 4
+                    .stroke(borderColor, lineWidth: isFocused ? 2 : 1)
             )
             .focused($focusedField, equals: field)
             .onChange(of: digits[index]) { _, newValue in
                 handleDigitChange(index: index, value: newValue)
             }
             .opacity(animateIn ? 1 : 0)
-            .offset(y: animateIn ? 0 : 15)
+            .offset(y: animateIn ? 0 : 10)
             .animation(
                 .spring(response: 0.4, dampingFraction: 0.75)
                     .delay(Double(index) * 0.05),
@@ -166,19 +188,15 @@ struct OTPVerificationView: View {
         HStack(spacing: 6) {
             Image(systemName: "info.circle")
                 .font(.system(size: 11))
-            Text("Demo code: 123456")
+            Text(localization.t("auth.demoCode"))
                 .font(.system(size: 12, weight: .medium))
         }
         .foregroundColor(AppTheme.gold)
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .background(
             Capsule()
                 .fill(AppTheme.gold.opacity(0.1))
-                .overlay(
-                    Capsule()
-                        .stroke(AppTheme.gold.opacity(0.2), lineWidth: 0.5)
-                )
         )
     }
 
@@ -201,15 +219,29 @@ struct OTPVerificationView: View {
     // MARK: - Verify Button
 
     private var verifyButton: some View {
-        PrimaryButton(
-            title: "Verify",
-            icon: "checkmark.circle.fill",
-            isLoading: authVM.isLoading
-        ) {
+        Button {
             authVM.otpCode = digits.joined()
             authVM.verifyOTP()
+        } label: {
+            HStack(spacing: 8) {
+                if authVM.isLoading {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(0.8)
+                } else {
+                    Text(localization.t("auth.verify"))
+                        .font(.system(size: 17, weight: .semibold))
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 16))
+                }
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .background(allDigitsFilled ? AppTheme.rose : AppTheme.rose.opacity(0.5))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
         }
-        .padding(.horizontal, AppTheme.spacingMD)
+        .disabled(authVM.isLoading || !allDigitsFilled)
     }
 
     // MARK: - Resend Section
@@ -217,67 +249,44 @@ struct OTPVerificationView: View {
     private var resendSection: some View {
         VStack(spacing: 8) {
             if authVM.resendCooldown > 0 {
-                cooldownRow
-            } else {
-                resendButton
+                HStack(spacing: 6) {
+                    Text(localization.t("auth.resendCodeIn"))
+                        .font(.system(size: 14))
+                        .foregroundColor(colors.textMuted)
+                    Text("\(authVM.resendCooldown)s")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(colors.textPrimary)
+                }
+            } else if authVM.resendCount < 3 {
+                Button {
+                    authVM.sendOTP()
+                    digits = Array(repeating: "", count: 6)
+                    focusedField = .d0
+                } label: {
+                    Text(localization.t("auth.resendCode"))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(AppTheme.rose)
+                }
             }
 
             if authVM.resendCount >= 3 {
-                Text("Maximum resend attempts reached")
+                Text(localization.t("auth.maxResend"))
                     .font(.system(size: 12))
                     .foregroundColor(AppTheme.error)
             }
         }
     }
 
-    private var cooldownRow: some View {
-        HStack(spacing: 6) {
-            ZStack {
-                Circle()
-                    .stroke(Color.white.opacity(0.1), lineWidth: 2)
-                    .frame(width: 22, height: 22)
-
-                Circle()
-                    .trim(from: 0, to: CGFloat(authVM.resendCooldown) / 30.0)
-                    .stroke(
-                        AppTheme.rose,
-                        style: StrokeStyle(lineWidth: 2, lineCap: .round)
-                    )
-                    .frame(width: 22, height: 22)
-                    .rotationEffect(.degrees(-90))
-                    .animation(.linear(duration: 1), value: authVM.resendCooldown)
-            }
-
-            Text("Resend code in \(authVM.resendCooldown)s")
-                .font(.system(size: 14, design: .monospaced))
-                .foregroundColor(AppTheme.textMuted)
-        }
-    }
-
-    private var resendButton: some View {
-        Button {
-            authVM.sendOTP()
-            digits = Array(repeating: "", count: 6)
-            focusedField = .d0
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 12, weight: .medium))
-                Text("Resend Code")
-                    .font(.system(size: 14, weight: .medium))
-            }
-            .foregroundColor(AppTheme.rose)
-        }
-        .disabled(authVM.resendCount >= 3)
-        .opacity(authVM.resendCount >= 3 ? 0.4 : 1)
-    }
-
     // MARK: - Helpers
+
+    private var allDigitsFilled: Bool {
+        digits.allSatisfy { !$0.isEmpty }
+    }
 
     private var maskedPhone: String {
         let phone = authVM.phone
         if phone.count >= 10 {
-            let masked = String(repeating: "*", count: phone.count - 4)
+            let masked = String(repeating: "•", count: phone.count - 4)
             return masked + phone.suffix(4)
         }
         return phone
@@ -296,7 +305,6 @@ struct OTPVerificationView: View {
                 submitAfterDelay()
                 return
             }
-            // Keep only last character
             digits[index] = String(cleaned.last ?? Character(""))
         }
 
@@ -311,8 +319,7 @@ struct OTPVerificationView: View {
         }
 
         // Auto-verify when all 6 digits entered
-        let allFilled = digits.allSatisfy { !$0.isEmpty }
-        if allFilled {
+        if allDigitsFilled {
             submitAfterDelay()
         }
     }

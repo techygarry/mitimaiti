@@ -5,6 +5,7 @@ import SwiftUI
 
 struct ContentCard<Content: View>: View {
     let content: Content
+    @Environment(\.adaptiveColors) private var colors
 
     init(@ViewBuilder content: () -> Content) {
         self.content = content()
@@ -14,14 +15,14 @@ struct ContentCard<Content: View>: View {
         content
             .background(
                 RoundedRectangle(cornerRadius: AppTheme.radiusCard)
-                    .fill(AppTheme.cardDark)
+                    .fill(colors.cardDark)
                     .overlay(
                         RoundedRectangle(cornerRadius: AppTheme.radiusCard)
-                            .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
+                            .stroke(colors.border, lineWidth: 0.5)
                     )
             )
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusCard))
-            .shadow(color: Color.black.opacity(0.25), radius: 12, x: 0, y: 6)
+            .shadow(color: colors.cardShadowColor, radius: 12, x: 0, y: 6)
     }
 }
 
@@ -198,7 +199,7 @@ struct SmallButton: View {
 }
 
 // MARK: - App Text Field
-// surfaceMedium background with rose highlight on focus
+// Adaptive background with rose highlight on focus
 
 struct AppTextField: View {
     let placeholder: String
@@ -206,17 +207,18 @@ struct AppTextField: View {
     var icon: String?
     var keyboardType: UIKeyboardType = .default
     @FocusState private var isFocused: Bool
+    @Environment(\.adaptiveColors) private var colors
 
     var body: some View {
         HStack(spacing: 12) {
             if let icon {
                 Image(systemName: icon)
-                    .foregroundColor(isFocused ? AppTheme.rose : AppTheme.textMuted)
+                    .foregroundColor(isFocused ? AppTheme.rose : colors.textMuted)
                     .frame(width: 20)
                     .animation(.easeInOut(duration: 0.2), value: isFocused)
             }
             TextField(placeholder, text: $text)
-                .foregroundColor(.white)
+                .foregroundColor(colors.textPrimary)
                 .keyboardType(keyboardType)
                 .autocorrectionDisabled()
                 .focused($isFocused)
@@ -224,17 +226,18 @@ struct AppTextField: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: AppTheme.radiusMD)
-                .fill(AppTheme.surfaceMedium)
+                .fill(colors.cardDark)
                 .overlay(
                     RoundedRectangle(cornerRadius: AppTheme.radiusMD)
                         .stroke(
                             isFocused
-                                ? AppTheme.rose.opacity(0.6)
-                                : Color.white.opacity(0.08),
-                            lineWidth: isFocused ? 1.2 : 0.5
+                                ? AppTheme.rose
+                                : colors.border,
+                            lineWidth: isFocused ? 1.5 : 1
                         )
                         .animation(.easeInOut(duration: 0.2), value: isFocused)
                 )
+                .shadow(color: colors.cardShadowColor, radius: 4, x: 0, y: 2)
         )
     }
 }
@@ -246,6 +249,7 @@ struct ToggleRow: View {
     let title: String
     let icon: String
     @Binding var isOn: Bool
+    @Environment(\.adaptiveColors) private var colors
 
     var body: some View {
         HStack {
@@ -253,7 +257,7 @@ struct ToggleRow: View {
                 .foregroundColor(AppTheme.rose)
                 .frame(width: 24)
             Text(title)
-                .foregroundColor(.white)
+                .foregroundColor(colors.textPrimary)
                 .font(.system(size: 15))
             Spacer()
             Toggle("", isOn: $isOn)
@@ -345,56 +349,87 @@ struct ProfileAvatar: View {
     let size: CGFloat
     var isOnline: Bool = false
     var showBorder: Bool = false
+    var useProfileImage: Bool = false
+    @Environment(\.adaptiveColors) private var colors
+    @ObservedObject private var imageStore = UserImageStore.shared
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            AppTheme.rose.opacity(0.7),
-                            AppTheme.roseDark.opacity(0.5)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: size, height: size)
-                .overlay(
-                    Text(name.initials)
-                        .font(.system(size: size * 0.35, weight: .semibold))
-                        .foregroundColor(.white)
-                )
-                .overlay(
-                    showBorder
-                        ? Circle()
-                            .stroke(
-                                LinearGradient(
-                                    colors: [AppTheme.rose, AppTheme.gold],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 2
-                            )
-                        : nil
-                )
+            // Show real profile photo if available and requested, or load from URL
+            if useProfileImage, let img = imageStore.profileImage {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
+                    .overlay(borderOverlay)
+            } else if let url, let imageURL = URL(string: url), url.hasPrefix("http") {
+                AsyncImage(url: imageURL) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                            .frame(width: size, height: size)
+                            .clipShape(Circle())
+                    default:
+                        initialsCircle
+                    }
+                }
+                .overlay(borderOverlay)
+            } else {
+                initialsCircle
+                    .overlay(borderOverlay)
+            }
 
             if isOnline {
                 Circle()
                     .fill(AppTheme.success)
                     .frame(width: size * 0.25, height: size * 0.25)
-                    .overlay(Circle().stroke(AppTheme.background, lineWidth: 2))
+                    .overlay(Circle().stroke(colors.background, lineWidth: 2))
             }
+        }
+    }
+
+    private var initialsCircle: some View {
+        Circle()
+            .fill(
+                LinearGradient(
+                    colors: [AppTheme.rose.opacity(0.7), AppTheme.roseDark.opacity(0.5)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .frame(width: size, height: size)
+            .overlay(
+                Text(name.initials)
+                    .font(.system(size: size * 0.35, weight: .semibold))
+                    .foregroundColor(.white)
+            )
+    }
+
+    @ViewBuilder
+    private var borderOverlay: some View {
+        if showBorder {
+            Circle()
+                .stroke(
+                    LinearGradient(
+                        colors: [AppTheme.rose, AppTheme.gold],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 2
+                )
+                .frame(width: size, height: size)
         }
     }
 }
 
 // MARK: - Message Bubble
-// "My" messages = rose gradient, "Their" = surfaceMedium, Icebreaker label in gold
+// "My" messages = rose gradient, "Their" = adaptive surfaceMedium, Icebreaker label in gold
 
 struct MessageBubble: View {
     let message: Message
     var showTimestamp: Bool = true
+    @Environment(\.adaptiveColors) private var colors
 
     var body: some View {
         HStack {
@@ -416,7 +451,7 @@ struct MessageBubble: View {
                 if message.msgType == .system {
                     Text(message.content)
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(AppTheme.textMuted)
+                        .foregroundColor(colors.textMuted)
                         .italic()
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
@@ -424,7 +459,7 @@ struct MessageBubble: View {
                     // Regular message bubble
                     Text(message.content)
                         .font(.system(size: 15))
-                        .foregroundColor(.white)
+                        .foregroundColor(message.isFromMe ? .white : colors.textPrimary)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
                         .background(bubbleBackground)
@@ -434,7 +469,7 @@ struct MessageBubble: View {
                                 .stroke(
                                     message.isFromMe
                                         ? Color.white.opacity(0.1)
-                                        : Color.white.opacity(0.06),
+                                        : colors.border,
                                     lineWidth: 0.5
                                 )
                         )
@@ -453,12 +488,10 @@ struct MessageBubble: View {
                     HStack(spacing: 4) {
                         Text(message.createdAt.messageTime)
                             .font(.system(size: 10))
-                            .foregroundColor(AppTheme.textMuted)
+                            .foregroundColor(colors.textMuted)
 
                         if message.isFromMe {
-                            Image(systemName: statusIcon)
-                                .font(.system(size: 10))
-                                .foregroundColor(statusColor)
+                            readReceiptIcon
                         }
                     }
                 }
@@ -474,22 +507,45 @@ struct MessageBubble: View {
             // "My" messages: rose gradient
             AppTheme.roseGradient
         } else {
-            // "Their" messages: solid surfaceMedium — no glass
-            AppTheme.surfaceMedium
+            // "Their" messages: adaptive surface
+            colors.surfaceMedium
         }
     }
 
-    private var statusIcon: String {
+    @ViewBuilder
+    private var readReceiptIcon: some View {
         switch message.status {
-        case .sending: return "clock"
-        case .sent: return "checkmark"
-        case .delivered: return "checkmark"
-        case .read: return "checkmark.circle.fill"
+        case .sending:
+            Image(systemName: "clock")
+                .font(.system(size: 10))
+                .foregroundColor(colors.textMuted)
+        case .sent:
+            Image(systemName: "checkmark")
+                .font(.system(size: 10))
+                .foregroundColor(colors.textMuted)
+        case .delivered:
+            ZStack(alignment: .leading) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10))
+                    .foregroundColor(colors.textMuted)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10))
+                    .foregroundColor(colors.textMuted)
+                    .offset(x: 4)
+            }
+            .frame(width: 18)
+        case .read:
+            ZStack(alignment: .leading) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10))
+                    .foregroundColor(AppTheme.rose)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10))
+                    .foregroundColor(AppTheme.rose)
+                    .offset(x: 4)
+            }
+            .frame(width: 18)
         }
-    }
-
-    private var statusColor: Color {
-        message.status == .read ? AppTheme.rose : AppTheme.textMuted
     }
 }
 
@@ -501,6 +557,7 @@ struct EmptyStateView: View {
     let message: String
     var actionTitle: String?
     var action: (() -> Void)?
+    @Environment(\.adaptiveColors) private var colors
 
     var body: some View {
         VStack(spacing: 16) {
@@ -516,11 +573,11 @@ struct EmptyStateView: View {
 
             Text(title)
                 .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundColor(colors.textPrimary)
 
             Text(message)
                 .font(.system(size: 14))
-                .foregroundColor(AppTheme.textSecondary)
+                .foregroundColor(colors.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
 
@@ -538,24 +595,25 @@ struct EmptyStateView: View {
 
 struct TypingIndicator: View {
     @State private var dotScale: [CGFloat] = [1, 1, 1]
+    @Environment(\.adaptiveColors) private var colors
 
     var body: some View {
         HStack {
             HStack(spacing: 4) {
                 ForEach(0..<3, id: \.self) { i in
                     Circle()
-                        .fill(AppTheme.textMuted)
+                        .fill(colors.textMuted)
                         .frame(width: 6, height: 6)
                         .scaleEffect(dotScale[i])
                 }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
-            .background(AppTheme.surfaceMedium)
+            .background(colors.surfaceMedium)
             .clipShape(RoundedRectangle(cornerRadius: 18))
             .overlay(
                 RoundedRectangle(cornerRadius: 18)
-                    .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
+                    .stroke(colors.border, lineWidth: 0.5)
             )
             Spacer()
         }

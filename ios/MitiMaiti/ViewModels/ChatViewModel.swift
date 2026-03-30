@@ -195,6 +195,16 @@ class ChatViewModel: ObservableObject {
     func receiveMessage(_ message: Message) {
         messages.append(message)
 
+        // Trigger a message notification
+        if let match {
+            NotificationManager.shared.addNotification(
+                type: .message,
+                title: "New message from \(match.otherUser.displayName)",
+                body: message.content,
+                actionData: match.id
+            )
+        }
+
         // If the match was locked and the other user just replied → UNLOCK
         if let match, match.firstMsgLocked {
             // The other user has replied — unlock the conversation

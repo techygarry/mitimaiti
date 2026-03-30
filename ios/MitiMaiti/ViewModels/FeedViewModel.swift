@@ -53,6 +53,14 @@ class FeedViewModel: ObservableObject {
                 if result.isMatch {
                     matchedUser = card.user
                     showMatchAlert = true
+
+                    // Trigger match notification
+                    NotificationManager.shared.addNotification(
+                        type: .match,
+                        title: "New Match!",
+                        body: "You and \(card.user.displayName) matched! Say hi before the timer runs out.",
+                        actionData: card.user.id
+                    )
                 }
             } catch {
                 self.error = error.localizedDescription

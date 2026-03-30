@@ -2,6 +2,7 @@ import SwiftUI
 
 struct InboxView: View {
     @EnvironmentObject var inboxVM: InboxViewModel
+    @Environment(\.adaptiveColors) private var colors
     @State private var selectedTab = 0
 
     var body: some View {
@@ -27,7 +28,7 @@ struct InboxView: View {
         HStack {
             Text("Inbox")
                 .font(.system(size: 28, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(colors.textPrimary)
             Spacer()
         }
         .padding(.horizontal)
@@ -61,10 +62,10 @@ struct InboxView: View {
         .padding(4)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(AppTheme.surfaceDark)
+                .fill(colors.surfaceDark)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
+                        .stroke(colors.border, lineWidth: 0.5)
                 )
         )
         .padding(.horizontal)
@@ -100,6 +101,7 @@ private struct InboxSegmentButton: View {
     let count: Int
     let isSelected: Bool
     let action: () -> Void
+    @Environment(\.adaptiveColors) private var colors
 
     var body: some View {
         Button(action: action) {
@@ -114,11 +116,11 @@ private struct InboxSegmentButton: View {
                         .padding(.vertical, 2)
                         .background(
                             Capsule()
-                                .fill(isSelected ? AppTheme.rose.opacity(0.3) : Color.white.opacity(0.1))
+                                .fill(isSelected ? AppTheme.rose.opacity(0.3) : colors.border)
                         )
                 }
             }
-            .foregroundColor(isSelected ? .white : AppTheme.textSecondary)
+            .foregroundColor(isSelected ? .white : colors.textSecondary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
             .background(
@@ -133,7 +135,7 @@ private struct InboxSegmentButton: View {
     }
 }
 
-// MARK: - Liked You Tab
+// MARK: - Liked You Tab (used by InboxView internal tabs)
 
 private struct LikedYouTabView: View {
     let likes: [LikedYouCard]
@@ -165,78 +167,7 @@ private struct LikedYouTabView: View {
     }
 }
 
-// MARK: - Liked You Card
-
-private struct LikedYouCardView: View {
-    let like: LikedYouCard
-
-    var body: some View {
-        Button {
-            print("Tapped profile: \(like.user.displayName)")
-        } label: {
-            likeCardBody
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var likeCardBody: some View {
-        ContentCard {
-            VStack(spacing: 10) {
-                ProfileAvatar(
-                    url: nil,
-                    name: like.user.displayName,
-                    size: 60,
-                    isOnline: like.user.isOnline,
-                    showBorder: true
-                )
-
-                VStack(spacing: 2) {
-                    Text(like.user.displayName)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-
-                    Text("\(like.user.age)")
-                        .font(.system(size: 13))
-                        .foregroundColor(AppTheme.textSecondary)
-                }
-
-                culturalBadge
-
-                Text(like.likeLabel)
-                    .font(.system(size: 11))
-                    .foregroundColor(AppTheme.textMuted)
-                    .lineLimit(1)
-
-                Text(like.likedAt.timeAgoShort)
-                    .font(.system(size: 10))
-                    .foregroundColor(AppTheme.textMuted)
-            }
-            .padding(.vertical, 14)
-            .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity)
-        }
-    }
-
-    private var culturalBadge: some View {
-        let badgeColor: Color = {
-            switch like.culturalBadge {
-            case .gold: return AppTheme.scoreGold
-            case .green: return AppTheme.scoreGreen
-            case .orange: return AppTheme.scoreOrange
-            case .none: return AppTheme.textMuted
-            }
-        }()
-
-        return ScoreTag(
-            label: "Cultural",
-            value: "\(like.culturalScore)%",
-            color: badgeColor
-        )
-    }
-}
-
-// MARK: - Matches Tab
+// MARK: - Matches Tab (used by InboxView internal tabs)
 
 private struct MatchesTabView: View {
     let matches: [Match]
@@ -249,96 +180,17 @@ private struct MatchesTabView: View {
                 message: "Start swiping on profiles to find your perfect match!"
             )
         } else {
-            matchList
-        }
-    }
-
-    private var matchList: some View {
-        ScrollView {
-            LazyVStack(spacing: 10) {
-                ForEach(matches) { match in
-                    NavigationLink(value: match) {
-                        MatchRowView(match: match)
+            ScrollView {
+                LazyVStack(spacing: 10) {
+                    ForEach(matches) { match in
+                        NavigationLink(value: match) {
+                            MatchRowView(match: match)
+                        }
                     }
                 }
-            }
-            .padding(.top, 12)
-            .padding(.bottom, 100)
-        }
-    }
-}
-
-// MARK: - Match Row
-
-private struct MatchRowView: View {
-    let match: Match
-
-    var body: some View {
-        HStack(spacing: 12) {
-            ProfileAvatar(
-                url: nil,
-                name: match.otherUser.displayName,
-                size: 52,
-                isOnline: match.otherUser.isOnline
-            )
-
-            matchInfo
-
-            Spacer()
-
-            matchTrailing
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .cardStyle()
-        .padding(.horizontal)
-    }
-
-    private var matchInfo: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(match.otherUser.displayName)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.white)
-
-            Text(match.lastMessage?.content ?? "Send the first message!")
-                .font(.system(size: 13))
-                .foregroundColor(AppTheme.textSecondary)
-                .lineLimit(1)
-        }
-    }
-
-    private var matchTrailing: some View {
-        VStack(alignment: .trailing, spacing: 6) {
-            if let lastMsg = match.lastMessage {
-                Text(lastMsg.createdAt.timeAgoShort)
-                    .font(.system(size: 11))
-                    .foregroundColor(AppTheme.textMuted)
-            }
-
-            if match.showCountdown, let exp = match.expiresAt {
-                CountdownBadge(expiresAt: exp)
-            }
-
-            if match.unreadCount > 0 {
-                MatchUnreadBadge(count: match.unreadCount)
+                .padding(.top, 12)
+                .padding(.bottom, 100)
             }
         }
-    }
-}
-
-// MARK: - Unread Badge
-
-private struct MatchUnreadBadge: View {
-    let count: Int
-
-    var body: some View {
-        Text("\(min(count, 99))")
-            .font(.system(size: 10, weight: .bold))
-            .foregroundColor(.white)
-            .frame(minWidth: 20, minHeight: 20)
-            .background(
-                Circle()
-                    .fill(AppTheme.rose)
-            )
     }
 }

@@ -13,6 +13,8 @@ class InboxViewModel: ObservableObject {
     var totalMatches: Int { matches.count }
     var unreadMessages: Int { matches.reduce(0) { $0 + $1.unreadCount } }
 
+    private var previousLikeIds: Set<String> = []
+
     func loadInbox() {
         guard !isLoading else { return }
         isLoading = true
@@ -24,6 +26,31 @@ class InboxViewModel: ObservableObject {
                 likes = result.likes
                 matches = result.matches
                 isLoading = false
+
+                // Create notifications for new likes we haven't seen before
+                let currentLikeIds = Set(likes.map(\.id))
+                let newLikeIds = currentLikeIds.subtracting(previousLikeIds)
+                if !previousLikeIds.isEmpty {
+                    for like in likes where newLikeIds.contains(like.id) {
+                        NotificationManager.shared.addNotification(
+                            type: .like,
+                            title: "\(like.user.displayName) liked your profile",
+                            body: "Check Liked You to see who!",
+                            actionData: like.user.id
+                        )
+                    }
+                }
+                previousLikeIds = currentLikeIds
+
+                // Schedule expiry reminders for matches with expiration
+                for match in matches {
+                    if let expiresAt = match.expiresAt, expiresAt > Date() {
+                        NotificationManager.shared.scheduleExpiryReminder(
+                            matchName: match.otherUser.displayName,
+                            expiresAt: expiresAt
+                        )
+                    }
+                }
             } catch {
                 self.error = error.localizedDescription
                 isLoading = false
@@ -35,14 +62,29 @@ class InboxViewModel: ObservableObject {
         guard let index = likes.firstIndex(where: { $0.id == likeId }) else { return }
         let like = likes.remove(at: index)
 
+        let expiresAt = Date().addingTimeInterval(86400)
         let match = Match(
             otherUser: like.user,
             status: .pendingFirstMessage,
             matchedAt: Date(),
-            expiresAt: Date().addingTimeInterval(86400),
+            expiresAt: expiresAt,
             firstMsgLocked: true
         )
         matches.insert(match, at: 0)
+
+        // Trigger match notification
+        NotificationManager.shared.addNotification(
+            type: .match,
+            title: "New Match!",
+            body: "You and \(like.user.displayName) matched! Say hi before the timer runs out.",
+            actionData: like.user.id
+        )
+
+        // Schedule expiry reminders for this new match
+        NotificationManager.shared.scheduleExpiryReminder(
+            matchName: like.user.displayName,
+            expiresAt: expiresAt
+        )
     }
 
     func passLike(likeId: String) {
