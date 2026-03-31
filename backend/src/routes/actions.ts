@@ -134,7 +134,7 @@ router.post(
 
     // Block check (both directions)
     const { data: block } = await supabase
-      .from('blocks')
+      .from('blocked_users')
       .select('id')
       .or(
         `and(blocker_id.eq.${user.id},blocked_id.eq.${targetUserId}),and(blocker_id.eq.${targetUserId},blocked_id.eq.${user.id})`,
@@ -538,19 +538,25 @@ router.get(
           id: like.actor_id,
           action_id: like.id,
           first_name: profile.display_name?.split(' ')[0] || 'Unknown',
+          display_name: profile.display_name || 'Unknown',
           age: profile.date_of_birth ? calculateAge(profile.date_of_birth) : null,
           city: profile.city,
           intent: profile.intent,
           is_verified: userMeta?.is_verified || false,
           photos: photos.map((p: any) => ({
-            url_600: p.url_medium,
-            url_1200: p.url_original,
+            url: p.url_original,
+            url_thumb: p.url_medium,
+            url_medium: p.url_medium,
+            is_primary: p.is_primary || false,
+            sort_order: p.sort_order || 0,
+            is_verified: false,
             is_video: false,
           })),
           about_me: profile.bio || null,
           interests,
           cultural_score: cs.total,
           cultural_badge: cs.badge,
+          like_label: 'Liked your profile',
           daily_prompt_answer: userMeta?.daily_prompt_answer || null,
           liked_at: like.created_at,
         });
@@ -629,7 +635,7 @@ router.get(
           .select('*', { count: 'exact', head: true })
           .eq('match_id', match.id)
           .neq('sender_id', user.id)
-          .eq('is_read', false);
+          .is('read_at', null);
 
         // Compute countdown timer for pending first message
         let countdown: { expires_at: string; seconds_remaining: number } | null = null;
@@ -646,15 +652,20 @@ router.get(
           match_id: match.id,
           user_id: otherId,
           first_name: profile?.display_name?.split(' ')[0] || 'Unknown',
+          display_name: profile?.display_name || 'Unknown',
           age: profile?.date_of_birth ? calculateAge(profile.date_of_birth) : null,
           city: profile?.city || null,
           is_verified: userMeta?.is_verified || false,
           photo: photo
-            ? { url_600: photo.url_medium, url_1200: photo.url_original }
+            ? { url: photo.url_original, url_thumb: photo.url_medium, url_medium: photo.url_medium }
             : null,
           cultural_score: match.cultural_score || 0,
           status: match.status,
-          matched_at: match.matched_at,
+          matched_at: match.matched_at || match.created_at,
+          expires_at: match.expires_at || null,
+          first_msg_by: match.first_msg_by || null,
+          first_msg_locked: match.first_msg_locked || false,
+          first_msg_at: match.first_msg_at || null,
           countdown,
           last_message: lastMessage
             ? {

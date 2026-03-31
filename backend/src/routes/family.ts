@@ -20,14 +20,14 @@ const INVITE_CODE_LENGTH = 6;
 // ─── Default permissions (all enabled) ──────────────────────────────────────
 
 const DEFAULT_PERMISSIONS: FamilyPermissions = {
-  photos: true,
-  bio: true,
-  education: true,
-  chatti: true,
-  kundli: true,
-  prompts: true,
-  voice: true,
-  cultural_badges: true,
+  canViewProfile: true,
+  canViewPhotos: true,
+  canViewBasics: true,
+  canViewSindhi: true,
+  canViewMatches: false,
+  canSuggest: true,
+  canViewCulturalScore: true,
+  canViewKundli: true,
 };
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
@@ -45,14 +45,14 @@ const joinSchema = z.object({
 
 const updateMemberSchema = z.object({
   permissions: z.object({
-    photos: z.boolean().optional(),
-    bio: z.boolean().optional(),
-    education: z.boolean().optional(),
-    chatti: z.boolean().optional(),
-    kundli: z.boolean().optional(),
-    prompts: z.boolean().optional(),
-    voice: z.boolean().optional(),
-    cultural_badges: z.boolean().optional(),
+    canViewProfile: z.boolean().optional(),
+    canViewPhotos: z.boolean().optional(),
+    canViewBasics: z.boolean().optional(),
+    canViewSindhi: z.boolean().optional(),
+    canViewMatches: z.boolean().optional(),
+    canSuggest: z.boolean().optional(),
+    canViewCulturalScore: z.boolean().optional(),
+    canViewKundli: z.boolean().optional(),
   }).optional(),
   is_revoked: z.boolean().optional(),
   revoke_all: z.boolean().optional(),
@@ -510,8 +510,8 @@ router.patch(
     if (permissions && Object.keys(permissions).length > 0) {
       // Validate all provided keys are valid FamilyPermissions keys
       const validKeys: (keyof FamilyPermissions)[] = [
-        'photos', 'bio', 'education', 'chatti',
-        'kundli', 'prompts', 'voice', 'cultural_badges',
+        'canViewProfile', 'canViewPhotos', 'canViewBasics', 'canViewSindhi',
+        'canViewMatches', 'canSuggest', 'canViewCulturalScore', 'canViewKundli',
       ];
 
       for (const key of Object.keys(permissions)) {
@@ -690,7 +690,7 @@ router.get(
 
     // Get blocked users for the owner (both directions)
     const { data: blocks } = await supabase
-      .from('blocks')
+      .from('blocked_users')
       .select('blocker_id, blocked_id')
       .or(`blocker_id.eq.${ownerId},blocked_id.eq.${ownerId}`);
 
@@ -718,8 +718,8 @@ router.get(
 
     // Build the select fields based on permissions
     const selectFields: string[] = ['user_id', 'display_name', 'date_of_birth', 'gender', 'city', 'country', 'intent'];
-    if (permissions.education) selectFields.push('education', 'occupation');
-    if (permissions.bio) selectFields.push('bio');
+    if (permissions.canViewBasics) selectFields.push('education', 'occupation');
+    if (permissions.canViewProfile) selectFields.push('bio');
 
     let query = supabase
       .from('basic_profiles')
@@ -765,17 +765,17 @@ router.get(
         gender: candidate.gender,
       };
 
-      if (permissions.education) {
+      if (permissions.canViewBasics) {
         enrichedCard.education = candidate.education;
         enrichedCard.occupation = candidate.occupation;
       }
 
-      if (permissions.bio) {
+      if (permissions.canViewProfile) {
         enrichedCard.bio = candidate.bio;
       }
 
       // Photos (only if permitted)
-      if (permissions.photos) {
+      if (permissions.canViewPhotos) {
         const { data: photos } = await supabase
           .from('photos')
           .select('url_medium, url_thumb, is_primary')
@@ -791,7 +791,7 @@ router.get(
       }
 
       // Cultural badges (only if permitted)
-      if (permissions.cultural_badges) {
+      if (permissions.canViewCulturalScore) {
         try {
           const { getCulturalScore } = await import('../services/scoring');
           const cs = await getCulturalScore(ownerId, candidate.user_id);
@@ -804,7 +804,7 @@ router.get(
       }
 
       // Prompts (only if permitted)
-      if (permissions.prompts) {
+      if (permissions.canViewProfile) {
         const { data: prompts } = await supabase
           .from('prompt_answers')
           .select('prompt_id, answer, created_at')

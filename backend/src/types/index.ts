@@ -6,7 +6,7 @@ export type Gender = 'man' | 'woman' | 'non-binary';
 export type Intent = 'casual' | 'open' | 'marriage';
 export type ShowMe = 'men' | 'women' | 'everyone';
 export type ActionType = 'like' | 'pass';
-export type MsgType = 'text' | 'photo' | 'voice' | 'gif' | 'icebreaker';
+export type MsgType = 'text' | 'photo' | 'voice' | 'gif' | 'icebreaker' | 'system';
 export type ReportReason = 'fake' | 'harassment' | 'spam' | 'photos' | 'underage' | 'safety';
 export type ReportPriority = 'P0' | 'P1' | 'P2';
 export type AdminAction = 'dismiss' | 'warn' | 'suspend' | 'ban';
@@ -14,9 +14,13 @@ export type ModerationAction = AdminAction;
 export type CulturalBadge = 'gold' | 'green' | 'orange' | 'none';
 export type KundliTier = 'excellent' | 'good' | 'challenging';
 export type FamilyRole = 'mom' | 'dad' | 'sibling' | 'grandparent' | 'uncle_aunt' | 'other';
-export type SindhiFluency = 'native' | 'fluent' | 'basic' | 'none';
-export type Dietary = 'veg' | 'non-veg' | 'vegan' | 'jain';
+export type SindhiFluency = 'native' | 'fluent' | 'conversational' | 'basic' | 'learning' | 'none';
+export type Dietary = 'veg' | 'non-veg' | 'vegan' | 'jain' | 'eggetarian' | 'vegetarian' | 'non_vegetarian';
 export type FamilyInvolvement = 'very' | 'moderate' | 'independent';
+export type FamilyValues = 'traditional' | 'moderate' | 'liberal';
+export type FoodPreference = 'vegetarian' | 'non_vegetarian' | 'vegan' | 'jain' | 'eggetarian';
+export type MatchStatus = 'pending_first_message' | 'active' | 'expired' | 'unmatched' | 'dissolved';
+export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read';
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -137,20 +141,43 @@ export interface ProfileTextScreenResult {
 export interface FeedCard {
   id: string;
   first_name: string;
+  display_name: string;
   age: number;
   city: string;
+  state: string | null;
+  country: string | null;
+  bio: string | null;
   intent: Intent;
   is_verified: boolean;
-  photos: { url_600: string; url_1200: string; is_video: boolean }[];
+  profile_completeness: number;
+  photos: { url: string; url_thumb: string; url_medium: string; is_primary: boolean; sort_order: number; is_verified: boolean; is_video: boolean }[];
   about_me: string | null;
   prompts: any[];
   interests: string[];
   cultural_score: number;
   cultural_badge: CulturalBadge;
+  cultural_breakdown: CulturalBreakdown | null;
   kundli_score: number | null;
   kundli_tier: KundliTier | null;
+  kundli_breakdown: KundliBreakdown | null;
   common_interests: number;
   daily_prompt_answer: string | null;
+  distance_km: number | null;
+  is_online: boolean;
+  last_active: string | null;
+  // Sindhi identity
+  sindhi_fluency: SindhiFluency | null;
+  family_values: FamilyValues | null;
+  food_preference: FoodPreference | null;
+  // Basics
+  height_cm: number | null;
+  education: string | null;
+  occupation: string | null;
+  company: string | null;
+  religion: string | null;
+  smoking: string | null;
+  drinking: string | null;
+  exercise: string | null;
 }
 
 // ─── Socket Events ────────────────────────────────────────────────────────────
@@ -181,12 +208,24 @@ export interface Icebreaker {
 // ─── Family Permissions ───────────────────────────────────────────────────────
 
 export interface FamilyPermissions {
-  photos: boolean;
-  bio: boolean;
-  education: boolean;
-  chatti: boolean;
-  kundli: boolean;
-  prompts: boolean;
-  voice: boolean;
-  cultural_badges: boolean;
+  canViewProfile: boolean;
+  canViewPhotos: boolean;
+  canViewBasics: boolean;
+  canViewSindhi: boolean;
+  canViewMatches: boolean;
+  canSuggest: boolean;
+  canViewCulturalScore: boolean;
+  canViewKundli: boolean;
 }
+
+// Legacy permission mapping for backward compatibility
+export const LEGACY_PERMISSION_MAP: Record<string, keyof FamilyPermissions> = {
+  photos: 'canViewPhotos',
+  bio: 'canViewProfile',
+  education: 'canViewBasics',
+  chatti: 'canViewSindhi',
+  kundli: 'canViewKundli',
+  prompts: 'canViewProfile',
+  voice: 'canViewProfile',
+  cultural_badges: 'canViewCulturalScore',
+};

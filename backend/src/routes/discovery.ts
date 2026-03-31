@@ -7,7 +7,7 @@ import { authenticate } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { getCulturalScore } from '../services/scoring';
 import { getKundliScore } from '../services/kundli';
-import { AuthenticatedRequest, FeedCard, CulturalBadge, KundliTier } from '../types';
+import { AuthenticatedRequest, FeedCard, CulturalBadge, KundliTier, FamilyValues, FoodPreference, SindhiFluency } from '../types';
 
 const router = Router();
 
@@ -317,7 +317,7 @@ router.get(
     ] = await Promise.all([
       // Blocked both directions
       supabase
-        .from('blocks')
+        .from('blocked_users')
         .select('blocker_id, blocked_id')
         .or(`blocker_id.eq.${user.id},blocked_id.eq.${user.id}`),
 
@@ -331,8 +331,8 @@ router.get(
 
       // Users in snooze mode
       supabase
-        .from('user_settings')
-        .select('user_id')
+        .from('users')
+        .select('id')
         .eq('is_snoozed', true),
 
       // Incognito users who liked me (exception: they SHOULD appear)
@@ -353,7 +353,7 @@ router.get(
     );
 
     const snoozedIds = new Set<string>(
-      (snoozedUsers || []).map((s: any) => s.user_id),
+      (snoozedUsers || []).map((s: any) => s.id),
     );
 
     const incognitoExceptionIds = new Set<string>(
@@ -506,7 +506,7 @@ router.get(
     // Get user metadata (active status, ban status, verification, completeness, etc.)
     const { data: usersMeta } = await supabase
       .from('users')
-      .select('id, is_active, is_banned, is_hidden, is_verified, profile_completeness, last_active_at, created_at')
+      .select('id, is_banned, is_hidden, is_verified, is_online, profile_completeness, last_active, created_at')
       .in('id', candidateIds);
 
     const metaMap = new Map<string, any>();
@@ -515,12 +515,12 @@ router.get(
     // Get incognito status
     const { data: incognitoSettings } = await supabase
       .from('user_settings')
-      .select('user_id, is_incognito')
+      .select('user_id, incognito_mode')
       .in('user_id', candidateIds);
 
     const incognitoMap = new Map<string, boolean>();
     (incognitoSettings || []).forEach((s: any) => {
-      incognitoMap.set(s.user_id, s.is_incognito === true);
+      incognitoMap.set(s.user_id, s.incognito_mode === true);
     });
 
     // Apply soft filters from additional settings (drinking, smoking, kids, fluency, gotra, etc.)
@@ -551,11 +551,11 @@ router.get(
       const meta = metaMap.get(cId);
       if (!meta) continue;
 
-      // Hard filter: banned, hidden, inactive
-      if (meta.is_banned || meta.is_hidden || !meta.is_active) continue;
+      // Hard filter: banned, hidden
+      if (meta.is_banned || meta.is_hidden) continue;
 
       // Hard filter: inactive 30d+
-      if (meta.last_active_at && new Date(meta.last_active_at) < new Date(inactiveThreshold)) continue;
+      if (meta.last_active && new Date(meta.last_active) < new Date(inactiveThreshold)) continue;
 
       // Hard filter: snoozed
       if (snoozedIds.has(cId)) continue;
@@ -654,7 +654,7 @@ router.get(
           const feedScore = computeFeedScore(
             culturalScore,
             meta.profile_completeness || 0,
-            meta.last_active_at || meta.created_at,
+            meta.last_active || meta.created_at,
             intentMatch,
             meta.created_at,
           );
@@ -804,33 +804,92 @@ router.get(
     // Compute common interests with current user
     const myInterests = new Set<string>(interestMap.get(user.id) || []);
 
+    // Fetch additional profile data for the cards (sindhi, chatti, basics for new fields)
+    const [
+      { data: sindhiForCards },
+      { data: chattiForCards },
+      { data: basicsForCards },
+    ] = await Promise.all([
+      supabase
+        .from('sindhi_profiles')
+        .select('user_id, sindhi_fluency, food_preference')
+        .in('user_id', allPageIds),
+      supabase
+        .from('chatti_profiles')
+        .select('user_id, family_values, food_preference')
+        .in('user_id', allPageIds),
+      supabase
+        .from('basic_profiles')
+        .select('user_id, company, smoking, drinking, exercise')
+        .in('user_id', allPageIds),
+    ]);
+
+    const sindhiCardMap = new Map<string, any>();
+    (sindhiForCards || []).forEach((s: any) => sindhiCardMap.set(s.user_id, s));
+
+    const chattiCardMap = new Map<string, any>();
+    (chattiForCards || []).forEach((c: any) => chattiCardMap.set(c.user_id, c));
+
+    const basicsCardMap = new Map<string, any>();
+    (basicsForCards || []).forEach((b: any) => basicsCardMap.set(b.user_id, b));
+
     function buildCard(c: ScoredCandidate, isExplore: boolean = false): FeedCard & { is_explore?: boolean } {
       const userPhotos = photoMap.get(c.userId) || [];
       const userPrompts = promptMap.get(c.userId) || [];
       const userInterests = interestMap.get(c.userId) || [];
       const commonCount = userInterests.filter((i) => myInterests.has(i)).length;
+      const sindhiData = sindhiCardMap.get(c.userId);
+      const chattiData = chattiCardMap.get(c.userId);
+      const basicsData = basicsCardMap.get(c.userId);
 
       return {
         id: c.userId,
         first_name: c.profile.display_name?.split(' ')[0] || 'Unknown',
+        display_name: c.profile.display_name || 'Unknown',
         age: calculateAge(c.profile.date_of_birth),
         city: c.profile.city,
+        state: c.profile.state || null,
+        country: c.profile.country || null,
+        bio: c.profile.bio || null,
         intent: c.profile.intent,
         is_verified: c.userMeta.is_verified || false,
+        profile_completeness: c.userMeta.profile_completeness || 0,
         photos: userPhotos.map((p: any) => ({
-          url_600: p.url_medium,
-          url_1200: p.url_original,
-          is_video: false,
+          url: p.url_original,
+          url_thumb: p.url_thumb || p.url_medium,
+          url_medium: p.url_medium,
+          is_primary: p.is_primary || false,
+          sort_order: p.sort_order || 0,
+          is_verified: p.is_verified || false,
+          is_video: p.is_video || false,
         })),
         about_me: c.profile.bio || null,
         prompts: userPrompts.slice(0, 3),
         interests: userInterests,
         cultural_score: c.culturalScore,
         cultural_badge: c.culturalBadge,
+        cultural_breakdown: null, // populated on detail view
         kundli_score: c.kundliScore,
         kundli_tier: c.kundliTier,
+        kundli_breakdown: null, // populated on detail view
         common_interests: commonCount,
         daily_prompt_answer: dailyPromptMap.get(c.userId) || null,
+        distance_km: null, // TODO: geo distance calculation
+        is_online: c.userMeta.is_online || false,
+        last_active: c.userMeta.last_active_at || c.userMeta.last_active || null,
+        // Sindhi identity
+        sindhi_fluency: (sindhiData?.sindhi_fluency as SindhiFluency) || null,
+        family_values: (chattiData?.family_values as FamilyValues) || null,
+        food_preference: (chattiData?.food_preference || sindhiData?.food_preference) as FoodPreference || null,
+        // Basics
+        height_cm: c.profile.height_cm || null,
+        education: c.profile.education || null,
+        occupation: c.profile.occupation || null,
+        company: basicsData?.company || null,
+        religion: c.profile.religion || null,
+        smoking: basicsData?.smoking || null,
+        drinking: basicsData?.drinking || null,
+        exercise: basicsData?.exercise || null,
         ...(isExplore ? { is_explore: true } : {}),
       };
     }

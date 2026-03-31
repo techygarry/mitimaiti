@@ -440,6 +440,199 @@ router.post(
   })
 );
 
+// ─── POST /v1/chat/:matchId/messages ────────────────────────────────────────
+// Send a text message via REST API (iOS uses this alongside Socket.io).
+// Enforces Respect-First: first sender must wait for reply before sending again.
+
+router.post(
+  '/:matchId/messages',
+  authenticate,
+  rateLimit({ maxRequests: 60, windowSeconds: 60, keyPrefix: 'rl_chat_msg' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const user = (req as AuthenticatedRequest).user;
+    const { matchId } = req.params;
+    const { content, type: msgType = 'text', mediaUrl } = req.body;
+
+    if (!content && !mediaUrl) {
+      throw new AppError(400, 'Message content or media URL is required', 'EMPTY_MESSAGE');
+    }
+
+    const validTypes = ['text', 'photo', 'voice', 'gif', 'icebreaker'];
+    if (!validTypes.includes(msgType)) {
+      throw new AppError(400, `Invalid message type: ${msgType}`, 'INVALID_MSG_TYPE');
+    }
+
+    const { match, otherId } = await verifyMatchAccess(matchId, user.id);
+
+    // Check dissolved/expired
+    if (match.is_dissolved || match.status === 'dissolved') {
+      throw new AppError(403, 'This match has been dissolved', 'MATCH_DISSOLVED');
+    }
+
+    if (match.status === 'expired') {
+      throw new AppError(403, 'This match has expired', 'MATCH_EXPIRED');
+    }
+
+    if (match.expires_at && new Date(match.expires_at) < new Date()) {
+      // Mark as expired
+      await supabase.from('matches').update({ status: 'expired', is_dissolved: true, dissolved_reason: 'expired' }).eq('id', matchId);
+      throw new AppError(403, 'This match has expired', 'MATCH_EXPIRED');
+    }
+
+    // ── Respect-First enforcement ──
+    // If no first message yet, this is the first message
+    if (!match.first_msg_by) {
+      // Atomic update: set first_msg_by only if still null (race condition safety)
+      const { data: updated, error: firstMsgError } = await supabase
+        .from('matches')
+        .update({
+          first_msg_by: user.id,
+          first_msg_at: new Date().toISOString(),
+          first_msg_locked: true,
+          status: 'pending_first_message',
+        })
+        .eq('id', matchId)
+        .is('first_msg_by', null)
+        .select()
+        .single();
+
+      if (firstMsgError || !updated) {
+        // Someone else beat us — re-check
+        const { data: recheck } = await supabase.from('matches').select('first_msg_by, first_msg_locked').eq('id', matchId).single();
+        if (recheck?.first_msg_by === user.id && recheck?.first_msg_locked) {
+          throw new AppError(403, 'Please wait for the other person to reply before sending another message', 'RESPECT_FIRST_LOCKED');
+        }
+      }
+    } else if (match.first_msg_by === user.id && match.first_msg_locked) {
+      // I sent first and they haven't replied yet — cannot send more
+      throw new AppError(403, 'Please wait for the other person to reply before sending another message', 'RESPECT_FIRST_LOCKED');
+    } else if (match.first_msg_by !== user.id && match.first_msg_locked) {
+      // Other person sent first, I'm replying — unlock the match!
+      await supabase
+        .from('matches')
+        .update({
+          first_msg_locked: false,
+          status: 'active',
+          expires_at: null, // Clear timer once both have messaged
+        })
+        .eq('id', matchId);
+    }
+
+    // ── AI moderation for text messages ──
+    if (content && msgType === 'text') {
+      try {
+        const { screenMessage, checkEarlyMessageContactSharing } = await import('../services/moderation');
+
+        // Check contact sharing in first 5 messages
+        const { count: msgCount } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('match_id', matchId);
+
+        if ((msgCount || 0) < 5) {
+          const hasContactInfo = await checkEarlyMessageContactSharing(matchId, content);
+          if (hasContactInfo) {
+            throw new AppError(400, 'Sharing contact information is not allowed in the first few messages', 'CONTACT_SHARING_BLOCKED');
+          }
+        }
+
+        const textScreen = await screenMessage(content);
+        if (!textScreen.pass) {
+          throw new AppError(400, 'Message was flagged by content moderation', 'MESSAGE_REJECTED');
+        }
+      } catch (err) {
+        if (err instanceof AppError) throw err;
+        // Moderation service failure — allow message
+        console.warn('[Chat] Moderation check failed, allowing message:', err);
+      }
+    }
+
+    // ── Insert message ──
+    const messageId = uuidv4();
+    const { data: message, error: insertError } = await supabase
+      .from('messages')
+      .insert({
+        id: messageId,
+        match_id: matchId,
+        sender_id: user.id,
+        content: content || null,
+        media_url: mediaUrl || null,
+        msg_type: msgType,
+        sent_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      throw new AppError(500, 'Failed to send message', 'MESSAGE_SEND_FAILED');
+    }
+
+    // Update match last message metadata
+    await supabase
+      .from('matches')
+      .update({
+        last_msg_text: content?.substring(0, 100) || `[${msgType}]`,
+        last_msg_at: new Date().toISOString(),
+        last_msg_by: user.id,
+      })
+      .eq('id', matchId);
+
+    // Update unread count for the other user
+    const isUserA = match.user_a_id === user.id;
+    const unreadField = isUserA ? 'unread_b' : 'unread_a';
+    const { data: currentMatch } = await supabase
+      .from('matches')
+      .select(unreadField)
+      .eq('id', matchId)
+      .single();
+
+    if (currentMatch) {
+      await supabase
+        .from('matches')
+        .update({ [unreadField]: ((currentMatch as any)[unreadField] || 0) + 1 })
+        .eq('id', matchId);
+    }
+
+    // Send push notification if other user is not in chat
+    try {
+      const inChatKey = `in_chat:${matchId}:${otherId}`;
+      const isInChat = await redis.get(inChatKey);
+
+      if (!isInChat) {
+        const { sendTemplateNotification } = await import('../services/notifications');
+        const { data: myBasic } = await supabase
+          .from('basic_profiles')
+          .select('display_name')
+          .eq('user_id', user.id)
+          .single();
+
+        await sendTemplateNotification('new_message', otherId, {
+          name: myBasic?.display_name || 'Someone',
+          matchId,
+        });
+      }
+    } catch {
+      // Notification failure is non-critical
+    }
+
+    res.status(201).json({
+      success: true,
+      data: {
+        message: {
+          id: message.id,
+          match_id: matchId,
+          sender_id: user.id,
+          content: message.content,
+          media_url: message.media_url,
+          msg_type: message.msg_type,
+          status: 'sent',
+          created_at: message.sent_at,
+        },
+      },
+    });
+  })
+);
+
 // ─── POST /v1/chat/:matchId/extend ──────────────────────────────────────────
 
 router.post(

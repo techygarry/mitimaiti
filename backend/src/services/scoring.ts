@@ -27,11 +27,11 @@ function cacheKey(idA: string, idB: string): string {
 
 interface UserSindhiRow {
   user_id: string;
-  family_involvement: FamilyInvolvement;
-  fluency: SindhiFluency;
+  family_values_legacy: FamilyInvolvement;
+  sindhi_fluency: SindhiFluency;
   festivals: string[];
-  dietary: Dietary;
-  generation: number; // 1 = immigrant, 2 = second-gen, 3 = third-gen, etc.
+  food_preference: Dietary;
+  generation: string; // '1st', '2nd', '3rd', '4th+'
 }
 
 interface UserRow {
@@ -197,8 +197,8 @@ function assignBadge(total: number): CulturalBadge {
 async function fetchUserData(userId: string): Promise<UserData> {
   const [sindhiRes, userRes] = await Promise.all([
     supabase
-      .from('user_sindhi')
-      .select('user_id, family_involvement, fluency, festivals, dietary, generation')
+      .from('sindhi_profiles')
+      .select('user_id, family_values_legacy, sindhi_fluency, festivals, food_preference, generation')
       .eq('user_id', userId)
       .single(),
     supabase
@@ -237,13 +237,13 @@ export async function computeCulturalScore(
   ]);
 
   const family_values = scoreFamilyValues(
-    dataA.sindhi?.family_involvement ?? null,
-    dataB.sindhi?.family_involvement ?? null
+    dataA.sindhi?.family_values_legacy ?? null,
+    dataB.sindhi?.family_values_legacy ?? null
   );
 
   const language = scoreLanguage(
-    dataA.sindhi?.fluency ?? null,
-    dataB.sindhi?.fluency ?? null
+    dataA.sindhi?.sindhi_fluency ?? null,
+    dataB.sindhi?.sindhi_fluency ?? null
   );
 
   const festivals = scoreFestivals(
@@ -252,13 +252,20 @@ export async function computeCulturalScore(
   );
 
   const food = scoreFood(
-    dataA.sindhi?.dietary ?? null,
-    dataB.sindhi?.dietary ?? null
+    dataA.sindhi?.food_preference ?? null,
+    dataB.sindhi?.food_preference ?? null
   );
 
+  // Parse generation string to number for scoring
+  const genToNum = (g: string | null): number | null => {
+    if (!g) return null;
+    const map: Record<string, number> = { '1st': 1, '2nd': 2, '3rd': 3, '4th+': 4 };
+    return map[g] ?? null;
+  };
+
   const diaspora = scoreDiaspora(
-    dataA.sindhi?.generation ?? null,
-    dataB.sindhi?.generation ?? null
+    genToNum(dataA.sindhi?.generation ?? null),
+    genToNum(dataB.sindhi?.generation ?? null)
   );
 
   const intent = scoreIntent(

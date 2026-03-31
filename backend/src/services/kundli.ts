@@ -264,7 +264,7 @@ interface ChattiRow {
 
 async function fetchChattiData(userId: string): Promise<ChattiRow | null> {
   const { data, error } = await supabase
-    .from('user_chatti')
+    .from('chatti_profiles')
     .select('user_id, nakshatra, rashi')
     .eq('user_id', userId)
     .single();
