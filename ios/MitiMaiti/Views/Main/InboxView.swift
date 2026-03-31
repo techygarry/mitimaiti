@@ -38,7 +38,7 @@ struct InboxView: View {
     // MARK: - Segmented Control
 
     private var segmentedControl: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 4) {
             InboxSegmentButton(
                 title: "Liked You",
                 count: inboxVM.totalLikes,
@@ -59,16 +59,16 @@ struct InboxView: View {
                 }
             }
         }
-        .padding(4)
+        .padding(5)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: 16)
                 .fill(colors.surfaceDark)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: 16)
                         .stroke(colors.border, lineWidth: 0.5)
                 )
         )
-        .padding(.horizontal)
+        .padding(.horizontal, 16)
         .padding(.top, 12)
     }
 
@@ -83,11 +83,15 @@ struct InboxView: View {
             Spacer()
         } else {
             TabView(selection: $selectedTab) {
-                LikedYouTabView(likes: inboxVM.likes)
-                    .tag(0)
+                LikedYouTabView(likes: inboxVM.likes, onRefresh: {
+                    inboxVM.loadInbox()
+                })
+                .tag(0)
 
-                MatchesTabView(matches: inboxVM.matches)
-                    .tag(1)
+                MatchesTabView(matches: inboxVM.matches, onRefresh: {
+                    inboxVM.loadInbox()
+                })
+                .tag(1)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
         }
@@ -107,31 +111,34 @@ private struct InboxSegmentButton: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Text(title)
-                    .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
+                    .font(.system(size: 14, weight: isSelected ? .semibold : .medium))
 
                 if count > 0 {
                     Text("\(count)")
                         .font(.system(size: 11, weight: .bold))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
                         .background(
                             Capsule()
-                                .fill(isSelected ? AppTheme.rose.opacity(0.3) : colors.border)
+                                .fill(isSelected ? Color.white.opacity(0.2) : colors.border)
                         )
                 }
             }
             .foregroundColor(isSelected ? .white : colors.textSecondary)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
+            .padding(.vertical, 11)
             .background(
                 Group {
                     if isSelected {
-                        RoundedRectangle(cornerRadius: 11)
-                            .fill(AppTheme.rose)
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(AppTheme.roseGradient)
+                            .shadow(color: AppTheme.rose.opacity(0.3), radius: 6, x: 0, y: 2)
                     }
                 }
             )
+            .animation(.easeInOut(duration: 0.2), value: isSelected)
         }
+        .buttonStyle(.plain)
     }
 }
 
@@ -139,6 +146,7 @@ private struct InboxSegmentButton: View {
 
 private struct LikedYouTabView: View {
     let likes: [LikedYouCard]
+    let onRefresh: () -> Void
 
     private let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -163,6 +171,9 @@ private struct LikedYouTabView: View {
                 .padding(.top, 16)
                 .padding(.bottom, 100)
             }
+            .refreshable {
+                onRefresh()
+            }
         }
     }
 }
@@ -171,6 +182,7 @@ private struct LikedYouTabView: View {
 
 private struct MatchesTabView: View {
     let matches: [Match]
+    let onRefresh: () -> Void
 
     var body: some View {
         if matches.isEmpty {
@@ -186,11 +198,26 @@ private struct MatchesTabView: View {
                         NavigationLink(value: match) {
                             MatchRowView(match: match)
                         }
+                        .buttonStyle(MatchRowButtonStyle())
                     }
                 }
                 .padding(.top, 12)
                 .padding(.bottom, 100)
             }
+            .refreshable {
+                onRefresh()
+            }
         }
+    }
+}
+
+// MARK: - Match Row Press Animation
+
+private struct MatchRowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .opacity(configuration.isPressed ? 0.85 : 1.0)
+            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
     }
 }

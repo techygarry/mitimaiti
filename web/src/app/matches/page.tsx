@@ -217,8 +217,8 @@ export default function MatchesPage() {
                             {getDisplayName(match.user)}, {match.user.age}
                           </h3>
                           {match.last_message && (
-                            <p className={`text-sm truncate mt-0.5 ${match.unread_count > 0 ? 'text-charcoal font-medium' : 'text-textLight'}`}>
-                              {match.last_message.sender_id === 'me' && <span className="text-textLight">You: </span>}
+                            <p className={`text-sm truncate mt-0.5 ${match.unread_count > 0 ? 'text-charcoal font-semibold' : 'text-textLight'}`}>
+                              {match.last_message.sender_id === 'me' && <span className="text-textLight font-normal">You: </span>}
                               {match.last_message.content}
                             </p>
                           )}

@@ -181,6 +181,158 @@ struct AppTheme {
     static let radiusXL: CGFloat = 24
     static let radiusCard: CGFloat = 20
     static let radiusFull: CGFloat = 100
+
+    // MARK: - Button Sizes
+    static let buttonHeightPrimary: CGFloat = 52
+    static let buttonHeightSecondary: CGFloat = 44
+    static let iconButtonSize: CGFloat = 40
+
+    // MARK: - Animation Constants
+    enum Animation {
+        static let standardDuration: Double = 0.3
+        static let springResponse: Double = 0.5
+        static let springDamping: Double = 0.7
+        static let cardSwipeDuration: Double = 0.4
+
+        static var standard: SwiftUI.Animation {
+            .easeInOut(duration: standardDuration)
+        }
+
+        static var spring: SwiftUI.Animation {
+            .spring(response: springResponse, dampingFraction: springDamping)
+        }
+
+        static var cardSwipe: SwiftUI.Animation {
+            .easeOut(duration: cardSwipeDuration)
+        }
+    }
+
+    // MARK: - Shadow Presets
+    enum Shadow {
+        case card
+        case button
+        case subtle
+
+        var radius: CGFloat {
+            switch self {
+            case .card: return 12
+            case .button: return 8
+            case .subtle: return 4
+            }
+        }
+
+        var x: CGFloat { 0 }
+
+        var y: CGFloat {
+            switch self {
+            case .card: return 6
+            case .button: return 4
+            case .subtle: return 2
+            }
+        }
+    }
+}
+
+// MARK: - Adaptive Shadow Colors
+
+extension AdaptiveColors {
+    func shadowColor(for preset: AppTheme.Shadow) -> Color {
+        switch preset {
+        case .card:
+            return cardShadowColor
+        case .button:
+            return isDark ? Color.black.opacity(0.30) : Color.black.opacity(0.10)
+        case .subtle:
+            return isDark ? Color.black.opacity(0.15) : Color.black.opacity(0.04)
+        }
+    }
+}
+
+// MARK: - Shadow View Modifier
+
+struct ShadowPresetModifier: ViewModifier {
+    let preset: AppTheme.Shadow
+    @Environment(\.adaptiveColors) private var colors
+
+    func body(content: Content) -> some View {
+        content.shadow(
+            color: colors.shadowColor(for: preset),
+            radius: preset.radius,
+            x: preset.x,
+            y: preset.y
+        )
+    }
+}
+
+extension View {
+    func shadowPreset(_ preset: AppTheme.Shadow) -> some View {
+        self.modifier(ShadowPresetModifier(preset: preset))
+    }
+}
+
+// MARK: - Typography
+
+enum Typography {
+    case heroTitle
+    case title
+    case subtitle
+    case body
+    case bodySmall
+    case caption
+    case label
+
+    var font: Font {
+        switch self {
+        case .heroTitle:  return .system(size: 34, weight: .bold, design: .rounded)
+        case .title:      return .system(size: 24, weight: .bold, design: .rounded)
+        case .subtitle:   return .system(size: 18, weight: .semibold, design: .rounded)
+        case .body:       return .system(size: 16, weight: .regular)
+        case .bodySmall:  return .system(size: 14, weight: .regular)
+        case .caption:    return .system(size: 12, weight: .medium)
+        case .label:      return .system(size: 13, weight: .semibold)
+        }
+    }
+
+    var lineSpacing: CGFloat {
+        switch self {
+        case .heroTitle:  return 4
+        case .title:      return 2
+        case .subtitle:   return 2
+        case .body:       return 4
+        case .bodySmall:  return 3
+        case .caption:    return 2
+        case .label:      return 0
+        }
+    }
+}
+
+struct TypographyModifier: ViewModifier {
+    let style: Typography
+
+    func body(content: Content) -> some View {
+        content
+            .font(style.font)
+            .lineSpacing(style.lineSpacing)
+    }
+}
+
+extension View {
+    func typography(_ style: Typography) -> some View {
+        self.modifier(TypographyModifier(style: style))
+    }
+}
+
+// MARK: - Adaptive Status & Score Colors
+
+extension AdaptiveColors {
+    var success: Color { isDark ? Color(hex: "4CAF50") : Color(hex: "388E3C") }
+    var warning: Color { isDark ? Color(hex: "FFA726") : Color(hex: "F57C00") }
+    var error: Color { isDark ? Color(hex: "EF4444") : Color(hex: "D32F2F") }
+    var info: Color { isDark ? Color(hex: "42A5F5") : Color(hex: "1976D2") }
+
+    var scoreGold: Color { isDark ? Color(hex: "FFD700") : Color(hex: "F9A825") }
+    var scoreGreen: Color { isDark ? Color(hex: "4CAF50") : Color(hex: "388E3C") }
+    var scoreOrange: Color { isDark ? Color(hex: "FF9800") : Color(hex: "EF6C00") }
 }
 
 // MARK: - Color Extension

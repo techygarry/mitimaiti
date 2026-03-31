@@ -103,8 +103,10 @@ class LocalizationManager: ObservableObject {
             "filter.apply": "Apply Filters",
             // Matches
             "matches.title": "Matches",
+            "matches.yourMatches": "Your Matches",
+            "matches.chats": "Chats",
             "matches.noMatchesYet": "No matches yet",
-            "matches.startLiking": "Start swiping on profiles to find your perfect match!",
+            "matches.startLiking": "Start liking to find your match",
             "matches.sendFirstMessage": "Send the first message!",
             // Chat
             "chat.typeMessage": "Type a message...",
@@ -351,8 +353,10 @@ class LocalizationManager: ObservableObject {
             "filter.apply": "फ़िल्टर लागू करें",
             // Matches
             "matches.title": "मिलान",
+            "matches.yourMatches": "आपके मिलान",
+            "matches.chats": "चैट्स",
             "matches.noMatchesYet": "अभी कोई मिलान नहीं",
-            "matches.startLiking": "अपना आदर्श मिलान खोजने के लिए स्वाइप करना शुरू करें!",
+            "matches.startLiking": "अपना मिलान खोजने के लिए लाइक करना शुरू करें",
             "matches.sendFirstMessage": "पहला संदेश भेजें!",
             // Chat
             "chat.typeMessage": "संदेश लिखें...",
@@ -599,8 +603,10 @@ class LocalizationManager: ObservableObject {
             "filter.apply": "فلٽر لاڳو ڪريو",
             // Matches
             "matches.title": "ميلاپ",
+            "matches.yourMatches": "توهان جا ميلاپ",
+            "matches.chats": "چيٽس",
             "matches.noMatchesYet": "اڃا ڪو ميلاپ ناهي",
-            "matches.startLiking": "پنهنجو بهترين ميلاپ ڳولڻ لاءِ سوائپ ڪرڻ شروع ڪريو!",
+            "matches.startLiking": "پنهنجو ميلاپ ڳولڻ لاءِ لائيڪ ڪرڻ شروع ڪريو",
             "matches.sendFirstMessage": "پهريون پيغام موڪليو!",
             // Chat
             "chat.typeMessage": "پيغام لکو...",

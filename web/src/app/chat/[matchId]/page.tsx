@@ -56,14 +56,17 @@ function MessageBubble({
           >
             {formatMessageTime(message.created_at)}
           </p>
-          {/* Read receipts for sent messages */}
-          {isMine && (
-            message.read ? (
-              <CheckCheck className="w-3.5 h-3.5 text-white/80" aria-label="Read" />
-            ) : (
-              <Check className="w-3.5 h-3.5 text-white/50" aria-label="Delivered" />
-            )
-          )}
+          {/* Read receipts for sent messages: sent = single check, delivered = double check, read = double blue check */}
+          {isMine && (() => {
+            const status = message.status || (message.read ? 'read' : 'delivered');
+            if (status === 'read') {
+              return <CheckCheck className="w-3.5 h-3.5 text-sky-300" aria-label="Read" />;
+            } else if (status === 'delivered') {
+              return <CheckCheck className="w-3.5 h-3.5 text-white/50" aria-label="Delivered" />;
+            } else {
+              return <Check className="w-3.5 h-3.5 text-white/50" aria-label="Sent" />;
+            }
+          })()}
         </div>
       </div>
     </motion.div>
@@ -192,6 +195,7 @@ export default function ChatPage() {
         content: text.trim(),
         type: 'text',
         read: false,
+        status: 'sent',
         created_at: new Date().toISOString(),
       };
 
@@ -207,6 +211,17 @@ export default function ChatPage() {
         }, 5000);
       }
 
+      // Simulate delivery after 1 second
+      setTimeout(() => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.sender_id === 'me' && m.status === 'sent'
+              ? { ...m, status: 'delivered' }
+              : m
+          )
+        );
+      }, 1000);
+
       setIsTyping(true);
       setTimeout(() => {
         setIsTyping(false);
@@ -220,9 +235,11 @@ export default function ChatPage() {
           created_at: new Date().toISOString(),
         };
         setMessages((prev) => [...prev, reply]);
-        // Mark previous messages as read
+        // Mark previous messages as read (they read our messages before replying)
         setMessages((prev) =>
-          prev.map((m) => (m.sender_id === 'me' ? { ...m, read: true } : m))
+          prev.map((m) =>
+            m.sender_id === 'me' ? { ...m, read: true, status: 'read' } : m
+          )
         );
       }, 2000 + Math.random() * 2000);
     },
@@ -291,16 +308,28 @@ export default function ChatPage() {
             />
           )}
 
-          {/* Locked first message state */}
+          {/* Locked first message state — rose-tinted banner */}
           {isLocked && (
-            <div className="px-6 py-2.5 bg-rose/5 border-b border-rose-light/20 text-center">
-              <p className="text-sm text-rose font-medium">
-                {t('chat.waitingForReply')}...
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="px-6 py-4 bg-gradient-to-r from-rose/10 via-rose/5 to-rose/10 border-b border-rose-light/30 text-center"
+            >
+              <div className="flex items-center justify-center gap-2 mb-1">
+                <motion.div
+                  animate={{ scale: [1, 1.15, 1] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                  className="w-2 h-2 rounded-full bg-rose/60"
+                />
+                <p className="text-sm text-rose font-semibold">
+                  Waiting for reply...
+                </p>
+              </div>
+              <p className="text-xs text-rose/60">
+                Your match hasn&apos;t seen your message yet
               </p>
-              <p className="text-xs text-textLight mt-0.5">
-                {t('chat.waitingForReplyMsg')}
-              </p>
-            </div>
+            </motion.div>
           )}
 
           {/* Messages area */}
@@ -323,15 +352,20 @@ export default function ChatPage() {
               </div>
             )}
 
-            {/* Match announcement */}
-            {messages.length > 0 && (
-              <div className="text-center mb-5">
-                <p className="text-sm text-textLight">
+            {/* Match announcement capsule */}
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex justify-center mb-5"
+            >
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-rose/5 border border-rose-light/20 rounded-full">
+                <span className="text-xs text-rose">&#10084;</span>
+                <p className="text-xs text-textLight font-medium">
                   You matched with {match.user.first_name} on{' '}
                   {format(new Date(match.matched_at), 'MMMM d, yyyy')}
                 </p>
               </div>
-            )}
+            </motion.div>
 
             {/* Messages */}
             <AnimatePresence initial={false}>

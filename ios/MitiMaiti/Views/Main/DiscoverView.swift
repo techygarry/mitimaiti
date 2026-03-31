@@ -102,55 +102,6 @@ struct DiscoverView: View {
         .padding(.bottom, 4)
     }
 
-    // MARK: - Profile Completeness Banner
-
-    @ViewBuilder
-    private var profileCompletenessBanner: some View {
-        if profileVM.user.profileCompleteness < 90 && !bannerDismissed {
-            HStack(spacing: 10) {
-                Image(systemName: "person.crop.circle.badge.exclamationmark")
-                    .font(.system(size: 20))
-                    .foregroundColor(AppTheme.rose)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(localization.t("discover.completeProfile"))
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(colors.textPrimary)
-                    Text(localization.t("discover.completeProfileHint"))
-                        .font(.system(size: 11))
-                        .foregroundColor(colors.textSecondary)
-                        .lineLimit(1)
-                }
-
-                Spacer()
-
-                Button { showEditProfile = true } label: {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(AppTheme.rose)
-                }
-
-                Button { withAnimation { bannerDismissed = true } } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(colors.textMuted)
-                }
-            }
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(AppTheme.rose.opacity(0.08))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(AppTheme.rose.opacity(0.15), lineWidth: 0.5)
-                    )
-            )
-            .padding(.horizontal, AppTheme.spacingMD)
-            .padding(.top, 4)
-            .transition(.opacity.combined(with: .move(edge: .top)))
-        }
-    }
-
     // MARK: - Main Content
 
     @ViewBuilder
@@ -202,6 +153,17 @@ struct DiscoverView: View {
     // MARK: - Card Deck View (matching web)
 
     @State private var showProfileDetail = false
+    @State private var swipeOffset: CGFloat = 0
+    @State private var swipeRotation: Double = 0
+    @State private var isAnimating = false
+    @State private var passButtonPressed = false
+    @State private var likeButtonPressed = false
+
+    /// Normalized swipe progress: -1 (full left) to +1 (full right)
+    private var swipeProgress: CGFloat {
+        let threshold: CGFloat = 150
+        return min(max(swipeOffset / threshold, -1), 1)
+    }
 
     private var cardDeckView: some View {
         GeometryReader { geo in
@@ -228,13 +190,44 @@ struct DiscoverView: View {
                         activeCard(card: card)
                             .padding(.leading, 16)
                             .padding(.trailing, 48)
+                            .overlay(swipeOverlay)
+                            .offset(x: swipeOffset)
+                            .rotationEffect(.degrees(swipeRotation))
+                            .gesture(
+                                DragGesture()
+                                    .onChanged { value in
+                                        guard !isAnimating else { return }
+                                        swipeOffset = value.translation.width
+                                        swipeRotation = Double(value.translation.width / 20)
+                                    }
+                                    .onEnded { value in
+                                        guard !isAnimating else { return }
+                                        let threshold: CGFloat = 100
+                                        if value.translation.width < -threshold {
+                                            swipeOffCard(direction: .left)
+                                        } else if value.translation.width > threshold {
+                                            swipeOffCard(direction: .right)
+                                        } else {
+                                            withAnimation(.easeOut(duration: 0.2)) {
+                                                swipeOffset = 0
+                                                swipeRotation = 0
+                                            }
+                                        }
+                                    }
+                            )
                     }
                 }
                 .frame(height: cardHeight)
 
-                // Pass / Like buttons — equal gap above and below
+                // Pass / Like buttons with scale animation and haptic feedback
                 HStack(spacing: 16) {
-                    Button { feedVM.passUser() } label: {
+                    Button {
+                        guard !isAnimating else { return }
+                        passButtonPressed.toggle()
+                        let generator = UIImpactFeedbackGenerator(style: .medium)
+                        generator.impactOccurred()
+                        swipeOffCard(direction: .left)
+                    } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 18, weight: .bold))
                             .foregroundColor(.gray)
@@ -245,7 +238,16 @@ struct DiscoverView: View {
                                     .shadow(color: .black.opacity(0.15), radius: 6, x: 0, y: 3)
                             )
                     }
-                    Button { feedVM.likeUser() } label: {
+                    .buttonStyle(ScaleButtonStyle())
+                    .disabled(isAnimating)
+
+                    Button {
+                        guard !isAnimating else { return }
+                        likeButtonPressed.toggle()
+                        let generator = UIImpactFeedbackGenerator(style: .medium)
+                        generator.impactOccurred()
+                        swipeOffCard(direction: .right)
+                    } label: {
                         Image(systemName: "heart.fill")
                             .font(.system(size: 20, weight: .bold))
                             .foregroundColor(.white)
@@ -256,6 +258,8 @@ struct DiscoverView: View {
                                     .shadow(color: AppTheme.rose.opacity(0.4), radius: 8, x: 0, y: 4)
                             )
                     }
+                    .buttonStyle(ScaleButtonStyle())
+                    .disabled(isAnimating)
                 }
                 .padding(.vertical, 6)
 
@@ -264,6 +268,78 @@ struct DiscoverView: View {
                     completeBanner
                 }
             }
+        }
+        .sheet(isPresented: $showProfileDetail) {
+            if let card = feedVM.selectedCard {
+                ProfileDetailSheet(card: card, feedVM: feedVM)
+            }
+        }
+    }
+
+    // MARK: - Swipe Overlay (LIKE / NOPE text)
+
+    private var swipeOverlay: some View {
+        ZStack {
+            // LIKE overlay (right swipe)
+            Text("LIKE")
+                .font(.system(size: 48, weight: .heavy))
+                .foregroundColor(.green)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.green, lineWidth: 4)
+                )
+                .rotationEffect(.degrees(-15))
+                .opacity(Double(max(0, swipeProgress)))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(.top, 40)
+                .padding(.leading, 36)
+
+            // NOPE overlay (left swipe)
+            Text("NOPE")
+                .font(.system(size: 48, weight: .heavy))
+                .foregroundColor(.red)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.red, lineWidth: 4)
+                )
+                .rotationEffect(.degrees(15))
+                .opacity(Double(max(0, -swipeProgress)))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                .padding(.top, 40)
+                .padding(.trailing, 36)
+        }
+        .allowsHitTesting(false)
+    }
+
+    // MARK: - Background Card Placeholder
+
+    private enum SwipeDirection { case left, right }
+
+    private func swipeOffCard(direction: SwipeDirection) {
+        isAnimating = true
+        let screenWidth = UIScreen.main.bounds.width
+
+        withAnimation(.easeIn(duration: 0.3)) {
+            swipeOffset = direction == .left ? -screenWidth * 1.5 : screenWidth * 1.5
+            swipeRotation = direction == .left ? -12 : 12
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            if direction == .left {
+                feedVM.passUser()
+            } else {
+                feedVM.likeUser()
+            }
+            // Reset instantly (no animation) before next card appears
+            withAnimation(.none) {
+                swipeOffset = 0
+                swipeRotation = 0
+            }
+            isAnimating = false
         }
     }
 
@@ -346,11 +422,6 @@ struct DiscoverView: View {
             .onTapGesture {
                 feedVM.selectedCard = card
                 showProfileDetail = true
-            }
-            .sheet(isPresented: $showProfileDetail) {
-                if let card = feedVM.selectedCard {
-                    ProfileDetailSheet(card: card, feedVM: feedVM)
-                }
             }
     }
 
@@ -581,416 +652,13 @@ private struct ProfileDetailSheet: View {
         }
     }
 }
+// MARK: - Scale Button Style
 
-// MARK: - ProfileScrollView REMOVED - replaced by card deck + ProfileDetailSheet above
-
-private struct ProfileScrollView_UNUSED: View {
-    let card: FeedCard
-    @ObservedObject var feedVM: FeedViewModel
-    @Environment(\.adaptiveColors) private var colors
-    private let localization = LocalizationManager.shared
-
-    var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                // Hero photo with overlaid action buttons
-                ZStack(alignment: .bottom) {
-                    heroPhotoArea
-
-                    // Pass/Like buttons floating over bottom of photo
-                    HStack(spacing: 16) {
-                        // Pass
-                        Button { feedVM.passUser() } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundColor(Color.gray)
-                                .frame(width: 52, height: 52)
-                                .background(
-                                    Circle()
-                                        .fill(colors.cardDark)
-                                        .overlay(Circle().stroke(colors.border, lineWidth: 1))
-                                        .shadow(color: colors.cardShadowColor, radius: 6, x: 0, y: 3)
-                                )
-                        }
-
-                        // Like
-                        Button { feedVM.likeUser() } label: {
-                            Image(systemName: "heart.fill")
-                                .font(.system(size: 20, weight: .bold))
-                                .foregroundColor(.white)
-                                .frame(width: 56, height: 56)
-                                .background(
-                                    Circle()
-                                        .fill(AppTheme.rose)
-                                        .shadow(color: AppTheme.rose.opacity(0.4), radius: 8, x: 0, y: 4)
-                                )
-                        }
-                    }
-                    .padding(.bottom, 20)
-                }
-
-                // Profile content below photo
-                scoresSection
-                bioSection
-                promptsSection
-                interestsSection
-                languagesSection
-                aboutSection
-                distanceSection
-
-                // Completeness banner (matching web position - below card)
-                profileCompletenessBanner
-                    .padding(.top, 12)
-
-                Spacer().frame(height: 100)
-            }
-        }
-    }
-
-    // MARK: - Completeness Banner (inside scroll)
-
-    @ViewBuilder
-    private var profileCompletenessBanner: some View {
-        HStack(spacing: 10) {
-            Circle()
-                .fill(AppTheme.rose)
-                .frame(width: 8, height: 8)
-
-            Group {
-                Text("Complete your profile")
-                    .font(.system(size: 14, weight: .semibold))
-                + Text(" — Sindhi Identity & Chatti details get 3x more matches!")
-                    .font(.system(size: 14))
-            }
-            .foregroundColor(colors.textSecondary)
-            .lineLimit(2)
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(colors.cardDark)
-                .shadow(color: colors.cardShadowColor, radius: 6, x: 0, y: 2)
-        )
-        .padding(.horizontal, AppTheme.spacingMD)
-    }
-
-    // MARK: - Hero Photo with Name Overlay
-
-    private var heroPhotoArea: some View {
-        ZStack(alignment: .bottomLeading) {
-            // Photo/gradient background
-            RoundedRectangle(cornerRadius: 16)
-                .fill(
-                    LinearGradient(
-                        colors: [AppTheme.rose.opacity(0.4), AppTheme.roseDark.opacity(0.5), AppTheme.roseDark.opacity(0.7)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(height: 340)
-                .overlay(
-                    Text(card.user.displayName.initials)
-                        .font(.system(size: 72, weight: .bold))
-                        .foregroundColor(.white.opacity(0.2))
-                )
-
-            // Bottom gradient overlay
-            LinearGradient(
-                colors: [.clear, .clear, Color.black.opacity(0.6)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-
-            // Name, age, location overlay on photo
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(card.user.displayName)
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(.white)
-
-                    Text("\(card.user.age)")
-                        .font(.system(size: 22, weight: .medium))
-                        .foregroundColor(.white.opacity(0.85))
-
-                    if card.user.isVerified {
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 18))
-                            .foregroundColor(AppTheme.info)
-                    }
-                }
-
-                if let city = card.user.city {
-                    HStack(spacing: 4) {
-                        Image(systemName: "mappin.circle.fill")
-                            .font(.system(size: 12))
-                        Text(city)
-                            .font(.system(size: 14))
-                    }
-                    .foregroundColor(.white.opacity(0.8))
-                }
-
-                if let intent = card.user.intent {
-                    HStack(spacing: 4) {
-                        Image(systemName: intent.icon)
-                            .font(.system(size: 10))
-                        Text(intent.display)
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Capsule().fill(Color.white.opacity(0.2)))
-                }
-            }
-            .padding(20)
-        }
-        .frame(height: 340)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .padding(.horizontal, AppTheme.spacingMD)
-        .padding(.top, 4)
-    }
-
-    // MARK: - Scores
-
-    private var scoresSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Spacer().frame(height: 4)
-            HStack(spacing: 8) {
-                Button {
-                    feedVM.selectedCard = card
-                    feedVM.showScoreBreakdown = true
-                } label: {
-                    ScoreTag(
-                        label: localization.t("common.cultural"),
-                        value: "\(card.culturalScore.overallScore)%",
-                        color: badgeColor(card.culturalScore.badge),
-                        icon: "sparkles"
-                    )
-                }
-                .buttonStyle(.plain)
-
-                if let kundli = card.kundliScore {
-                    Button {
-                        feedVM.selectedCard = card
-                        feedVM.showScoreBreakdown = true
-                    } label: {
-                        ScoreTag(
-                            label: localization.t("welcome.kundli"),
-                            value: "\(kundli.totalScore)/\(kundli.maxScore)",
-                            color: tierColor(kundli.tier),
-                            icon: "star.fill"
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
-            Button {
-                feedVM.selectedCard = card
-                feedVM.showScoreBreakdown = true
-            } label: {
-                HStack(spacing: 4) {
-                    Text(localization.t("discover.seeBreakdown"))
-                        .font(.system(size: 13, weight: .medium))
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
-                }
-                .foregroundColor(AppTheme.rose)
-            }
-        }
-        .padding(.horizontal, AppTheme.spacingMD)
-        .padding(.vertical, AppTheme.spacingSM)
-    }
-
-    // MARK: - Bio
-
-    @ViewBuilder
-    private var bioSection: some View {
-        if let bio = card.user.bio, !bio.isEmpty {
-            ContentCard {
-                Text(bio)
-                    .font(.system(size: 15))
-                    .foregroundColor(colors.textSecondary)
-                    .lineSpacing(4)
-                    .padding(AppTheme.spacingMD)
-            }
-            .padding(.horizontal, AppTheme.spacingMD)
-            .padding(.vertical, AppTheme.spacingSM)
-        }
-    }
-
-    // MARK: - Prompts
-
-    @ViewBuilder
-    private var promptsSection: some View {
-        if !card.user.prompts.isEmpty {
-            VStack(spacing: 12) {
-                ForEach(card.user.prompts) { prompt in
-                    PromptCard(prompt: prompt)
-                }
-            }
-            .padding(.horizontal, AppTheme.spacingMD)
-            .padding(.vertical, AppTheme.spacingSM)
-        }
-    }
-
-    // MARK: - Interests
-
-    @ViewBuilder
-    private var interestsSection: some View {
-        if !card.user.interests.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(localization.t("discover.interests"))
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(colors.textPrimary)
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(card.user.interests, id: \.self) { interest in
-                            InterestCapsule(text: interest)
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, AppTheme.spacingMD)
-            .padding(.vertical, AppTheme.spacingSM)
-        }
-    }
-
-    // MARK: - Second Photo Area
-
-    private var secondPhotoArea: some View {
-        RoundedRectangle(cornerRadius: 16)
-            .fill(
-                LinearGradient(
-                    colors: [AppTheme.rose.opacity(0.3), AppTheme.roseDark.opacity(0.4)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .frame(height: 260)
-            .overlay(
-                Image(systemName: "camera.fill")
-                    .font(.system(size: 36))
-                    .foregroundColor(.white.opacity(0.3))
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .padding(.horizontal, AppTheme.spacingMD)
-            .padding(.vertical, AppTheme.spacingSM)
-    }
-
-    // MARK: - Languages
-
-    @ViewBuilder
-    private var languagesSection: some View {
-        if let languages = card.user.languages, !languages.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(localization.t("discover.languages"))
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(colors.textPrimary)
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(languages, id: \.self) { language in
-                            HStack(spacing: 4) {
-                                Image(systemName: "globe")
-                                    .font(.system(size: 11))
-                                Text(language)
-                                    .font(.system(size: 13, weight: .medium))
-                            }
-                            .foregroundColor(AppTheme.rose)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(
-                                Capsule()
-                                    .fill(colors.surfaceMedium)
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(AppTheme.rose.opacity(0.3), lineWidth: 0.5)
-                                    )
-                            )
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, AppTheme.spacingMD)
-            .padding(.vertical, AppTheme.spacingSM)
-        }
-    }
-
-    // MARK: - About
-
-    @ViewBuilder
-    private var aboutSection: some View {
-        let items = aboutItems
-        if !items.isEmpty {
-            ContentCard {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(localization.t("discover.about"))
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(colors.textPrimary)
-
-                    ForEach(items, id: \.0) { item in
-                        AboutRow(icon: item.0, label: item.1, value: item.2)
-                    }
-                }
-                .padding(AppTheme.spacingMD)
-            }
-            .padding(.horizontal, AppTheme.spacingMD)
-            .padding(.vertical, AppTheme.spacingSM)
-        }
-    }
-
-    private var aboutItems: [(String, String, String)] {
-        var result: [(String, String, String)] = []
-        if let h = card.user.heightCm {
-            result.append(("ruler", localization.t("profile.height"), "\(h) cm"))
-        }
-        if let edu = card.user.education {
-            result.append(("graduationcap.fill", localization.t("profile.education"), edu))
-        }
-        if let occ = card.user.occupation {
-            result.append(("briefcase.fill", localization.t("profile.occupation"), occ))
-        }
-        return result
-    }
-
-    // MARK: - Distance
-
-    @ViewBuilder
-    private var distanceSection: some View {
-        if let dist = card.distanceKm {
-            HStack(spacing: 6) {
-                Image(systemName: "location.fill")
-                    .font(.system(size: 13))
-                    .foregroundColor(AppTheme.rose)
-                Text(String(format: "%.0f km away", dist))
-                    .font(.system(size: 14))
-                    .foregroundColor(colors.textSecondary)
-            }
-            .padding(.horizontal, AppTheme.spacingMD)
-            .padding(.vertical, AppTheme.spacingSM)
-        }
-    }
-
-    // MARK: - Helpers
-
-    private func badgeColor(_ badge: CulturalBadge) -> Color {
-        switch badge {
-        case .gold: return AppTheme.scoreGold
-        case .green: return AppTheme.scoreGreen
-        case .orange: return AppTheme.scoreOrange
-        case .none: return colors.textMuted
-        }
-    }
-
-    private func tierColor(_ tier: KundliTier) -> Color {
-        switch tier {
-        case .excellent: return AppTheme.scoreGold
-        case .good: return AppTheme.scoreGreen
-        case .challenging: return AppTheme.scoreOrange
-        }
+private struct ScaleButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.88 : 1.0)
+            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
     }
 }
 

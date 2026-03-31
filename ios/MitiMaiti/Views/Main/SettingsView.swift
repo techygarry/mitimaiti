@@ -7,21 +7,35 @@ struct SettingsView: View {
     @EnvironmentObject var themeManager: ThemeManager
     @Environment(\.adaptiveColors) private var colors
 
+    @State private var activePickerSheet: PickerSheetType?
+
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: AppTheme.spacingMD) {
-                discoverySection
-                notificationsSection
-                privacySection
-                appearanceSection
-                accountSection
-                aboutSection
-                Spacer().frame(height: 100)
+        ZStack(alignment: .top) {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: AppTheme.spacingMD) {
+                    visibilitySection
+                    discoverySection
+                    communityCultureSection
+                    lifestyleSection
+                    notificationsSection
+                    appearanceSection
+                    accountSection
+                    aboutSection
+                    Spacer().frame(height: 100)
+                }
+                .padding(.horizontal, AppTheme.spacingMD)
+                .padding(.top, AppTheme.spacingSM)
             }
-            .padding(.horizontal, AppTheme.spacingMD)
-            .padding(.top, AppTheme.spacingSM)
+            .appBackground()
+
+            // Toast overlay
+            if let toast = vm.toastMessage {
+                toastView(message: toast)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.spring(response: 0.35, dampingFraction: 0.8), value: vm.toastMessage)
+                    .zIndex(100)
+            }
         }
-        .appBackground()
         .navigationTitle(localization.t("settings.title"))
         .navigationBarTitleDisplayMode(.inline)
         .alert(localization.t("settings.logOutConfirm"), isPresented: $vm.showLogoutConfirmation) {
@@ -30,11 +44,11 @@ struct SettingsView: View {
         } message: {
             Text(localization.t("settings.logOutMessage"))
         }
-        .alert(localization.t("settings.deleteAccountConfirm"), isPresented: $vm.showDeleteConfirmation) {
-            Button(localization.t("settings.delete"), role: .destructive) {}
-            Button(localization.t("common.cancel"), role: .cancel) {}
-        } message: {
-            Text(localization.t("settings.deleteAccountMessage"))
+        .sheet(isPresented: $vm.showDeleteSheet) {
+            deleteAccountSheet
+        }
+        .sheet(item: $activePickerSheet) { sheetType in
+            pickerSheetContent(for: sheetType)
         }
         .onAppear {
             switch themeManager.preference {
@@ -43,12 +57,41 @@ struct SettingsView: View {
             case .system: vm.theme = .auto
             }
         }
+        .onChange(of: vm.incognitoMode) { _, newValue in
+            vm.showToast(newValue ? "Incognito on" : "Incognito off")
+        }
     }
 
-    // MARK: - Discovery Section
+    // MARK: - Toast
+
+    private func toastView(message: String) -> some View {
+        Text(message)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundColor(.white)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(
+                Capsule()
+                    .fill(Color.black.opacity(0.8))
+            )
+            .padding(.top, 8)
+    }
+
+    // MARK: - Visibility Section
+
+    private var visibilitySection: some View {
+        settingsSection(title: "VISIBILITY", icon: "eye.fill") {
+            ToggleRow(title: localization.t("settings.showInDiscovery"), icon: "eye.fill", isOn: $vm.discoveryEnabled)
+            ToggleRow(title: localization.t("settings.incognitoMode"), icon: "eye.slash.fill", isOn: $vm.incognitoMode)
+            ToggleRow(title: localization.t("settings.displayFullName"), icon: "person.text.rectangle", isOn: $vm.showFullName)
+            ToggleRow(title: localization.t("settings.snoozeProfile"), icon: "moon.zzz.fill", isOn: $vm.isSnoozed)
+        }
+    }
+
+    // MARK: - Discovery Section (WHO I'M LOOKING FOR)
 
     private var discoverySection: some View {
-        settingsSection(title: localization.t("settings.discovery"), icon: "magnifyingglass") {
+        settingsSection(title: "WHO I'M LOOKING FOR", icon: "magnifyingglass") {
             showMeRow
             ageRangeRow
             ToggleRow(
@@ -131,10 +174,78 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Community & Culture Section
+
+    private var communityCultureSection: some View {
+        settingsSection(title: "COMMUNITY & CULTURE", icon: "globe.asia.australia.fill") {
+            filterPickerRow(
+                icon: "text.bubble.fill",
+                title: "Sindhi Fluency",
+                value: vm.fluencyFilter,
+                sheetType: .fluency
+            )
+            filterPickerRow(
+                icon: "person.3.sequence.fill",
+                title: "Generation",
+                value: vm.generationFilter,
+                sheetType: .generation
+            )
+            filterPickerRow(
+                icon: "building.columns.fill",
+                title: "Religion",
+                value: vm.religionFilter,
+                sheetType: .religion
+            )
+            filterPickerRow(
+                icon: "leaf.fill",
+                title: "Gotra",
+                value: vm.gotraFilter,
+                sheetType: .gotra
+            )
+            filterPickerRow(
+                icon: "fork.knife",
+                title: "Dietary",
+                value: vm.dietaryFilter,
+                sheetType: .dietary
+            )
+        }
+    }
+
+    // MARK: - Lifestyle Section
+
+    private var lifestyleSection: some View {
+        settingsSection(title: "LIFESTYLE", icon: "heart.text.square.fill") {
+            filterPickerRow(
+                icon: "graduationcap.fill",
+                title: "Education",
+                value: vm.educationFilter,
+                sheetType: .education
+            )
+            filterPickerRow(
+                icon: "smoke.fill",
+                title: "Smoking",
+                value: vm.smokingFilter,
+                sheetType: .smoking
+            )
+            filterPickerRow(
+                icon: "wineglass.fill",
+                title: "Drinking",
+                value: vm.drinkingFilter,
+                sheetType: .drinking
+            )
+            filterPickerRow(
+                icon: "figure.2.and.child.holdinghands",
+                title: "Family Plans",
+                value: vm.familyPlansFilter,
+                sheetType: .familyPlans
+            )
+        }
+    }
+
     // MARK: - Notifications Section
 
     private var notificationsSection: some View {
-        settingsSection(title: localization.t("settings.notifications"), icon: "bell.fill") {
+        settingsSection(title: "NOTIFICATIONS", icon: "bell.fill") {
             ToggleRow(
                 title: localization.t("settings.matches"),
                 icon: "heart.circle.fill",
@@ -194,21 +305,10 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Privacy Section
-
-    private var privacySection: some View {
-        settingsSection(title: localization.t("settings.privacy"), icon: "lock.fill") {
-            ToggleRow(title: localization.t("settings.showInDiscovery"), icon: "eye.fill", isOn: $vm.discoveryEnabled)
-            ToggleRow(title: localization.t("settings.incognitoMode"), icon: "eye.slash.fill", isOn: $vm.incognitoMode)
-            ToggleRow(title: localization.t("settings.displayFullName"), icon: "person.text.rectangle", isOn: $vm.showFullName)
-            ToggleRow(title: localization.t("settings.snoozeProfile"), icon: "moon.zzz.fill", isOn: $vm.isSnoozed)
-        }
-    }
-
-    // MARK: - Appearance Section
+    // MARK: - Appearance Section (APP)
 
     private var appearanceSection: some View {
-        settingsSection(title: localization.t("settings.appearance"), icon: "paintbrush.fill") {
+        settingsSection(title: "APP", icon: "paintbrush.fill") {
             themePickerRow
             languageRow
         }
@@ -232,6 +332,7 @@ struct SettingsView: View {
                     case .dark: themeManager.preference = .dark
                     case .auto: themeManager.preference = .system
                     }
+                    vm.showToast("Theme set to \(newTheme.display)")
                 }
             )) {
                 ForEach(SettingsViewModel.AppearanceTheme.allCases) { theme in
@@ -267,7 +368,7 @@ struct SettingsView: View {
     // MARK: - Account Section
 
     private var accountSection: some View {
-        settingsSection(title: localization.t("settings.account"), icon: "person.crop.circle.fill") {
+        settingsSection(title: "ACCOUNT", icon: "person.crop.circle.fill") {
             NavigationLink {
                 EditProfileView()
             } label: {
@@ -280,6 +381,16 @@ struct SettingsView: View {
                 settingsRow(icon: "person.3.fill", title: localization.t("settings.familyMode"), color: AppTheme.rose)
             }
 
+            // Export Data
+            Button {
+                vm.showToast("Data export requested")
+            } label: {
+                settingsRow(icon: "square.and.arrow.down", title: "Export Data", color: AppTheme.rose)
+            }
+
+            // Change Phone
+            changePhoneRow
+
             Divider()
                 .background(colors.borderSubtle)
                 .padding(.horizontal, 16)
@@ -288,22 +399,81 @@ struct SettingsView: View {
         }
     }
 
+    private var changePhoneRow: some View {
+        HStack {
+            Image(systemName: "phone.fill")
+                .foregroundColor(AppTheme.rose)
+                .frame(width: 24)
+            Text("Change Phone")
+                .font(.system(size: 15))
+                .foregroundColor(colors.textPrimary)
+            Spacer()
+            Text("+91 98XXX XXXXX")
+                .font(.system(size: 13))
+                .foregroundColor(colors.textMuted)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12))
+                .foregroundColor(colors.textMuted)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
     private var accountDangerButtons: some View {
         VStack(spacing: 0) {
             Button { vm.showLogoutConfirmation = true } label: {
                 settingsRow(icon: "rectangle.portrait.and.arrow.forward", title: localization.t("settings.logOut"), color: AppTheme.warning)
             }
 
-            Button { vm.showDeleteConfirmation = true } label: {
+            Button { vm.showDeleteSheet = true } label: {
                 settingsRow(icon: "trash.fill", title: localization.t("settings.deleteAccount"), color: AppTheme.error)
             }
         }
     }
 
+    // MARK: - Delete Account Sheet
+
+    private var deleteAccountSheet: some View {
+        VStack(spacing: 24) {
+            Spacer().frame(height: 8)
+
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 48))
+                .foregroundColor(AppTheme.error)
+
+            Text("Delete Account")
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(colors.textPrimary)
+
+            Text("This action is permanent and cannot be undone. All your matches, messages, and profile data will be permanently deleted.")
+                .font(.system(size: 15))
+                .foregroundColor(colors.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+
+            VStack(spacing: 12) {
+                SecondaryButton(title: "Keep Account") {
+                    vm.showDeleteSheet = false
+                }
+
+                DangerButton(title: "Delete Account", icon: "trash.fill") {
+                    vm.showDeleteSheet = false
+                    // Trigger actual deletion
+                }
+            }
+            .padding(.horizontal, 24)
+
+            Spacer()
+        }
+        .padding(.top, 24)
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+    }
+
     // MARK: - About Section
 
     private var aboutSection: some View {
-        settingsSection(title: localization.t("settings.about"), icon: "info.circle.fill") {
+        settingsSection(title: "ABOUT", icon: "info.circle.fill") {
             aboutRow(icon: "app.badge", title: localization.t("settings.appVersion"), detail: "2.0.0")
             settingsLinkRow(icon: "doc.text.fill", title: localization.t("settings.termsOfService"))
             settingsLinkRow(icon: "hand.raised.fill", title: localization.t("settings.privacyPolicy"))
@@ -328,6 +498,99 @@ struct SettingsView: View {
         .padding(.vertical, 12)
     }
 
+    // MARK: - Filter Picker Row
+
+    private func filterPickerRow(icon: String, title: String, value: String, sheetType: PickerSheetType) -> some View {
+        Button {
+            activePickerSheet = sheetType
+        } label: {
+            HStack {
+                Image(systemName: icon)
+                    .foregroundColor(AppTheme.rose)
+                    .frame(width: 24)
+                Text(title)
+                    .font(.system(size: 15))
+                    .foregroundColor(colors.textPrimary)
+                Spacer()
+                Text(value)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(value == "Any" ? colors.textMuted : AppTheme.rose)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12))
+                    .foregroundColor(colors.textMuted)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+    }
+
+    // MARK: - Picker Sheet Content
+
+    @ViewBuilder
+    private func pickerSheetContent(for type: PickerSheetType) -> some View {
+        let (title, options, binding) = pickerData(for: type)
+        NavigationStack {
+            List {
+                ForEach(options, id: \.self) { option in
+                    Button {
+                        binding.wrappedValue = option
+                        activePickerSheet = nil
+                        if option != "Any" {
+                            vm.showToast("Filter updated")
+                        }
+                    } label: {
+                        HStack {
+                            Text(option)
+                                .font(.system(size: 16))
+                                .foregroundColor(colors.textPrimary)
+                            Spacer()
+                            if binding.wrappedValue == option {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(AppTheme.rose)
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") {
+                        activePickerSheet = nil
+                    }
+                    .foregroundColor(AppTheme.rose)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func pickerData(for type: PickerSheetType) -> (String, [String], Binding<String>) {
+        switch type {
+        case .fluency:
+            return ("Sindhi Fluency", SettingsViewModel.fluencyOptions, $vm.fluencyFilter)
+        case .generation:
+            return ("Generation", SettingsViewModel.generationOptions, $vm.generationFilter)
+        case .religion:
+            return ("Religion", SettingsViewModel.religionOptions, $vm.religionFilter)
+        case .gotra:
+            return ("Gotra", SettingsViewModel.gotraOptions, $vm.gotraFilter)
+        case .dietary:
+            return ("Dietary", SettingsViewModel.dietaryOptions, $vm.dietaryFilter)
+        case .education:
+            return ("Education", SettingsViewModel.educationOptions, $vm.educationFilter)
+        case .smoking:
+            return ("Smoking", SettingsViewModel.smokingOptions, $vm.smokingFilter)
+        case .drinking:
+            return ("Drinking", SettingsViewModel.drinkingOptions, $vm.drinkingFilter)
+        case .familyPlans:
+            return ("Family Plans", SettingsViewModel.familyPlansOptions, $vm.familyPlansFilter)
+        }
+    }
+
     // MARK: - Shared Helpers
 
     private func settingsSection<Content: View>(
@@ -342,8 +605,9 @@ struct SettingsView: View {
                         .font(.system(size: 14))
                         .foregroundColor(AppTheme.rose)
                     Text(title)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(colors.textSecondary)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(colors.textMuted)
+                        .tracking(1.0)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 14)
@@ -388,4 +652,13 @@ struct SettingsView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
     }
+}
+
+// MARK: - Picker Sheet Type
+
+enum PickerSheetType: String, Identifiable {
+    case fluency, generation, religion, gotra, dietary
+    case education, smoking, drinking, familyPlans
+
+    var id: String { rawValue }
 }

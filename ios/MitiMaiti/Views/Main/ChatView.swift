@@ -29,6 +29,8 @@ struct ChatView: View {
         }
         .onAppear {
             chatVM.loadMessages(for: match)
+            // Mark all unread messages from the other user as read
+            chatVM.markUnreadMessagesAsRead()
         }
         .onChange(of: chatVM.chatUnlocked) { _, unlocked in
             if unlocked {
@@ -78,7 +80,7 @@ struct ChatView: View {
     private var messageListSection: some View {
         ChatMessageList(
             chatVM: chatVM,
-            otherUserName: match.otherUser.displayName
+            match: match
         )
     }
 
@@ -179,11 +181,46 @@ private struct ChatLockBanner: View {
     @Environment(\.adaptiveColors) private var colors
 
     var body: some View {
-        ContentCard {
-            HStack(spacing: 10) {
+        if chatVM.isLockedForMe {
+            // Rose-tinted "waiting for reply" banner
+            VStack(spacing: 4) {
+                HStack(spacing: 8) {
+                    bannerIcon
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Waiting for reply...")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(AppTheme.rose)
+                        Text("Your match hasn't seen your message yet")
+                            .font(.system(size: 11))
+                            .foregroundColor(colors.textMuted)
+                    }
+
+                    Spacer()
+
+                    if chatVM.showCountdown, let exp = chatVM.match?.expiresAt {
+                        CountdownBadge(expiresAt: exp)
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(AppTheme.rose.opacity(0.05))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(AppTheme.rose.opacity(0.15), lineWidth: 1)
+                    )
+            )
+            .padding(.horizontal, 12)
+            .padding(.top, 6)
+        } else {
+            // Standard countdown / prompt banner
+            HStack(spacing: 12) {
                 bannerIcon
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(chatVM.lockBannerMessage?.title ?? LocalizationManager.shared.t("chat.timerActive"))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(colors.textPrimary)
@@ -200,17 +237,31 @@ private struct ChatLockBanner: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(AppTheme.rose.opacity(0.08))
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(colors.surfaceMedium)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(AppTheme.rose.opacity(0.2), lineWidth: 1)
+                    )
+                    .shadow(color: AppTheme.rose.opacity(0.08), radius: 8, x: 0, y: 2)
+            )
+            .padding(.horizontal, 12)
+            .padding(.top, 6)
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 4)
     }
 
     private var bannerIcon: some View {
-        Image(systemName: chatVM.isLockedForMe ? "lock.fill" : "clock.fill")
-            .font(.system(size: 14))
-            .foregroundColor(AppTheme.rose)
+        ZStack {
+            Circle()
+                .fill(AppTheme.rose.opacity(0.12))
+                .frame(width: 36, height: 36)
+
+            Image(systemName: chatVM.isLockedForMe ? "lock.fill" : "clock.fill")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(AppTheme.rose)
+        }
     }
 }
 
@@ -218,13 +269,19 @@ private struct ChatLockBanner: View {
 
 private struct ChatMessageList: View {
     @ObservedObject var chatVM: ChatViewModel
-    let otherUserName: String
+    let match: Match
     @Environment(\.adaptiveColors) private var colors
+    @State private var showScrollToBottom = false
+
+    private var otherUserName: String { match.otherUser.displayName }
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 8) {
+                    // Match announcement at the very top
+                    matchAnnouncementView
+
                     if chatVM.match?.hasFirstMessage == false {
                         systemMessageText(LocalizationManager.shared.t("chat.matchedSendMessage"))
                     }
@@ -246,10 +303,45 @@ private struct ChatMessageList: View {
                         TypingIndicator()
                             .id("typing")
                     }
+
+                    // Anchor for scroll detection
+                    Color.clear
+                        .frame(height: 1)
+                        .id("bottom-anchor")
+                        .onAppear { showScrollToBottom = false }
+                        .onDisappear { showScrollToBottom = true }
                 }
                 .padding(.horizontal)
                 .padding(.top, 12)
                 .padding(.bottom, 8)
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if showScrollToBottom {
+                    Button {
+                        let target = chatVM.messages.last?.id ?? "bottom-anchor"
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            proxy.scrollTo(target, anchor: .bottom)
+                        }
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(colors.textSecondary)
+                            .frame(width: 36, height: 36)
+                            .background(
+                                Circle()
+                                    .fill(colors.cardDark)
+                                    .shadow(color: colors.cardShadowColor, radius: 8, x: 0, y: 4)
+                            )
+                            .overlay(
+                                Circle()
+                                    .stroke(colors.border, lineWidth: 0.5)
+                            )
+                    }
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 8)
+                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                    .animation(.easeOut(duration: 0.2), value: showScrollToBottom)
+                }
             }
             .onChange(of: chatVM.messages.count) { _, _ in
                 let target = chatVM.messages.last?.id ?? "typing"
@@ -319,6 +411,35 @@ private struct ChatMessageList: View {
             .padding(.vertical, 8)
     }
 
+    // MARK: - Match Announcement
+
+    private var matchAnnouncementView: some View {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, yyyy"
+        let dateString = formatter.string(from: match.matchedAt)
+
+        return HStack(spacing: 6) {
+            Image(systemName: "heart.fill")
+                .font(.system(size: 10))
+                .foregroundColor(AppTheme.rose.opacity(0.7))
+            Text("You matched with \(otherUserName) on \(dateString)")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(colors.textMuted)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
+        .background(
+            Capsule()
+                .fill(colors.surfaceMedium)
+                .overlay(
+                    Capsule()
+                        .stroke(colors.border, lineWidth: 0.5)
+                )
+        )
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+    }
+
     // MARK: - System Message
 
     private func systemMessageText(_ text: String) -> some View {
@@ -335,40 +456,53 @@ private struct ChatMessageList: View {
 
 private struct ChatIcebreakerSection: View {
     @ObservedObject var chatVM: ChatViewModel
+    @Environment(\.adaptiveColors) private var colors
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             icebreakerHeader
             icebreakerScroll
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, 12)
     }
 
     private var icebreakerHeader: some View {
         HStack(spacing: 6) {
             Image(systemName: "sparkles")
                 .font(.system(size: 14))
-                .foregroundColor(AppTheme.gold)
+                .foregroundColor(AppTheme.rose)
             Text(LocalizationManager.shared.t("chat.breakTheIce"))
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(AppTheme.gold)
+                .foregroundColor(AppTheme.rose)
         }
         .padding(.horizontal)
     }
 
     private var icebreakerScroll: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: 12) {
                 ForEach(MockData.icebreakers.prefix(5)) { ice in
                     Button {
                         chatVM.sendIcebreaker(ice.question)
                     } label: {
                         IcebreakerCardView(icebreaker: ice)
                     }
+                    .buttonStyle(IcebreakerButtonStyle())
                 }
             }
             .padding(.horizontal)
         }
+    }
+}
+
+// MARK: - Icebreaker Button Style
+
+private struct IcebreakerButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .opacity(configuration.isPressed ? 0.8 : 1.0)
+            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
     }
 }
 
@@ -379,21 +513,41 @@ private struct IcebreakerCardView: View {
     @Environment(\.adaptiveColors) private var colors
 
     var body: some View {
-        ContentCard {
-            VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 5) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 9, weight: .bold))
                 Text(icebreaker.category.capitalized)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(AppTheme.gold)
-
-                Text(icebreaker.question)
-                    .font(.system(size: 13))
-                    .foregroundColor(colors.textPrimary)
-                    .multilineTextAlignment(.leading)
-                    .lineLimit(2)
+                    .font(.system(size: 10, weight: .bold))
+                    .textCase(.uppercase)
+                    .tracking(0.5)
             }
-            .padding(12)
-            .frame(width: 180, alignment: .leading)
+            .foregroundColor(AppTheme.rose)
+
+            Text(icebreaker.question)
+                .font(.system(size: 13))
+                .foregroundColor(colors.textPrimary)
+                .multilineTextAlignment(.leading)
+                .lineLimit(2)
         }
+        .padding(14)
+        .frame(width: 200, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(AppTheme.rose.opacity(0.06))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(
+                            LinearGradient(
+                                colors: [AppTheme.rose.opacity(0.3), AppTheme.rose.opacity(0.1)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+                .shadow(color: AppTheme.rose.opacity(0.1), radius: 8, x: 0, y: 4)
+        )
     }
 }
 
@@ -406,13 +560,40 @@ private struct ChatInputBar: View {
 
     var body: some View {
         if chatVM.inputDisabled {
-            disabledBar
+            inputBarContainer {
+                disabledContent
+            }
         } else {
-            activeBar
+            inputBarContainer {
+                activeContent
+            }
         }
     }
 
-    private var disabledBar: some View {
+    // MARK: - Shared Container
+
+    private func inputBarContainer<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        Rectangle()
+                            .fill(colors.surfaceDark.opacity(0.5))
+                    )
+                    .overlay(alignment: .top) {
+                        Divider()
+                            .foregroundColor(colors.border)
+                    }
+                    .ignoresSafeArea()
+            )
+    }
+
+    // MARK: - Disabled Content
+
+    private var disabledContent: some View {
         HStack(spacing: 10) {
             Image(systemName: "lock.fill")
                 .font(.system(size: 16))
@@ -433,15 +614,11 @@ private struct ChatInputBar: View {
                         .stroke(colors.border, lineWidth: 0.5)
                 )
         )
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(
-            colors.surfaceDark
-                .ignoresSafeArea()
-        )
     }
 
-    private var activeBar: some View {
+    // MARK: - Active Content
+
+    private var activeContent: some View {
         HStack(spacing: 10) {
             // Camera button
             Button {} label: {
@@ -486,12 +663,6 @@ private struct ChatInputBar: View {
                 sendButton
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(
-            colors.surfaceDark
-                .ignoresSafeArea()
-        )
     }
 
     private var sendButton: some View {

@@ -15,10 +15,31 @@ class SettingsViewModel: ObservableObject {
     @Published var heightMax: Double = 190
     @Published var genderPreference: ShowMe = .women
     @Published var intentFilter: Intent?
-    @Published var religionFilter: String?
-    @Published var dietaryFilter: FoodPreference?
-    @Published var fluencyFilter: SindhiFluency?
     @Published var verifiedOnly = false
+
+    // Community & Culture Filters
+    @Published var fluencyFilter: String = "Any"
+    @Published var generationFilter: String = "Any"
+    @Published var religionFilter: String = "Any"
+    @Published var gotraFilter: String = "Any"
+    @Published var dietaryFilter: String = "Any"
+
+    // Lifestyle Filters
+    @Published var educationFilter: String = "Any"
+    @Published var smokingFilter: String = "Any"
+    @Published var drinkingFilter: String = "Any"
+    @Published var familyPlansFilter: String = "Any"
+
+    // Filter options
+    static let fluencyOptions = ["Any", "Fluent", "Conversational", "Basic", "Learning"]
+    static let generationOptions = ["Any", "1st Gen", "2nd Gen", "3rd Gen", "4th Gen+"]
+    static let religionOptions = ["Any", "Hindu Sindhi", "Muslim Sindhi", "Sikh Sindhi", "Other"]
+    static let gotraOptions = ["Any", "Lohana", "Bhatia", "Amil", "Sahiti", "Hyderabadi", "Shikarpuri", "Other"]
+    static let dietaryOptions = ["Any", "Vegetarian", "Non-Vegetarian", "Vegan", "Jain"]
+    static let educationOptions = ["Any", "Bachelors", "Masters", "PhD", "Professional", "Business Owner"]
+    static let smokingOptions = ["Any", "Never", "Occasionally", "Regularly"]
+    static let drinkingOptions = ["Any", "Never", "Socially", "Regularly"]
+    static let familyPlansOptions = ["Any", "Yes wants kids", "Maybe", "No"]
 
     // Notifications - backed by NotificationManager.shared.settings
     var notifyMatches: Bool {
@@ -92,6 +113,19 @@ class SettingsViewModel: ObservableObject {
     // Account
     @Published var showDeleteConfirmation = false
     @Published var showLogoutConfirmation = false
+    @Published var showDeleteSheet = false
+
+    // Toast
+    @Published var toastMessage: String?
+
+    func showToast(_ message: String) {
+        toastMessage = message
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            if self?.toastMessage == message {
+                self?.toastMessage = nil
+            }
+        }
+    }
 
     enum AppearanceTheme: String, CaseIterable, Identifiable {
         case light, dark, auto

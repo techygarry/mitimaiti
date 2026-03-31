@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MainTabView: View {
     @State private var selectedTab = 0
+    @State private var tabBounce: [Int: CGFloat] = [:]
     @StateObject private var feedVM = FeedViewModel()
     @StateObject private var inboxVM = InboxViewModel()
     @StateObject private var profileVM = ProfileViewModel()
@@ -9,7 +10,7 @@ struct MainTabView: View {
     @ObservedObject private var notificationManager = NotificationManager.shared
 
     var body: some View {
-        TabView(selection: $selectedTab) {
+        TabView(selection: tabSelection) {
             DiscoverView()
                 .environmentObject(feedVM)
                 .environmentObject(profileVM)
@@ -50,6 +51,7 @@ struct MainTabView: View {
         }
         .tint(AppTheme.rose)
         .onAppear {
+            configureTabBarAppearance()
             feedVM.loadFeed()
             inboxVM.loadInbox()
             profileVM.loadProfile()
@@ -60,27 +62,85 @@ struct MainTabView: View {
         }
     }
 
-    // MARK: - Badge Counts (combining inbox counts with unread notification counts)
+    // MARK: - Tab Selection Binding (with haptic + bounce)
+
+    private var tabSelection: Binding<Int> {
+        Binding(
+            get: { selectedTab },
+            set: { newTab in
+                guard newTab != selectedTab else { return }
+                // Haptic feedback
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                // Bounce animation on selected icon
+                withAnimation(.interpolatingSpring(stiffness: 300, damping: 12)) {
+                    tabBounce[newTab] = 1.15
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    withAnimation(.interpolatingSpring(stiffness: 300, damping: 12)) {
+                        tabBounce[newTab] = 1.0
+                    }
+                }
+                selectedTab = newTab
+            }
+        )
+    }
+
+    // MARK: - Tab Bar Appearance
+
+    private func configureTabBarAppearance() {
+        let appearance = UITabBarAppearance()
+        appearance.configureWithDefaultBackground()
+
+        // Subtle top border shadow
+        appearance.shadowImage = UIImage()
+        appearance.shadowColor = nil
+        appearance.backgroundEffect = UIBlurEffect(style: .systemMaterial)
+
+        // Larger icons for better touch targets
+        let normalAttrs: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: 11, weight: .medium)
+        ]
+        let selectedAttrs: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: 11, weight: .semibold)
+        ]
+
+        let normalItemAppearance = UITabBarItemAppearance()
+        normalItemAppearance.normal.titleTextAttributes = normalAttrs
+        normalItemAppearance.selected.titleTextAttributes = selectedAttrs
+
+        normalItemAppearance.normal.iconColor = UIColor.secondaryLabel
+        normalItemAppearance.selected.iconColor = UIColor(AppTheme.rose)
+
+        appearance.stackedLayoutAppearance = normalItemAppearance
+        appearance.inlineLayoutAppearance = normalItemAppearance
+        appearance.compactInlineLayoutAppearance = normalItemAppearance
+
+        UITabBar.appearance().standardAppearance = appearance
+        UITabBar.appearance().scrollEdgeAppearance = appearance
+
+        // Top shadow for depth
+        UITabBar.appearance().layer.shadowColor = UIColor.black.cgColor
+        UITabBar.appearance().layer.shadowOffset = CGSize(width: 0, height: -2)
+        UITabBar.appearance().layer.shadowRadius = 8
+        UITabBar.appearance().layer.shadowOpacity = 0.06
+        UITabBar.appearance().clipsToBounds = false
+    }
+
+    // MARK: - Badge Counts
 
     private var likeBadgeCount: Int {
         let inboxLikes = inboxVM.totalLikes
-        let notifLikes = notificationManager.notifications
-            .filter { !$0.isRead && ($0.type == .like || $0.type == .profileView) }
-            .count
+        let notifLikes = notificationManager.unreadCount(for: [.like, .profileView])
         return max(inboxLikes, notifLikes)
     }
 
     private var matchBadgeCount: Int {
         let unread = inboxVM.unreadMessages
-        let notifMatches = notificationManager.notifications
-            .filter { !$0.isRead && ($0.type == .match || $0.type == .message || $0.type == .expiry || $0.type == .icebreaker) }
-            .count
+        let notifMatches = notificationManager.unreadCount(for: [.match, .message, .expiry, .icebreaker])
         return max(unread, notifMatches)
     }
 
     private var familyBadgeCount: Int {
-        notificationManager.notifications
-            .filter { !$0.isRead && ($0.type == .family || $0.type == .familySuggestion) }
-            .count
+        notificationManager.unreadCount(for: [.family, .familySuggestion])
     }
 }

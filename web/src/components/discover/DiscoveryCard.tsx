@@ -228,7 +228,8 @@ export default function DiscoveryCard({ card, onAction }: DiscoveryCardProps) {
           <div className="flex items-center justify-center gap-5">
             <motion.button
               whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
+              whileTap={{ scale: 0.85 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 15 }}
               onClick={() => onAction('pass')}
               className="w-14 h-14 rounded-full bg-white border-2 border-gray-200 flex items-center justify-center hover:border-gray-300 transition-colors shadow-md"
               aria-label="Pass"
@@ -238,7 +239,8 @@ export default function DiscoveryCard({ card, onAction }: DiscoveryCardProps) {
 
             <motion.button
               whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
+              whileTap={{ scale: 0.85 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 15 }}
               onClick={() => onAction('like')}
               className="w-14 h-14 rounded-full bg-rose flex items-center justify-center hover:bg-rose-dark transition-colors shadow-lg"
               aria-label="Like"

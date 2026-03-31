@@ -8,6 +8,13 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
+            // DEV: Skip auth/onboarding — go straight to main app
+            MainTabView()
+                .onAppear {
+                    NotificationManager.shared.requestPermission()
+                }
+
+            /* ORIGINAL FLOW — uncomment to restore:
             if showSplash {
                 SplashView()
                     .transition(.opacity)
@@ -34,6 +41,7 @@ struct ContentView: View {
                         NotificationManager.shared.requestPermission()
                     }
             }
+            */
         }
         .animation(.easeInOut(duration: 0.5), value: showSplash)
         .animation(.easeInOut(duration: 0.5), value: authVM.isAuthenticated)

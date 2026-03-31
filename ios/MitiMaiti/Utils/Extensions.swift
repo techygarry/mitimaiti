@@ -19,9 +19,19 @@ extension View {
         self.modifier(ElevatedCardModifier())
     }
 
-    /// Shimmer loading animation overlay
+    /// Elevated content card (alias for `elevatedCard()` for naming consistency with `cardStyle()`)
+    func elevatedCardStyle() -> some View {
+        self.modifier(ElevatedCardModifier())
+    }
+
+    /// Shimmer loading animation overlay (controlled via binding)
     func shimmer(isActive: Bool) -> some View {
         self.modifier(ShimmerModifier(isActive: isActive))
+    }
+
+    /// Convenience shimmer that is always active -- suitable for placeholder loading states
+    func shimmerEffect() -> some View {
+        self.modifier(ShimmerEffectModifier())
     }
 }
 
@@ -98,6 +108,30 @@ struct ShimmerModifier: ViewModifier {
                     withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
                         phase = 1
                     }
+                }
+            }
+    }
+}
+
+// MARK: - Shimmer Effect Modifier (always-active, self-contained)
+
+struct ShimmerEffectModifier: ViewModifier {
+    @State private var phase: CGFloat = 0
+    @Environment(\.adaptiveColors) private var colors
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                GeometryReader { geo in
+                    colors.shimmerGradient
+                        .frame(width: geo.size.width * 2)
+                        .offset(x: phase * geo.size.width * 2 - geo.size.width)
+                        .mask(content)
+                }
+            )
+            .onAppear {
+                withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+                    phase = 1
                 }
             }
     }

@@ -146,6 +146,11 @@ class NotificationManager: ObservableObject {
 
     var unreadCount: Int { notifications.filter { !$0.isRead }.count }
 
+    func unreadCount(for types: [NotificationType]) -> Int {
+        let typeSet = Set(types)
+        return notifications.filter { !$0.isRead && typeSet.contains($0.type) }.count
+    }
+
     var todayNotifications: [AppNotification] {
         notifications.filter { Calendar.current.isDateInToday($0.createdAt) }
     }

@@ -3,10 +3,31 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, X, MapPin, Eye } from 'lucide-react';
+import { Heart, X, MapPin, Eye, Star } from 'lucide-react';
 import AppShell from '@/components/ui/AppShell';
 import { getFilteredMockLikes, getDisplayName } from '@/lib/mockData';
 import { useTranslation } from '@/lib/i18n';
+import { CulturalBadge } from '@/types';
+
+function CulturalScoreBadge({ score, badge }: { score: number; badge: CulturalBadge }) {
+  const colorMap: Record<CulturalBadge, string> = {
+    gold: 'bg-amber-500 text-white',
+    green: 'bg-emerald-500 text-white',
+    orange: 'bg-orange-500 text-white',
+    none: 'bg-gray-400 text-white',
+  };
+  return (
+    <motion.div
+      initial={{ scale: 0 }}
+      animate={{ scale: 1 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 20, delay: 0.2 }}
+      className={`absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded-full ${colorMap[badge]} shadow-md backdrop-blur-sm`}
+    >
+      <Star className="w-3 h-3 fill-current" />
+      <span className="text-[11px] font-bold">{score}%</span>
+    </motion.div>
+  );
+}
 
 export default function InboxPage() {
   const router = useRouter();
@@ -89,6 +110,11 @@ export default function InboxPage() {
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
+                        {/* Cultural score badge */}
+                        {current.culturalScore != null && current.culturalBadge && (
+                          <CulturalScoreBadge score={current.culturalScore} badge={current.culturalBadge} />
+                        )}
+
                         {/* Name overlay */}
                         <div className="absolute bottom-0 left-0 right-0 p-5">
                           <h2 className="text-2xl font-bold text-white">
@@ -139,9 +165,22 @@ export default function InboxPage() {
                   </div>
                   <div className="flex gap-3">
                     {upNext.map((like) => (
-                      <div
+                      <motion.button
                         key={like.id}
-                        className="flex-1 aspect-[4/5] rounded-2xl overflow-hidden bg-gray-100 relative"
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.97 }}
+                        onClick={() => {
+                          // Skip to this profile by moving it to the front
+                          setLikes((prev) => {
+                            const idx = prev.findIndex((l) => l.id === like.id);
+                            if (idx <= 0) return prev;
+                            const updated = [...prev];
+                            const [target] = updated.splice(idx, 1);
+                            updated.unshift(target);
+                            return updated;
+                          });
+                        }}
+                        className="flex-1 aspect-[4/5] rounded-2xl overflow-hidden bg-gray-100 relative cursor-pointer"
                       >
                         <img
                           src={like.from_photos[0]?.url}
@@ -154,12 +193,16 @@ export default function InboxPage() {
                             {getDisplayName(like.from_user)}
                           </p>
                         </div>
+                        {/* Cultural score badge on thumbnail */}
+                        {like.culturalScore != null && like.culturalBadge && (
+                          <CulturalScoreBadge score={like.culturalScore} badge={like.culturalBadge} />
+                        )}
                         <div className="absolute top-2 right-2">
                           <div className="w-6 h-6 rounded-full bg-rose/90 flex items-center justify-center">
                             <Heart className="w-3 h-3 text-white fill-white" />
                           </div>
                         </div>
-                      </div>
+                      </motion.button>
                     ))}
                   </div>
                 </div>

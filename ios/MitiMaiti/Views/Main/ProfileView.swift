@@ -7,20 +7,31 @@ struct ProfileView: View {
     @State private var showEditProfile = false
     @State private var showSettings = false
     @State private var showFamily = false
+    @State private var appeared = false
 
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: AppTheme.spacingLG) {
                     headerSection
-                    completenessRing
+                    photoCarousel
+                        .sectionFadeIn(appeared: appeared, delay: 0.05)
+                    completenessCard
+                        .sectionFadeIn(appeared: appeared, delay: 0.1)
                     statsRow
+                        .sectionFadeIn(appeared: appeared, delay: 0.15)
                     bioSection
+                        .sectionFadeIn(appeared: appeared, delay: 0.2)
                     promptsSection
+                        .sectionFadeIn(appeared: appeared, delay: 0.25)
                     aboutMeSection
+                        .sectionFadeIn(appeared: appeared, delay: 0.3)
                     sindhiIdentitySection
+                        .sectionFadeIn(appeared: appeared, delay: 0.35)
                     interestsSection
+                        .sectionFadeIn(appeared: appeared, delay: 0.4)
                     actionButtons
+                        .sectionFadeIn(appeared: appeared, delay: 0.45)
                     Spacer().frame(height: 100)
                 }
                 .padding(.horizontal, AppTheme.spacingMD)
@@ -44,7 +55,12 @@ struct ProfileView: View {
             .navigationDestination(isPresented: $showFamily) {
                 FamilyView()
             }
-            .onAppear { profileVM.loadProfile() }
+            .onAppear {
+                profileVM.loadProfile()
+                withAnimation(.easeOut(duration: 0.4)) {
+                    appeared = true
+                }
+            }
         }
     }
 
@@ -52,93 +68,210 @@ struct ProfileView: View {
 
     private var headerSection: some View {
         VStack(spacing: 0) {
-            // Rose gradient header background
             ZStack(alignment: .bottom) {
-                LinearGradient(
-                    colors: [AppTheme.rose.opacity(0.3), AppTheme.roseDark.opacity(0.4)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .frame(height: 120)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+                ZStack {
+                    LinearGradient(
+                        colors: [
+                            AppTheme.rose.opacity(0.4),
+                            AppTheme.roseDark.opacity(0.5),
+                            AppTheme.rose.opacity(0.25)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
 
-                // Avatar with progress ring, centered and overlapping the gradient
-                avatarWithProgressRing
-                    .offset(y: 50)
+                    RadialGradient(
+                        colors: [AppTheme.rose.opacity(0.3), Color.clear],
+                        center: .center,
+                        startRadius: 10,
+                        endRadius: 140
+                    )
+                    .blendMode(.screen)
+                }
+                .frame(height: 160)
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
+
+                profileAvatarRing
+                    .offset(y: 54)
             }
-            .padding(.horizontal, 0)
 
-            Spacer().frame(height: 58)
+            Spacer().frame(height: 62)
 
             nameAndLocation
 
-            Spacer().frame(height: AppTheme.spacingSM)
+            // Intent badge
+            intentBadge
 
-            // Edit Profile button
+            Spacer().frame(height: AppTheme.spacingMD)
+
             Button { showEditProfile = true } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: AppTheme.spacingSM) {
                     Image(systemName: "pencil")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                     Text(localization.t("profile.editProfile"))
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 15, weight: .bold))
                 }
-                .foregroundColor(AppTheme.rose)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
-                .background(
-                    Capsule()
-                        .fill(AppTheme.rose.opacity(0.12))
-                        .overlay(
-                            Capsule()
-                                .stroke(AppTheme.rose.opacity(0.3), lineWidth: 0.5)
-                        )
-                )
+                .foregroundColor(.white)
+                .padding(.horizontal, AppTheme.spacingLG)
+                .padding(.vertical, 12)
+                .background(AppTheme.roseGradient)
+                .clipShape(Capsule())
+                .shadow(color: AppTheme.rose.opacity(0.35), radius: 12, x: 0, y: 5)
             }
         }
         .padding(.top, AppTheme.spacingSM)
     }
 
-    private var avatarWithProgressRing: some View {
+    // MARK: - Photo Carousel
+
+    @ViewBuilder
+    private var photoCarousel: some View {
+        if !profileVM.user.photos.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: AppTheme.spacingSM) {
+                    ForEach(Array(profileVM.user.photos.sorted(by: { $0.sortOrder < $1.sortOrder }).enumerated()), id: \.element.id) { index, photo in
+                        photoCarouselItem(photo: photo, isMain: index == 0)
+                    }
+                }
+                .padding(.horizontal, AppTheme.spacingXS)
+            }
+        }
+    }
+
+    @ObservedObject private var imageStore = UserImageStore.shared
+
+    private func photoCarouselItem(photo: UserPhoto, isMain: Bool) -> some View {
+        ZStack(alignment: .topLeading) {
+            if isMain, let profileImg = imageStore.profileImage {
+                // Use locally stored profile image for main photo
+                Image(uiImage: profileImg)
+                    .resizable()
+                    .scaledToFill()
+            } else if photo.url.hasPrefix("http"), let imageURL = URL(string: photo.url) {
+                AsyncImage(url: imageURL) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    default:
+                        photoPlaceholder
+                    }
+                }
+            } else {
+                photoPlaceholder
+            }
+        }
+        .frame(width: 120, height: 160)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusMD))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.radiusMD)
+                .stroke(isMain ? AppTheme.gold : colors.border, lineWidth: isMain ? 2 : 0.5)
+        )
+        .overlay(alignment: .topLeading) {
+            if isMain {
+                Text("MAIN")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(AppTheme.goldGradient)
+                    .clipShape(Capsule())
+                    .padding(6)
+            }
+        }
+    }
+
+    private var photoPlaceholder: some View {
+        LinearGradient(
+            colors: [AppTheme.rose.opacity(0.3), AppTheme.roseDark.opacity(0.2)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .overlay(
+            Image(systemName: "photo")
+                .font(.system(size: 24))
+                .foregroundColor(colors.textMuted)
+        )
+    }
+
+    // MARK: - Intent Badge
+
+    @ViewBuilder
+    private var intentBadge: some View {
+        if let intent = profileVM.user.intent {
+            HStack(spacing: 4) {
+                Image(systemName: intent.icon)
+                    .font(.system(size: 11, weight: .semibold))
+                Text(intent.display)
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .foregroundColor(intentColor(intent))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(intentColor(intent).opacity(0.12))
+                    .overlay(
+                        Capsule()
+                            .stroke(intentColor(intent).opacity(0.3), lineWidth: 0.5)
+                    )
+            )
+            .padding(.top, AppTheme.spacingSM)
+        }
+    }
+
+    private func intentColor(_ intent: Intent) -> Color {
+        switch intent {
+        case .casual: return AppTheme.info
+        case .open: return Color.purple
+        case .marriage: return AppTheme.rose
+        }
+    }
+
+    // MARK: - Unified Progress Ring Avatar
+
+    private var profileAvatarRing: some View {
         ZStack {
-            // Background ring
             Circle()
                 .stroke(colors.border, lineWidth: 4)
-                .frame(width: 118, height: 118)
+                .frame(width: 120, height: 120)
 
-            // Progress ring
             Circle()
                 .trim(from: 0, to: completenessProgress)
                 .stroke(
                     AppTheme.roseGradient,
                     style: StrokeStyle(lineWidth: 4, lineCap: .round)
                 )
-                .frame(width: 118, height: 118)
+                .frame(width: 120, height: 120)
                 .rotationEffect(.degrees(-90))
+                .animation(.easeInOut(duration: 0.8), value: completenessProgress)
 
             ProfileAvatar(
-                url: nil,
+                url: profileVM.user.photos.first?.url,
                 name: profileVM.user.displayName,
-                size: 106,
+                size: 108,
                 isOnline: profileVM.user.isOnline,
-                showBorder: false
+                showBorder: false,
+                useProfileImage: true
             )
 
-            // Camera button overlay
             Button { showEditProfile = true } label: {
                 Image(systemName: "camera.fill")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.white)
-                    .frame(width: 32, height: 32)
+                    .frame(width: 34, height: 34)
                     .background(
                         Circle()
                             .fill(AppTheme.roseGradient)
+                            .shadow(color: AppTheme.rose.opacity(0.4), radius: 4, x: 0, y: 2)
                     )
             }
-            .offset(x: 38, y: 38)
+            .offset(x: 40, y: 40)
 
             if profileVM.user.isVerified {
                 verifiedBadge
-                    .offset(x: -38, y: 38)
+                    .offset(x: -40, y: 40)
             }
         }
     }
@@ -155,7 +288,7 @@ struct ProfileView: View {
     }
 
     private var nameAndLocation: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: AppTheme.spacingXS) {
             HStack(spacing: 6) {
                 Text(profileVM.user.displayName)
                     .font(.system(size: 24, weight: .bold))
@@ -169,7 +302,7 @@ struct ProfileView: View {
             }
 
             if let city = profileVM.user.city {
-                HStack(spacing: 4) {
+                HStack(spacing: AppTheme.spacingXS) {
                     Image(systemName: "mappin.circle.fill")
                         .font(.system(size: 12))
                     Text(city)
@@ -180,53 +313,55 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: - Completeness Ring
+    // MARK: - Profile Completeness Card
 
-    private var completenessRing: some View {
-        ContentCard {
-            HStack(spacing: AppTheme.spacingMD) {
-                completenessCircle
-                completenessText
-                Spacer()
+    private var completenessCard: some View {
+        Button { showEditProfile = true } label: {
+            ContentCard {
+                VStack(alignment: .leading, spacing: AppTheme.spacingSM) {
+                    HStack(spacing: AppTheme.spacingSM) {
+                        Image(systemName: "chart.bar.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(AppTheme.rose)
+
+                        Text(localization.t("profile.completeness"))
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(colors.textPrimary)
+
+                        Spacer()
+
+                        Text("\(profileVM.user.profileCompleteness)%")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(AppTheme.rose)
+                    }
+
+                    // Progress bar
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(colors.border)
+                                .frame(height: 8)
+
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(AppTheme.roseGradient)
+                                .frame(width: geo.size.width * completenessProgress, height: 8)
+                                .animation(.easeInOut(duration: 0.8), value: completenessProgress)
+                        }
+                    }
+                    .frame(height: 8)
+
+                    Text(localization.t("profile.completeForMatches"))
+                        .font(.system(size: 12))
+                        .foregroundColor(colors.textSecondary)
+                }
+                .padding(AppTheme.spacingMD)
             }
-            .padding(AppTheme.spacingMD)
         }
-    }
-
-    private var completenessCircle: some View {
-        ZStack {
-            Circle()
-                .stroke(colors.border, lineWidth: 6)
-                .frame(width: 56, height: 56)
-
-            Circle()
-                .trim(from: 0, to: completenessProgress)
-                .stroke(
-                    AppTheme.roseGradient,
-                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
-                )
-                .frame(width: 56, height: 56)
-                .rotationEffect(.degrees(-90))
-
-            Text("\(profileVM.user.profileCompleteness)%")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundColor(AppTheme.rose)
-        }
+        .buttonStyle(.plain)
     }
 
     private var completenessProgress: Double {
         Double(profileVM.user.profileCompleteness) / 100.0
-    }
-
-    private var completenessText: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(localization.t("profile.completeness"))
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(colors.textPrimary)
-            Text(localization.t("profile.completeForMatches"))
-                .font(.system(size: 12))
-                .foregroundColor(colors.textSecondary)
-        }
     }
 
     // MARK: - Stats Row
@@ -237,22 +372,22 @@ struct ProfileView: View {
                 ForEach(Array(profileVM.profileStats.enumerated()), id: \.offset) { index, stat in
                     if index > 0 {
                         Divider()
-                            .frame(height: 40)
+                            .frame(height: 48)
                             .background(colors.border)
                     }
-                    VStack(spacing: 6) {
+                    VStack(spacing: AppTheme.spacingSM) {
                         Image(systemName: stat.0)
-                            .font(.system(size: 16))
+                            .font(.system(size: 18))
                             .foregroundColor(AppTheme.rose)
                         Text(stat.1)
-                            .font(.system(size: 20, weight: .bold))
+                            .font(.system(size: 24, weight: .bold))
                             .foregroundColor(colors.textPrimary)
                         Text(stat.2)
-                            .font(.system(size: 12))
-                            .foregroundColor(colors.textSecondary)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(colors.textMuted)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, AppTheme.spacingSM)
+                    .padding(.vertical, AppTheme.spacingMD)
                 }
             }
             .padding(.horizontal, AppTheme.spacingSM)
@@ -267,10 +402,17 @@ struct ProfileView: View {
             ContentCard {
                 VStack(alignment: .leading, spacing: AppTheme.spacingSM) {
                     sectionLabel(icon: "text.quote", title: localization.t("profile.bio"))
-                    Text(bio)
-                        .font(.system(size: 15))
-                        .foregroundColor(colors.textPrimary)
-                        .lineSpacing(4)
+
+                    HStack(alignment: .top, spacing: AppTheme.spacingSM) {
+                        Image(systemName: "quote.opening")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(AppTheme.rose.opacity(0.3))
+
+                        Text(bio)
+                            .font(.system(size: 15).italic())
+                            .foregroundColor(colors.textPrimary)
+                            .lineSpacing(4)
+                    }
                 }
                 .padding(AppTheme.spacingMD)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -282,11 +424,32 @@ struct ProfileView: View {
 
     @ViewBuilder
     private var promptsSection: some View {
-        if !profileVM.user.prompts.isEmpty {
-            VStack(spacing: AppTheme.spacingSM) {
+        VStack(spacing: AppTheme.spacingSM) {
+            if !profileVM.user.prompts.isEmpty {
                 ForEach(profileVM.user.prompts) { prompt in
                     promptCard(prompt: prompt)
                 }
+            }
+
+            if profileVM.user.prompts.count < 3 {
+                Button { showEditProfile = true } label: {
+                    ContentCard {
+                        HStack(spacing: AppTheme.spacingSM) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 18))
+                                .foregroundColor(AppTheme.rose)
+                            Text("Add prompts")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(AppTheme.rose)
+                            Spacer()
+                            Text("\(profileVM.user.prompts.count)/3")
+                                .font(.system(size: 12))
+                                .foregroundColor(colors.textMuted)
+                        }
+                        .padding(AppTheme.spacingMD)
+                    }
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -294,9 +457,10 @@ struct ProfileView: View {
     private func promptCard(prompt: UserPrompt) -> some View {
         ContentCard {
             VStack(alignment: .leading, spacing: AppTheme.spacingSM) {
-                Text(prompt.question)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(AppTheme.gold)
+                Text(prompt.question.uppercased())
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(AppTheme.rose)
+                    .tracking(1.2)
                 Text(prompt.answer)
                     .font(.system(size: 15))
                     .foregroundColor(colors.textPrimary)
@@ -310,14 +474,57 @@ struct ProfileView: View {
     // MARK: - About Me Section
 
     private var aboutMeSection: some View {
-        profileSectionRow(
-            icon: "person.fill",
-            title: localization.t("profile.aboutMe"),
-            filledCount: aboutMeFilledCount,
-            totalCount: aboutMeTotalCount
-        ) {
-            showEditProfile = true
+        ContentCard {
+            VStack(alignment: .leading, spacing: AppTheme.spacingSM) {
+                HStack {
+                    sectionLabel(icon: "person.fill", title: localization.t("profile.aboutMe"))
+                    Spacer()
+                    Text("\(aboutMeFilledCount)/\(aboutMeTotalCount)")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(colors.textMuted)
+                }
+
+                aboutMeFieldRow(icon: "ruler", label: localization.t("profile.height"), value: profileVM.user.heightCm.map { "\($0) cm" })
+                aboutMeFieldRow(icon: "graduationcap.fill", label: localization.t("profile.education"), value: profileVM.user.education)
+                aboutMeFieldRow(icon: "briefcase.fill", label: localization.t("profile.occupation"), value: profileVM.user.occupation)
+                aboutMeFieldRow(icon: "building.2.fill", label: localization.t("profile.company"), value: profileVM.user.company)
+                aboutMeFieldRow(icon: "hands.sparkles.fill", label: localization.t("profile.religion"), value: profileVM.user.religion)
+                aboutMeFieldRow(icon: "smoke.fill", label: localization.t("profile.smoking"), value: profileVM.user.smoking)
+                aboutMeFieldRow(icon: "wineglass.fill", label: localization.t("profile.drinking"), value: profileVM.user.drinking)
+                aboutMeFieldRow(icon: "figure.run", label: localization.t("profile.exercise"), value: profileVM.user.exercise)
+                aboutMeFieldRow(icon: "figure.and.child.holdinghands", label: localization.t("profile.wantKids"), value: profileVM.user.wantKids)
+            }
+            .padding(AppTheme.spacingMD)
         }
+    }
+
+    private func aboutMeFieldRow(icon: String, label: String, value: String?) -> some View {
+        HStack(spacing: AppTheme.spacingSM) {
+            Image(systemName: icon)
+                .font(.system(size: 13))
+                .foregroundColor(AppTheme.rose)
+                .frame(width: 22)
+
+            Text(label)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(colors.textSecondary)
+                .frame(width: 110, alignment: .leading)
+
+            if let value, !value.isEmpty {
+                Text(value)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(colors.textPrimary)
+            } else {
+                Button { showEditProfile = true } label: {
+                    Text("Add")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(colors.textMuted)
+                }
+            }
+
+            Spacer()
+        }
+        .padding(.vertical, AppTheme.spacingXS)
     }
 
     private var aboutMeFilledCount: Int {
@@ -339,14 +546,55 @@ struct ProfileView: View {
     // MARK: - Sindhi Identity Section
 
     private var sindhiIdentitySection: some View {
-        profileSectionRow(
-            icon: "globe.asia.australia.fill",
-            title: localization.t("profile.sindhiIdentity"),
-            filledCount: sindhiFilledCount,
-            totalCount: sindhiTotalCount
-        ) {
-            showEditProfile = true
+        ContentCard {
+            VStack(alignment: .leading, spacing: AppTheme.spacingSM) {
+                HStack {
+                    sectionLabel(icon: "globe.asia.australia.fill", title: localization.t("profile.sindhiIdentity"))
+                    Spacer()
+                    Text("\(sindhiFilledCount)/\(sindhiTotalCount)")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(colors.textMuted)
+                }
+
+                sindhiFieldRow(icon: "waveform.and.mic", label: localization.t("profile.sindhiFluency"), value: profileVM.user.sindhiFluency?.display)
+                sindhiFieldRow(icon: "character.bubble.fill", label: localization.t("profile.dialect"), value: profileVM.user.sindhiDialect)
+                sindhiFieldRow(icon: "mouth.fill", label: localization.t("profile.motherTongue"), value: profileVM.user.motherTongue)
+                sindhiFieldRow(icon: "leaf.fill", label: localization.t("profile.gotra"), value: profileVM.user.gotra)
+                sindhiFieldRow(icon: "clock.arrow.circlepath", label: localization.t("profile.generation"), value: profileVM.user.generation)
+                sindhiFieldRow(icon: "house.fill", label: localization.t("profile.familyValues"), value: profileVM.user.familyValues?.display)
+                sindhiFieldRow(icon: "fork.knife", label: localization.t("profile.foodPreference"), value: profileVM.user.foodPreference?.display)
+            }
+            .padding(AppTheme.spacingMD)
         }
+    }
+
+    private func sindhiFieldRow(icon: String, label: String, value: String?) -> some View {
+        HStack(spacing: AppTheme.spacingSM) {
+            Image(systemName: icon)
+                .font(.system(size: 13))
+                .foregroundColor(AppTheme.rose)
+                .frame(width: 22)
+
+            Text(label)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(colors.textSecondary)
+                .frame(width: 110, alignment: .leading)
+
+            if let value, !value.isEmpty {
+                Text(value)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(colors.textPrimary)
+            } else {
+                Button { showEditProfile = true } label: {
+                    Text("Add")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(colors.textMuted)
+                }
+            }
+
+            Spacer()
+        }
+        .padding(.vertical, AppTheme.spacingXS)
     }
 
     private var sindhiFilledCount: Int {
@@ -365,14 +613,51 @@ struct ProfileView: View {
 
     // MARK: - Interests Section
 
+    @ViewBuilder
     private var interestsSection: some View {
-        profileSectionRow(
-            icon: "heart.fill",
-            title: localization.t("profile.interests"),
-            filledCount: profileVM.user.interests.count,
-            totalCount: max(profileVM.user.interests.count, 5)
-        ) {
-            showEditProfile = true
+        ContentCard {
+            VStack(alignment: .leading, spacing: AppTheme.spacingSM) {
+                HStack {
+                    sectionLabel(icon: "heart.fill", title: localization.t("profile.interests"))
+                    Spacer()
+                    Text("\(profileVM.user.interests.count)/10")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(colors.textMuted)
+                }
+
+                if profileVM.user.interests.isEmpty {
+                    Button { showEditProfile = true } label: {
+                        HStack(spacing: AppTheme.spacingSM) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 16))
+                                .foregroundColor(AppTheme.rose)
+                            Text("Add interests")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(AppTheme.rose)
+                        }
+                        .padding(.vertical, AppTheme.spacingSM)
+                    }
+                } else {
+                    InterestsFlowLayout(spacing: AppTheme.spacingSM) {
+                        ForEach(profileVM.user.interests, id: \.self) { interest in
+                            Text(interest)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(AppTheme.rose)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(
+                                    Capsule()
+                                        .fill(AppTheme.rose.opacity(0.1))
+                                        .overlay(
+                                            Capsule()
+                                                .stroke(AppTheme.rose.opacity(0.25), lineWidth: 0.5)
+                                        )
+                                )
+                        }
+                    }
+                }
+            }
+            .padding(AppTheme.spacingMD)
         }
     }
 
@@ -384,37 +669,6 @@ struct ProfileView: View {
                 showFamily = true
             }
         }
-    }
-
-    // MARK: - Profile Section Row
-
-    private func profileSectionRow(icon: String, title: String, filledCount: Int, totalCount: Int, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            ContentCard {
-                HStack(spacing: AppTheme.spacingSM) {
-                    Image(systemName: icon)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(AppTheme.rose)
-                        .frame(width: 28)
-
-                    Text(title)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(colors.textPrimary)
-
-                    Spacer()
-
-                    Text("\(filledCount)/\(totalCount) fields")
-                        .font(.system(size: 13))
-                        .foregroundColor(colors.textMuted)
-
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(colors.textMuted)
-                }
-                .padding(AppTheme.spacingMD)
-            }
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Helpers
@@ -448,6 +702,72 @@ struct ProfileView: View {
 
             Spacer()
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, AppTheme.spacingSM)
+    }
+}
+
+// MARK: - Interests Flow Layout
+
+struct InterestsFlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = arrangeSubviews(proposal: proposal, subviews: subviews)
+        return result.size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = arrangeSubviews(proposal: proposal, subviews: subviews)
+        for (index, position) in result.positions.enumerated() {
+            guard index < subviews.count else { break }
+            subviews[index].place(at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y), proposal: .unspecified)
+        }
+    }
+
+    private func arrangeSubviews(proposal: ProposedViewSize, subviews: Subviews) -> (positions: [CGPoint], size: CGSize) {
+        let maxWidth = proposal.width ?? .infinity
+        var positions: [CGPoint] = []
+        var currentX: CGFloat = 0
+        var currentY: CGFloat = 0
+        var lineHeight: CGFloat = 0
+        var maxX: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if currentX + size.width > maxWidth, currentX > 0 {
+                currentX = 0
+                currentY += lineHeight + spacing
+                lineHeight = 0
+            }
+            positions.append(CGPoint(x: currentX, y: currentY))
+            lineHeight = max(lineHeight, size.height)
+            currentX += size.width + spacing
+            maxX = max(maxX, currentX - spacing)
+        }
+
+        return (positions, CGSize(width: maxX, height: currentY + lineHeight))
+    }
+}
+
+// MARK: - Section Fade-In Modifier
+
+private struct SectionFadeIn: ViewModifier {
+    let appeared: Bool
+    let delay: Double
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(appeared ? 1 : 0)
+            .offset(y: appeared ? 0 : 12)
+            .animation(
+                .easeOut(duration: 0.35).delay(delay),
+                value: appeared
+            )
+    }
+}
+
+extension View {
+    fileprivate func sectionFadeIn(appeared: Bool, delay: Double) -> some View {
+        modifier(SectionFadeIn(appeared: appeared, delay: delay))
     }
 }

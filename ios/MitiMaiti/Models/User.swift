@@ -59,6 +59,7 @@ struct User: Identifiable, Codable, Hashable {
     var drinking: String?
     var exercise: String?
     var wantKids: String?
+    var settlingTimeline: String?
 
     // Sindhi
     var motherTongue: String?
@@ -124,6 +125,7 @@ struct User: Identifiable, Codable, Hashable {
         drinking: String? = nil,
         exercise: String? = nil,
         wantKids: String? = nil,
+        settlingTimeline: String? = nil,
         motherTongue: String? = nil,
         sindhiDialect: String? = nil,
         sindhiFluency: SindhiFluency? = nil,
@@ -172,6 +174,7 @@ struct User: Identifiable, Codable, Hashable {
         self.drinking = drinking
         self.exercise = exercise
         self.wantKids = wantKids
+        self.settlingTimeline = settlingTimeline
         self.motherTongue = motherTongue
         self.sindhiDialect = sindhiDialect
         self.sindhiFluency = sindhiFluency

@@ -233,6 +233,20 @@ class ChatViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Mark Messages As Read
+
+    /// Marks all unread messages from the other user as "read"
+    func markUnreadMessagesAsRead() {
+        guard let match else { return }
+        let otherUserId = match.otherUser.id
+        for i in messages.indices {
+            if messages[i].senderId == otherUserId &&
+               (messages[i].status == .sent || messages[i].status == .delivered) {
+                messages[i].status = .read
+            }
+        }
+    }
+
     // MARK: - Simulate Reply (Demo Mode)
 
     private func simulateReply(matchId: String) {

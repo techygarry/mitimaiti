@@ -16,11 +16,29 @@ struct FamilyPermissions: Codable, Hashable {
         canViewCulturalScore: true, canViewKundli: true
     )
 
+    static let allDisabled = FamilyPermissions(
+        canViewProfile: false, canViewPhotos: false, canViewBasics: false,
+        canViewSindhi: false, canViewMatches: false, canSuggest: false,
+        canViewCulturalScore: false, canViewKundli: false
+    )
+
     var enabledCount: Int {
         [canViewProfile, canViewPhotos, canViewBasics, canViewSindhi,
          canViewMatches, canSuggest, canViewCulturalScore, canViewKundli]
             .filter { $0 }.count
     }
+
+    /// Maps each permission key path to its (icon, title, description).
+    static let permissionDescriptions: [(keyPath: WritableKeyPath<FamilyPermissions, Bool>, icon: String, title: String, description: String)] = [
+        (\.canViewProfile, "eye", "View Profile", "Can see your full profile details"),
+        (\.canViewPhotos, "camera", "View Photos", "Can browse your uploaded photos"),
+        (\.canViewBasics, "briefcase", "View Basics", "Can see education, occupation & lifestyle"),
+        (\.canViewSindhi, "moon.stars", "Sindhi Identity", "Can view your Sindhi heritage details"),
+        (\.canViewMatches, "heart", "View Matches", "Can see your current matches"),
+        (\.canSuggest, "message", "Suggest Profiles", "Can recommend profiles for you"),
+        (\.canViewCulturalScore, "star", "Cultural Score", "Can view your cultural compatibility score"),
+        (\.canViewKundli, "chart.bar", "Kundli Score", "Can view your kundli compatibility score"),
+    ]
 }
 
 struct FamilyMember: Identifiable, Codable, Hashable {

@@ -4,10 +4,18 @@ import SwiftUI
 // Clean solid card for content — NO glass effect. Glass is reserved for navigation only.
 
 struct ContentCard<Content: View>: View {
+    enum Style {
+        case `default`
+        case elevated
+        case flat
+    }
+
+    let style: Style
     let content: Content
     @Environment(\.adaptiveColors) private var colors
 
-    init(@ViewBuilder content: () -> Content) {
+    init(style: Style = .default, @ViewBuilder content: () -> Content) {
+        self.style = style
         self.content = content()
     }
 
@@ -18,11 +26,92 @@ struct ContentCard<Content: View>: View {
                     .fill(colors.cardDark)
                     .overlay(
                         RoundedRectangle(cornerRadius: AppTheme.radiusCard)
-                            .stroke(colors.border, lineWidth: 0.5)
+                            .stroke(borderColor, lineWidth: borderWidth)
                     )
             )
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusCard))
-            .shadow(color: colors.cardShadowColor, radius: 12, x: 0, y: 6)
+            .shadow(color: shadowColor, radius: shadowRadius, x: 0, y: shadowY)
+    }
+
+    private var borderColor: Color {
+        switch style {
+        case .default: colors.border
+        case .elevated: colors.border.opacity(0.8)
+        case .flat: Color.clear
+        }
+    }
+
+    private var borderWidth: CGFloat {
+        style == .flat ? 0 : 0.5
+    }
+
+    private var shadowColor: Color {
+        switch style {
+        case .default: colors.cardShadowColor
+        case .elevated: colors.cardShadowColor.opacity(1.5)
+        case .flat: Color.clear
+        }
+    }
+
+    private var shadowRadius: CGFloat {
+        switch style {
+        case .default: 12
+        case .elevated: 20
+        case .flat: 0
+        }
+    }
+
+    private var shadowY: CGFloat {
+        switch style {
+        case .default: 6
+        case .elevated: 10
+        case .flat: 0
+        }
+    }
+}
+
+// MARK: - Shared Button Content
+// Extracts the repeated icon/text/loading HStack pattern used by all buttons.
+
+private struct ButtonContent: View {
+    let title: String
+    let icon: String?
+    let isLoading: Bool
+    let tint: Color
+    let fontSize: CGFloat
+    let spacing: CGFloat
+
+    init(
+        title: String,
+        icon: String?,
+        isLoading: Bool,
+        tint: Color = .white,
+        fontSize: CGFloat = 16,
+        spacing: CGFloat = 8
+    ) {
+        self.title = title
+        self.icon = icon
+        self.isLoading = isLoading
+        self.tint = tint
+        self.fontSize = fontSize
+        self.spacing = spacing
+    }
+
+    var body: some View {
+        HStack(spacing: spacing) {
+            if isLoading {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: tint))
+                    .scaleEffect(0.8)
+            } else {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: fontSize, weight: .semibold))
+                }
+                Text(title)
+                    .font(.system(size: fontSize, weight: .semibold))
+            }
+        }
     }
 }
 
@@ -42,27 +131,14 @@ struct PrimaryButton: View {
             tapTrigger.toggle()
             action()
         }) {
-            HStack(spacing: 8) {
-                if isLoading {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        .scaleEffect(0.8)
-                } else {
-                    if let icon {
-                        Image(systemName: icon)
-                            .font(.system(size: 16, weight: .semibold))
-                    }
-                    Text(title)
-                        .font(.system(size: 16, weight: .semibold))
-                }
-            }
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 24)
-            .padding(.vertical, 16)
-            .background(AppTheme.roseGradient)
-            .clipShape(Capsule())
-            .shadow(color: AppTheme.rose.opacity(0.45), radius: 14, x: 0, y: 6)
+            ButtonContent(title: title, icon: icon, isLoading: isLoading)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 16)
+                .background(AppTheme.roseGradient)
+                .clipShape(Capsule())
+                .shadow(color: AppTheme.rose.opacity(0.45), radius: 14, x: 0, y: 6)
         }
         .sensoryFeedback(.impact, trigger: tapTrigger)
         .disabled(isLoading)
@@ -85,30 +161,17 @@ struct SecondaryButton: View {
             tapTrigger.toggle()
             action()
         }) {
-            HStack(spacing: 8) {
-                if isLoading {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: AppTheme.rose))
-                        .scaleEffect(0.8)
-                } else {
-                    if let icon {
-                        Image(systemName: icon)
-                            .font(.system(size: 16, weight: .semibold))
-                    }
-                    Text(title)
-                        .font(.system(size: 16, weight: .semibold))
-                }
-            }
-            .foregroundColor(AppTheme.rose)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 24)
-            .padding(.vertical, 16)
-            .background(Color.clear)
-            .clipShape(Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(AppTheme.rose, lineWidth: 1.5)
-            )
+            ButtonContent(title: title, icon: icon, isLoading: isLoading, tint: AppTheme.rose)
+                .foregroundColor(AppTheme.rose)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 16)
+                .background(Color.clear)
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(AppTheme.rose, lineWidth: 1.5)
+                )
         }
         .sensoryFeedback(.impact, trigger: tapTrigger)
         .disabled(isLoading)
@@ -131,33 +194,20 @@ struct DangerButton: View {
             tapTrigger.toggle()
             action()
         }) {
-            HStack(spacing: 8) {
-                if isLoading {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        .scaleEffect(0.8)
-                } else {
-                    if let icon {
-                        Image(systemName: icon)
-                            .font(.system(size: 16, weight: .semibold))
-                    }
-                    Text(title)
-                        .font(.system(size: 16, weight: .semibold))
-                }
-            }
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 24)
-            .padding(.vertical, 16)
-            .background(
-                LinearGradient(
-                    colors: [AppTheme.error, AppTheme.error.opacity(0.8)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
+            ButtonContent(title: title, icon: icon, isLoading: isLoading)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 16)
+                .background(
+                    LinearGradient(
+                        colors: [AppTheme.error, AppTheme.error.opacity(0.8)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
                 )
-            )
-            .clipShape(Capsule())
-            .shadow(color: AppTheme.error.opacity(0.35), radius: 14, x: 0, y: 6)
+                .clipShape(Capsule())
+                .shadow(color: AppTheme.error.opacity(0.35), radius: 14, x: 0, y: 6)
         }
         .sensoryFeedback(.impact, trigger: tapTrigger)
         .disabled(isLoading)
@@ -179,20 +229,13 @@ struct SmallButton: View {
             tapTrigger.toggle()
             action()
         }) {
-            HStack(spacing: 6) {
-                if let icon {
-                    Image(systemName: icon)
-                        .font(.system(size: 14, weight: .semibold))
-                }
-                Text(title)
-                    .font(.system(size: 14, weight: .semibold))
-            }
-            .foregroundColor(.white)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-            .background(AppTheme.roseGradient)
-            .clipShape(Capsule())
-            .shadow(color: AppTheme.rose.opacity(0.35), radius: 10, x: 0, y: 4)
+            ButtonContent(title: title, icon: icon, isLoading: false, fontSize: 14, spacing: 6)
+                .foregroundColor(.white)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(AppTheme.roseGradient)
+                .clipShape(Capsule())
+                .shadow(color: AppTheme.rose.opacity(0.35), radius: 10, x: 0, y: 4)
         }
         .sensoryFeedback(.impact, trigger: tapTrigger)
     }
@@ -430,6 +473,12 @@ struct MessageBubble: View {
     let message: Message
     var showTimestamp: Bool = true
     @Environment(\.adaptiveColors) private var colors
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var appeared = false
+
+    private var bubbleShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
+    }
 
     var body: some View {
         HStack {
@@ -460,12 +509,12 @@ struct MessageBubble: View {
                     Text(message.content)
                         .font(.system(size: 15))
                         .foregroundColor(message.isFromMe ? .white : colors.textPrimary)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 11)
                         .background(bubbleBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: 18))
+                        .clipShape(bubbleShape)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 18)
+                            bubbleShape
                                 .stroke(
                                     message.isFromMe
                                         ? Color.white.opacity(0.1)
@@ -475,15 +524,15 @@ struct MessageBubble: View {
                         )
                         .shadow(
                             color: message.isFromMe
-                                ? AppTheme.rose.opacity(0.15)
-                                : Color.clear,
-                            radius: 8,
+                                ? AppTheme.rose.opacity(0.18)
+                                : colors.cardShadowColor.opacity(0.5),
+                            radius: message.isFromMe ? 10 : 6,
                             x: 0,
-                            y: 4
+                            y: message.isFromMe ? 4 : 3
                         )
                 }
 
-                // Timestamp row
+                // Timestamp + read receipt row
                 if showTimestamp {
                     HStack(spacing: 4) {
                         Text(message.createdAt.messageTime)
@@ -499,17 +548,29 @@ struct MessageBubble: View {
 
             if !message.isFromMe { Spacer(minLength: 60) }
         }
+        // Entrance animation
+        .opacity(appeared ? 1 : 0)
+        .offset(y: appeared ? 0 : 8)
+        .scaleEffect(appeared ? 1 : 0.97)
+        .onAppear {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                appeared = true
+            }
+        }
     }
 
     @ViewBuilder
     private var bubbleBackground: some View {
         if message.isFromMe {
-            // "My" messages: rose gradient
             AppTheme.roseGradient
         } else {
-            // "Their" messages: adaptive surface
             colors.surfaceMedium
         }
+    }
+
+    /// Read receipt color for the "read" state adapts to color scheme
+    private var readColor: Color {
+        colorScheme == .dark ? .white : Color(hex: "3478F6")
     }
 
     @ViewBuilder
@@ -521,30 +582,30 @@ struct MessageBubble: View {
                 .foregroundColor(colors.textMuted)
         case .sent:
             Image(systemName: "checkmark")
-                .font(.system(size: 10))
+                .font(.system(size: 10, weight: .medium))
                 .foregroundColor(colors.textMuted)
         case .delivered:
             ZStack(alignment: .leading) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 10))
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundColor(colors.textMuted)
                 Image(systemName: "checkmark")
-                    .font(.system(size: 10))
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundColor(colors.textMuted)
-                    .offset(x: 4)
+                    .offset(x: 5)
             }
-            .frame(width: 18)
+            .frame(width: 19)
         case .read:
             ZStack(alignment: .leading) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 10))
-                    .foregroundColor(AppTheme.rose)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(readColor)
                 Image(systemName: "checkmark")
-                    .font(.system(size: 10))
-                    .foregroundColor(AppTheme.rose)
-                    .offset(x: 4)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(readColor)
+                    .offset(x: 5)
             }
-            .frame(width: 18)
+            .frame(width: 19)
         }
     }
 }
@@ -557,10 +618,19 @@ struct EmptyStateView: View {
     let message: String
     var actionTitle: String?
     var action: (() -> Void)?
+    var illustration: Image?
     @Environment(\.adaptiveColors) private var colors
 
     var body: some View {
         VStack(spacing: 16) {
+            if let illustration {
+                illustration
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: 200, maxHeight: 160)
+                    .padding(.bottom, 4)
+            }
+
             Image(systemName: icon)
                 .font(.system(size: 48))
                 .foregroundStyle(
@@ -590,29 +660,203 @@ struct EmptyStateView: View {
     }
 }
 
+// MARK: - Verified Badge
+// Blue checkmark.seal.fill badge for verified profiles and entities
+
+struct VerifiedBadge: View {
+    var size: CGFloat = 16
+
+    var body: some View {
+        Image(systemName: "checkmark.seal.fill")
+            .font(.system(size: size))
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [Color.blue, Color.blue.opacity(0.8)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .accessibilityLabel("Verified")
+    }
+}
+
+// MARK: - Progress Ring
+// Circular progress indicator (e.g. profile completeness)
+
+struct ProgressRing: View {
+    let progress: Double
+    var size: CGFloat = 60
+    var lineWidth: CGFloat = 6
+    var color: Color = AppTheme.rose
+
+    var body: some View {
+        ZStack {
+            // Background track
+            Circle()
+                .stroke(color.opacity(0.15), lineWidth: lineWidth)
+
+            // Filled arc
+            Circle()
+                .trim(from: 0, to: clampedProgress)
+                .stroke(
+                    AngularGradient(
+                        colors: [color, color.opacity(0.7), color],
+                        center: .center,
+                        startAngle: .degrees(0),
+                        endAngle: .degrees(360)
+                    ),
+                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90))
+                .animation(.easeInOut(duration: 0.5), value: clampedProgress)
+
+            // Percentage label
+            Text("\(Int(clampedProgress * 100))%")
+                .font(.system(size: size * 0.25, weight: .bold, design: .rounded))
+                .foregroundColor(color)
+        }
+        .frame(width: size, height: size)
+    }
+
+    private var clampedProgress: Double {
+        min(max(progress, 0), 1)
+    }
+}
+
+// MARK: - Loading Overlay
+// Centered shimmer overlay that can be placed on any view
+
+struct LoadingOverlay: View {
+    @State private var shimmerOffset: CGFloat = -1
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.4)
+                .ignoresSafeArea()
+
+            VStack(spacing: 16) {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    .scaleEffect(1.3)
+
+                Text("Loading...")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white.opacity(0.9))
+            }
+            .padding(32)
+            .background(
+                RoundedRectangle(cornerRadius: AppTheme.radiusMD)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        shimmerLayer
+                            .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusMD))
+                    )
+            )
+        }
+        .onAppear {
+            withAnimation(
+                .linear(duration: 1.5)
+                .repeatForever(autoreverses: false)
+            ) {
+                shimmerOffset = 2
+            }
+        }
+    }
+
+    private var shimmerLayer: some View {
+        GeometryReader { geo in
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0),
+                            Color.white.opacity(0.08),
+                            Color.white.opacity(0),
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: geo.size.width * 0.6)
+                .offset(x: geo.size.width * shimmerOffset)
+        }
+    }
+}
+
+// MARK: - Stat Row
+// Horizontal row of icon + value stats (e.g. "Views: 234 | Likes: 56")
+
+struct StatRow: View {
+    struct Item: Identifiable {
+        let id = UUID()
+        let icon: String
+        let label: String
+        let value: String
+    }
+
+    let items: [Item]
+    @Environment(\.adaptiveColors) private var colors
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                if index > 0 {
+                    divider
+                }
+                statItem(item)
+            }
+        }
+    }
+
+    private func statItem(_ item: Item) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: item.icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(AppTheme.rose)
+            Text(item.value)
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .foregroundColor(colors.textPrimary)
+            Text(item.label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(colors.textMuted)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var divider: some View {
+        Rectangle()
+            .fill(colors.border)
+            .frame(width: 0.5, height: 20)
+    }
+}
+
 // MARK: - Typing Indicator
 // Three animated dots
 
 struct TypingIndicator: View {
+    @State private var dotOpacity: [Double] = [0.4, 0.4, 0.4]
     @State private var dotScale: [CGFloat] = [1, 1, 1]
     @Environment(\.adaptiveColors) private var colors
 
     var body: some View {
         HStack {
-            HStack(spacing: 4) {
+            HStack(spacing: 5) {
                 ForEach(0..<3, id: \.self) { i in
                     Circle()
                         .fill(colors.textMuted)
-                        .frame(width: 6, height: 6)
+                        .frame(width: 7, height: 7)
                         .scaleEffect(dotScale[i])
+                        .opacity(dotOpacity[i])
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background(colors.surfaceMedium)
-            .clipShape(RoundedRectangle(cornerRadius: 18))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(
+                BubbleTailShape(isFromMe: false)
+                    .fill(colors.surfaceMedium)
+            )
             .overlay(
-                RoundedRectangle(cornerRadius: 18)
+                BubbleTailShape(isFromMe: false)
                     .stroke(colors.border, lineWidth: 0.5)
             )
             Spacer()
@@ -623,12 +867,24 @@ struct TypingIndicator: View {
     private func animate() {
         for i in 0..<3 {
             withAnimation(
-                .easeInOut(duration: 0.4)
-                .repeatForever()
-                .delay(Double(i) * 0.15)
+                .easeInOut(duration: 1.0)
+                .repeatForever(autoreverses: true)
+                .delay(Double(i) * 0.2)
             ) {
-                dotScale[i] = 1.5
+                dotScale[i] = 1.4
+                dotOpacity[i] = 1.0
             }
         }
+    }
+}
+
+/// A rounded-rect shape with a small tail on the left or right
+private struct BubbleTailShape: Shape {
+    let isFromMe: Bool
+
+    func path(in rect: CGRect) -> Path {
+        let radius: CGFloat = 18
+        return RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .path(in: rect)
     }
 }

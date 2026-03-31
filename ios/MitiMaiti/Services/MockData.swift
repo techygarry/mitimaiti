@@ -1,7 +1,7 @@
 import Foundation
 
 struct MockData {
-    // MARK: - Photo URLs (picsum.photos for real placeholder images)
+    // MARK: - Photo URLs (high-quality placeholder images)
     static let photoURLs = [
         "https://i.pravatar.cc/600?img=1",
         "https://i.pravatar.cc/600?img=5",
@@ -17,7 +17,22 @@ struct MockData {
         "https://i.pravatar.cc/600?img=48",
         "https://i.pravatar.cc/600?img=49",
         "https://i.pravatar.cc/600?img=56",
-        "https://i.pravatar.cc/600?img=57"
+        "https://i.pravatar.cc/600?img=57",
+        "https://i.pravatar.cc/600?img=3",
+        "https://i.pravatar.cc/600?img=7",
+        "https://i.pravatar.cc/600?img=10",
+        "https://i.pravatar.cc/600?img=14",
+        "https://i.pravatar.cc/600?img=18",
+        "https://i.pravatar.cc/600?img=22",
+        "https://i.pravatar.cc/600?img=26",
+        "https://i.pravatar.cc/600?img=29",
+        "https://i.pravatar.cc/600?img=33",
+        "https://i.pravatar.cc/600?img=38",
+        "https://i.pravatar.cc/600?img=43",
+        "https://i.pravatar.cc/600?img=47",
+        "https://i.pravatar.cc/600?img=51",
+        "https://i.pravatar.cc/600?img=53",
+        "https://i.pravatar.cc/600?img=60"
     ]
 
     // MARK: - Interests
@@ -190,7 +205,69 @@ struct MockData {
         makeUser(name: "Riya", age: 25, city: "Kolkata", gender: .woman,
                 bio: "Classical Kathak dancer turned contemporary choreographer. I express through movement what words can't say.",
                 occupation: "Choreographer", company: "Nritya Academy", education: "MA Performing Arts",
-                interests: ["Dancing", "Music", "Yoga", "Art", "Meditation"], intent: .open, photoIndex: 14)
+                interests: ["Dancing", "Music", "Yoga", "Art", "Meditation"], intent: .open, photoIndex: 14),
+
+        // ── 10 more diverse profiles ──
+
+        makeUser(name: "Nisha", age: 27, city: "Mumbai", gender: .woman,
+                bio: "Pediatrician who loves kids more than adulting. Marathon runner, amateur baker, and obsessed with sunset hikes.",
+                occupation: "Pediatrician", company: "Hinduja Hospital", education: "MBBS, Grant Medical",
+                interests: ["Fitness", "Cooking", "Hiking", "Yoga", "Volunteering"],
+                fluency: .native, photoIndex: 15),
+
+        makeUser(name: "Rohan", age: 29, city: "Bangalore", gender: .man,
+                bio: "Product designer at a startup. I sketch ideas on napkins, brew pour-over coffee, and debate whether pineapple goes on pizza.",
+                occupation: "Lead Product Designer", company: "Razorpay", education: "MDes, IIT Bombay",
+                interests: ["Art", "Coffee", "Tech", "Photography", "Cycling"],
+                fluency: .conversational, photoIndex: 16),
+
+        makeUser(name: "Prerna", age: 24, city: "Ahmedabad", gender: .woman,
+                bio: "CA by day, open mic poet by night. My spreadsheets are as balanced as my chai. Looking for someone who gets both sides.",
+                occupation: "Chartered Accountant", company: "Deloitte", education: "BCom, HL College + CA",
+                interests: ["Writing", "Coffee", "Theatre", "Bollywood", "Travel"],
+                intent: .open, fluency: .fluent, photoIndex: 17),
+
+        makeUser(name: "Arjun", age: 31, city: "Dubai", gender: .man,
+                bio: "Real estate developer building communities. Weekend golfer, vinyl collector. The guy who always picks the restaurant.",
+                occupation: "Development Manager", company: "Emaar Properties", education: "MBA, ISB Hyderabad",
+                interests: ["Travel", "Food", "Cricket", "Music", "Fashion"],
+                fluency: .basic, photoIndex: 18),
+
+        makeUser(name: "Meera", age: 26, city: "Chennai", gender: .woman,
+                bio: "Climate scientist working on ocean conservation. Scuba diver, vegan cook, and firm believer that small acts change the world.",
+                occupation: "Research Fellow", company: "NIOT Chennai", education: "MSc Environmental Science, IISc",
+                interests: ["Swimming", "Volunteering", "Photography", "Cooking", "Reading"],
+                fluency: .learning, photoIndex: 19),
+
+        makeUser(name: "Karan", age: 28, city: "New York", gender: .man,
+                bio: "Investment banker who trades stocks by day and guitar chords by night. Homesick for mom's dal but NYC has its own magic.",
+                occupation: "Associate", company: "Goldman Sachs", education: "BSc Econ, Wharton",
+                interests: ["Music", "Fitness", "Travel", "Food", "Tech"],
+                fluency: .fluent, photoIndex: 20),
+
+        makeUser(name: "Diya", age: 25, city: "Pune", gender: .woman,
+                bio: "UX researcher who asks too many questions for a living. Cat mom to two rescues. Will judge you lovingly by your bookshelf.",
+                occupation: "Senior UX Researcher", company: "Google", education: "MA Psychology, TISS",
+                interests: ["Reading", "Coffee", "Art", "Movies", "Meditation"],
+                fluency: .conversational, photoIndex: 21),
+
+        makeUser(name: "Sahil", age: 30, city: "London", gender: .man,
+                bio: "Hedge fund quant who speaks Python better than English. Weekend potter, terrible singer, excellent listener. Chai snob.",
+                occupation: "Quantitative Analyst", company: "Citadel", education: "MFE, Oxford",
+                interests: ["Tech", "Art", "Music", "Cricket", "Cooking"],
+                fluency: .native, photoIndex: 22),
+
+        makeUser(name: "Ira", age: 23, city: "Delhi", gender: .woman,
+                bio: "Fashion design student with a thing for sustainable textiles. My Instagram is 90% fabric swatches and 10% street food.",
+                occupation: "Fashion Designer", company: "NIFT Delhi", education: "BDes Fashion, NIFT",
+                interests: ["Fashion", "Art", "Photography", "Travel", "Dancing"],
+                intent: .casual, fluency: .fluent, photoIndex: 23),
+
+        makeUser(name: "Dev", age: 27, city: "Singapore", gender: .man,
+                bio: "Data scientist who found patterns in everything except love. Triathlon finisher, amateur chef, professional overthinker.",
+                occupation: "Senior Data Scientist", company: "Grab", education: "MS Analytics, NUS",
+                interests: ["Fitness", "Cooking", "Tech", "Swimming", "Cycling"],
+                fluency: .basic, photoIndex: 24)
     ]
 
     // MARK: - Feed Cards
@@ -309,18 +386,28 @@ struct MockData {
         LikedYouCard(user: mockUsers[3], likedAt: Date().addingTimeInterval(-7200), likeLabel: "Liked your photo", culturalScore: 76, culturalBadge: .green),
         LikedYouCard(user: mockUsers[5], likedAt: Date().addingTimeInterval(-14400), likeLabel: "Liked your answer", culturalScore: 82, culturalBadge: .green),
         LikedYouCard(user: mockUsers[7], likedAt: Date().addingTimeInterval(-28800), likeLabel: "Liked your profile", culturalScore: 91, culturalBadge: .gold),
-        LikedYouCard(user: mockUsers[9], likedAt: Date().addingTimeInterval(-43200), likeLabel: "Liked your photo", culturalScore: 65, culturalBadge: .orange)
+        LikedYouCard(user: mockUsers[9], likedAt: Date().addingTimeInterval(-43200), likeLabel: "Liked your photo", culturalScore: 65, culturalBadge: .orange),
+        LikedYouCard(user: mockUsers[15], likedAt: Date().addingTimeInterval(-1800), likeLabel: "Liked your prompt", culturalScore: 94, culturalBadge: .gold),
+        LikedYouCard(user: mockUsers[17], likedAt: Date().addingTimeInterval(-5400), likeLabel: "Liked your profile", culturalScore: 79, culturalBadge: .green),
+        LikedYouCard(user: mockUsers[19], likedAt: Date().addingTimeInterval(-10800), likeLabel: "Liked your photo", culturalScore: 71, culturalBadge: .orange),
+        LikedYouCard(user: mockUsers[21], likedAt: Date().addingTimeInterval(-21600), likeLabel: "Liked your answer", culturalScore: 86, culturalBadge: .gold),
+        LikedYouCard(user: mockUsers[23], likedAt: Date().addingTimeInterval(-36000), likeLabel: "Liked your profile", culturalScore: 68, culturalBadge: .orange)
     ]
 
     // MARK: - Messages
     static func mockMessages(matchId: String, otherUserId: String) -> [Message] {
         [
-            Message(matchId: matchId, senderId: otherUserId, content: "Hey there! I noticed we both love Sindhi food!", msgType: .text, status: .read, createdAt: Date().addingTimeInterval(-7200)),
-            Message(matchId: matchId, senderId: "current-user-id", content: "Sai bhaani! Yes, nothing beats homemade dal pakwan!", msgType: .text, status: .read, createdAt: Date().addingTimeInterval(-6900)),
-            Message(matchId: matchId, senderId: otherUserId, content: "So true! My mom makes the best one. What's your specialty?", msgType: .text, status: .read, createdAt: Date().addingTimeInterval(-6600)),
-            Message(matchId: matchId, senderId: "current-user-id", content: "I make a killer sai bhaji! Also trying to perfect koki", msgType: .text, status: .delivered, createdAt: Date().addingTimeInterval(-5400)),
-            Message(matchId: matchId, senderId: otherUserId, content: "A person after my own heart! We should cook together sometime", msgType: .text, status: .sent, createdAt: Date().addingTimeInterval(-3600)),
-            Message(matchId: matchId, senderId: "current-user-id", content: "That sounds like an amazing first date idea!", msgType: .text, status: .sent, createdAt: Date().addingTimeInterval(-1800))
+            Message(matchId: matchId, senderId: otherUserId, content: "Hey there! I noticed we both love Sindhi food!", msgType: .text, status: .read, createdAt: Date().addingTimeInterval(-86400)),
+            Message(matchId: matchId, senderId: "current-user-id", content: "Sai bhaani! Yes, nothing beats homemade dal pakwan!", msgType: .text, status: .read, createdAt: Date().addingTimeInterval(-86100)),
+            Message(matchId: matchId, senderId: otherUserId, content: "So true! My mom makes the best one. What's your specialty?", msgType: .text, status: .read, createdAt: Date().addingTimeInterval(-85200)),
+            Message(matchId: matchId, senderId: "current-user-id", content: "I make a killer sai bhaji! Also trying to perfect koki 😄", msgType: .text, status: .read, createdAt: Date().addingTimeInterval(-84000)),
+            Message(matchId: matchId, senderId: otherUserId, content: "Omg koki is so hard to get right! My nani was the queen of koki", msgType: .text, status: .read, createdAt: Date().addingTimeInterval(-72000)),
+            Message(matchId: matchId, senderId: "current-user-id", content: "The secret is apparently in the dough resting time. My mom told me 30 min minimum", msgType: .text, status: .read, createdAt: Date().addingTimeInterval(-71000)),
+            Message(matchId: matchId, senderId: otherUserId, content: "That makes sense! My nani used to say patience makes the best food", msgType: .text, status: .read, createdAt: Date().addingTimeInterval(-43200)),
+            Message(matchId: matchId, senderId: "current-user-id", content: "Your nani sounds amazing. What other traditions has she passed down?", msgType: .text, status: .read, createdAt: Date().addingTimeInterval(-42000)),
+            Message(matchId: matchId, senderId: otherUserId, content: "She taught me to always keep Jhulelal's photo in the kitchen. And to never waste food 🙏", msgType: .text, status: .delivered, createdAt: Date().addingTimeInterval(-7200)),
+            Message(matchId: matchId, senderId: otherUserId, content: "A person after my own heart! We should cook together sometime", msgType: .text, status: .delivered, createdAt: Date().addingTimeInterval(-3600)),
+            Message(matchId: matchId, senderId: "current-user-id", content: "That sounds like an amazing first date idea! When are you free?", msgType: .text, status: .sent, createdAt: Date().addingTimeInterval(-1800))
         ]
     }
 
@@ -340,6 +427,18 @@ struct MockData {
             suggestedUser: mockUsers[3],
             note: "Lalwani family ka beta hai, bahut accha ladka hai. London mein settled hai.",
             suggestedAt: Date().addingTimeInterval(-3600 * 6)
+        ),
+        FamilySuggestion(
+            suggestedBy: mockFamilyMembers[1],
+            suggestedUser: mockUsers[15],
+            note: "Doctor hai, Hinduja hospital mein. Bahut sanskaari family hai.",
+            suggestedAt: Date().addingTimeInterval(-3600 * 2)
+        ),
+        FamilySuggestion(
+            suggestedBy: mockFamilyMembers[0],
+            suggestedUser: mockUsers[21],
+            note: "Vaswani uncle ki beti. Google mein kaam karti hai, Pune mein hai.",
+            suggestedAt: Date().addingTimeInterval(-3600 * 12)
         )
     ]
 

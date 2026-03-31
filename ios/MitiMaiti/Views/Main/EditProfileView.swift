@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 struct EditProfileView: View {
     @EnvironmentObject var profileVM: ProfileViewModel
@@ -40,6 +41,7 @@ struct EditProfileView: View {
     @State private var editDrinking: String = ""
     @State private var editExercise: String = ""
     @State private var editWantKids: String = ""
+    @State private var editSettlingTimeline: String = ""
 
     @State private var editFluency: SindhiFluency = .fluent
     @State private var editDialect: String = ""
@@ -48,6 +50,7 @@ struct EditProfileView: View {
     @State private var editMotherTongue: String = ""
     @State private var editCommunitySubGroup: String = ""
     @State private var editFamilyOriginCity: String = ""
+    @State private var editFamilyOriginCountry: String = ""
 
     @State private var editFamilyValues: FamilyValues = .moderate
     @State private var editFoodPreference: FoodPreference = .vegetarian
@@ -60,6 +63,19 @@ struct EditProfileView: View {
     @State private var editMovies: [String] = []
     @State private var editLanguages: [String] = []
     @State private var editTravelStyle: String = ""
+
+    // MARK: - Prompts state
+    @State private var editPrompts: [UserPrompt] = []
+    @State private var showAddPrompt: Bool = false
+    @State private var selectedPromptQuestion: String = "A life goal of mine"
+    @State private var promptAnswer: String = ""
+
+    // MARK: - Photos state
+    @State private var selectedPhotoItems: [PhotosPickerItem] = []
+    @State private var showPhotoPicker: Bool = false
+
+    // MARK: - Save toast
+    @State private var showSaveToast: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -98,6 +114,34 @@ struct EditProfileView: View {
                 saveSuccessBanner
             }
         }
+        .overlay(alignment: .top) {
+            if showSaveToast {
+                Text("Saved")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 8)
+                    .background(AppTheme.success)
+                    .clipShape(Capsule())
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .padding(.top, 8)
+            }
+        }
+        .sheet(isPresented: $showAddPrompt) {
+            addPromptSheet
+        }
+        .onChange(of: editName) { _ in flashSaveToast() }
+        .onChange(of: editBio) { _ in flashSaveToast() }
+        .onChange(of: editHeight) { _ in flashSaveToast() }
+        .onChange(of: editSmoking) { _ in flashSaveToast() }
+        .onChange(of: editDrinking) { _ in flashSaveToast() }
+        .onChange(of: editExercise) { _ in flashSaveToast() }
+        .onChange(of: editWantKids) { _ in flashSaveToast() }
+        .onChange(of: editSettlingTimeline) { _ in flashSaveToast() }
+        .onChange(of: editInterests) { _ in flashSaveToast() }
+        .onChange(of: editPrompts) { _ in flashSaveToast() }
+        .onChange(of: editGeneration) { _ in flashSaveToast() }
+        .onChange(of: editFamilyOriginCountry) { _ in flashSaveToast() }
         .onAppear { populateFromUser() }
     }
 
@@ -298,8 +342,15 @@ struct EditProfileView: View {
             editField(label: "Want Kids", icon: "figure.and.child.holdinghands") {
                 menuPicker(
                     selection: $editWantKids,
-                    options: ["", "Yes", "No", "Maybe", "Have Kids"],
-                    labels: ["Select", "Yes", "No", "Maybe", "Have Kids"]
+                    options: ["", "Want someday", "Don't want", "Have & want more", "Have & done", "Open to it"],
+                    labels: ["Select", "Want someday", "Don't want", "Have & want more", "Have & done", "Open to it"]
+                )
+            }
+            editField(label: "Settling Timeline", icon: "calendar.badge.clock") {
+                menuPicker(
+                    selection: $editSettlingTimeline,
+                    options: ["", "ASAP", "1-2 years", "3-5 years", "Not sure"],
+                    labels: ["Select", "ASAP", "1-2 years", "3-5 years", "Not sure"]
                 )
             }
         }
@@ -332,7 +383,11 @@ struct EditProfileView: View {
                 AppTextField(placeholder: "e.g. Advani", text: $editGotra, icon: "leaf")
             }
             editField(label: "Generation", icon: "clock.arrow.circlepath") {
-                AppTextField(placeholder: "e.g. 2nd Generation", text: $editGeneration)
+                menuPicker(
+                    selection: $editGeneration,
+                    options: ["", "Sindhi-born", "2nd Generation", "3rd Generation", "Mixed heritage"],
+                    labels: ["Select", "Sindhi-born", "2nd Generation", "3rd Generation", "Mixed heritage"]
+                )
             }
             editField(label: "Mother Tongue", icon: "character.bubble.fill") {
                 AppTextField(placeholder: "e.g. Sindhi", text: $editMotherTongue)
@@ -342,6 +397,9 @@ struct EditProfileView: View {
             }
             editField(label: "Family Origin City", icon: "mappin.circle.fill") {
                 AppTextField(placeholder: "Ancestral city", text: $editFamilyOriginCity, icon: "mappin")
+            }
+            editField(label: "Family Origin Country", icon: "globe.americas.fill") {
+                AppTextField(placeholder: "e.g. India, Pakistan", text: $editFamilyOriginCountry, icon: "globe")
             }
         }
     }
@@ -435,12 +493,18 @@ struct EditProfileView: View {
     // MARK: - Section 4: Personality
 
     private var personalitySection: some View {
-        ContentCard {
-            VStack(spacing: AppTheme.spacingSM) {
-                personalityChipFields
-                personalityTextFields
+        VStack(spacing: AppTheme.spacingSM) {
+            ContentCard {
+                VStack(spacing: AppTheme.spacingSM) {
+                    personalityChipFields
+                    personalityTextFields
+                }
+                .padding(AppTheme.spacingMD)
             }
-            .padding(AppTheme.spacingMD)
+            ContentCard {
+                promptsSection
+                    .padding(AppTheme.spacingMD)
+            }
         }
     }
 
@@ -467,6 +531,208 @@ struct EditProfileView: View {
         }
     }
 
+    // MARK: - Prompts Section
+
+    private var promptQuestionOptions: [String] {
+        [
+            "A life goal of mine",
+            "The way to my heart is",
+            "My Sindhi superpower",
+            "My simple pleasures",
+            "I geek out on",
+            "My most controversial opinion",
+            "Together we could",
+            "I am convinced that",
+            "My non-negotiable",
+            "My typical Sunday",
+            "The best way to ask me out",
+            "I am looking for",
+            "We will get along if",
+            "I want someone who",
+            "My idea of a perfect day"
+        ]
+    }
+
+    private var promptsSection: some View {
+        VStack(alignment: .leading, spacing: AppTheme.spacingSM) {
+            HStack(spacing: 6) {
+                Image(systemName: "bubble.left.and.text.bubble.right.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(AppTheme.rose)
+                Text("Prompts")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(colors.textSecondary)
+            }
+
+            ForEach(editPrompts) { prompt in
+                promptCard(prompt: prompt)
+            }
+
+            if editPrompts.count < 3 {
+                Button {
+                    selectedPromptQuestion = availablePromptQuestions.first ?? "A life goal of mine"
+                    promptAnswer = ""
+                    showAddPrompt = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 14))
+                        Text("Add Prompt")
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(AppTheme.rose)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: AppTheme.radiusMD)
+                            .fill(AppTheme.rose.opacity(0.1))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: AppTheme.radiusMD)
+                                    .stroke(AppTheme.rose.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
+                            )
+                    )
+                }
+            }
+        }
+    }
+
+    private var availablePromptQuestions: [String] {
+        let usedQuestions = Set(editPrompts.map { $0.question })
+        return promptQuestionOptions.filter { !usedQuestions.contains($0) }
+    }
+
+    private func promptCard(prompt: UserPrompt) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(prompt.question.uppercased())
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(AppTheme.rose)
+                Spacer()
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        editPrompts.removeAll { $0.id == prompt.id }
+                    }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundColor(AppTheme.error)
+                }
+            }
+            Text(prompt.answer)
+                .font(.system(size: 14))
+                .foregroundColor(colors.textPrimary)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: AppTheme.radiusMD)
+                .fill(colors.surfaceMedium)
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.radiusMD)
+                        .stroke(colors.borderSubtle, lineWidth: 0.5)
+                )
+        )
+    }
+
+    private var addPromptSheet: some View {
+        NavigationView {
+            VStack(spacing: AppTheme.spacingMD) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Choose a prompt")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(colors.textSecondary)
+                    Picker("Prompt", selection: $selectedPromptQuestion) {
+                        ForEach(availablePromptQuestions, id: \.self) { q in
+                            Text(q).tag(q)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .tint(AppTheme.rose)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: AppTheme.radiusMD)
+                            .fill(colors.surfaceMedium)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: AppTheme.radiusMD)
+                                    .stroke(colors.borderSubtle, lineWidth: 0.5)
+                            )
+                    )
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Your answer")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(colors.textSecondary)
+                    ZStack(alignment: .topLeading) {
+                        if promptAnswer.isEmpty {
+                            Text("Write your answer...")
+                                .font(.system(size: 14))
+                                .foregroundColor(colors.textMuted)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 20)
+                        }
+                        TextEditor(text: $promptAnswer)
+                            .font(.system(size: 14))
+                            .foregroundColor(colors.textPrimary)
+                            .frame(height: 120)
+                            .scrollContentBackground(.hidden)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .onChange(of: promptAnswer) { newValue in
+                                if newValue.count > 200 {
+                                    promptAnswer = String(newValue.prefix(200))
+                                }
+                            }
+                    }
+                    .background(
+                        RoundedRectangle(cornerRadius: AppTheme.radiusMD)
+                            .fill(colors.surfaceMedium)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: AppTheme.radiusMD)
+                                    .stroke(colors.borderSubtle, lineWidth: 0.5)
+                            )
+                    )
+                    HStack {
+                        Spacer()
+                        Text("\(promptAnswer.count)/200")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(promptAnswer.count >= 200 ? AppTheme.error : colors.textMuted)
+                    }
+                }
+
+                Spacer()
+            }
+            .padding(AppTheme.spacingMD)
+            .appBackground()
+            .navigationTitle("Add Prompt")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        showAddPrompt = false
+                    }
+                    .foregroundColor(colors.textSecondary)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Add") {
+                        let newPrompt = UserPrompt(
+                            question: selectedPromptQuestion,
+                            answer: promptAnswer
+                        )
+                        withAnimation {
+                            editPrompts.append(newPrompt)
+                        }
+                        showAddPrompt = false
+                    }
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(AppTheme.rose)
+                    .disabled(promptAnswer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
     // MARK: - Section 5: Photos
 
     private var photosSection: some View {
@@ -474,14 +740,44 @@ struct EditProfileView: View {
             photosGrid
                 .padding(AppTheme.spacingMD)
         }
+        .photosPicker(
+            isPresented: $showPhotoPicker,
+            selection: $selectedPhotoItems,
+            maxSelectionCount: max(0, 6 - profileVM.user.photos.count),
+            matching: .images
+        )
+        .onChange(of: selectedPhotoItems) { newItems in
+            Task {
+                for item in newItems {
+                    if let data = try? await item.loadTransferable(type: Data.self),
+                       let uiImage = UIImage(data: data) {
+                        let newPhoto = UserPhoto(
+                            url: "local_photo_\(UUID().uuidString)",
+                            isPrimary: profileVM.user.photos.isEmpty,
+                            sortOrder: profileVM.user.photos.count
+                        )
+                        profileVM.user.photos.append(newPhoto)
+
+                        // Save the first photo as the profile image
+                        if profileVM.user.photos.count == 1 || newPhoto.isPrimary {
+                            UserImageStore.shared.save(uiImage)
+                        }
+                    }
+                }
+                selectedPhotoItems = []
+                flashSaveToast()
+            }
+        }
     }
 
     private var photosGrid: some View {
-        LazyVGrid(columns: photoColumns, spacing: AppTheme.spacingSM) {
-            ForEach(profileVM.user.photos) { photo in
-                photoSlot(photo: photo)
+        let totalSlots = 6
+        let columns = photoColumns
+        return LazyVGrid(columns: columns, spacing: AppTheme.spacingSM) {
+            ForEach(Array(profileVM.user.photos.enumerated()), id: \.element.id) { index, photo in
+                photoSlot(photo: photo, index: index)
             }
-            if profileVM.user.photos.count < 6 {
+            ForEach(0..<max(0, totalSlots - profileVM.user.photos.count), id: \.self) { _ in
                 addPhotoSlot
             }
         }
@@ -495,7 +791,7 @@ struct EditProfileView: View {
         ]
     }
 
-    private func photoSlot(photo: UserPhoto) -> some View {
+    private func photoSlot(photo: UserPhoto, index: Int) -> some View {
         ZStack(alignment: .topTrailing) {
             RoundedRectangle(cornerRadius: AppTheme.radiusMD)
                 .fill(colors.surfaceMedium)
@@ -505,11 +801,6 @@ struct EditProfileView: View {
                         Image(systemName: "photo.fill")
                             .font(.system(size: 24))
                             .foregroundColor(colors.textMuted)
-                        if photo.isPrimary {
-                            Text("Primary")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundColor(AppTheme.rose)
-                        }
                     }
                 )
                 .overlay(
@@ -521,8 +812,22 @@ struct EditProfileView: View {
                             lineWidth: photo.isPrimary ? 1.5 : 0.5
                         )
                 )
+                .overlay(alignment: .bottom) {
+                    if index == 0 {
+                        Text("MAIN")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 3)
+                            .background(AppTheme.gold)
+                            .clipShape(Capsule())
+                            .padding(.bottom, 6)
+                    }
+                }
 
-            Button { } label: {
+            Button {
+                profileVM.user.photos.removeAll { $0.id == photo.id }
+            } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 20))
                     .foregroundColor(AppTheme.error)
@@ -537,7 +842,9 @@ struct EditProfileView: View {
     }
 
     private var addPhotoSlot: some View {
-        Button { } label: {
+        Button {
+            showPhotoPicker = true
+        } label: {
             RoundedRectangle(cornerRadius: AppTheme.radiusMD)
                 .fill(colors.surfaceDark)
                 .aspectRatio(3 / 4, contentMode: .fit)
@@ -676,6 +983,7 @@ struct EditProfileView: View {
         editDrinking = user.drinking ?? ""
         editExercise = user.exercise ?? ""
         editWantKids = user.wantKids ?? ""
+        editSettlingTimeline = user.settlingTimeline ?? ""
 
         editFluency = user.sindhiFluency ?? .fluent
         editDialect = user.sindhiDialect ?? ""
@@ -684,6 +992,9 @@ struct EditProfileView: View {
         editMotherTongue = user.motherTongue ?? ""
         editCommunitySubGroup = user.communitySubGroup ?? ""
         editFamilyOriginCity = user.familyOriginCity ?? ""
+        editFamilyOriginCountry = user.familyOriginCountry ?? ""
+
+        editPrompts = user.prompts
 
         editFamilyValues = user.familyValues ?? .moderate
         editFoodPreference = user.foodPreference ?? .vegetarian
@@ -711,6 +1022,7 @@ struct EditProfileView: View {
         profileVM.user.drinking = editDrinking.isEmpty ? nil : editDrinking
         profileVM.user.exercise = editExercise.isEmpty ? nil : editExercise
         profileVM.user.wantKids = editWantKids.isEmpty ? nil : editWantKids
+        profileVM.user.settlingTimeline = editSettlingTimeline.isEmpty ? nil : editSettlingTimeline
 
         profileVM.user.sindhiFluency = editFluency
         profileVM.user.sindhiDialect = editDialect.isEmpty ? nil : editDialect
@@ -719,6 +1031,9 @@ struct EditProfileView: View {
         profileVM.user.motherTongue = editMotherTongue.isEmpty ? nil : editMotherTongue
         profileVM.user.communitySubGroup = editCommunitySubGroup.isEmpty ? nil : editCommunitySubGroup
         profileVM.user.familyOriginCity = editFamilyOriginCity.isEmpty ? nil : editFamilyOriginCity
+        profileVM.user.familyOriginCountry = editFamilyOriginCountry.isEmpty ? nil : editFamilyOriginCountry
+
+        profileVM.user.prompts = editPrompts
 
         profileVM.user.familyValues = editFamilyValues
         profileVM.user.foodPreference = editFoodPreference
@@ -731,6 +1046,17 @@ struct EditProfileView: View {
         profileVM.user.movieGenres = editMovies.isEmpty ? nil : editMovies
         profileVM.user.languages = editLanguages.isEmpty ? nil : editLanguages
         profileVM.user.travelStyle = editTravelStyle.isEmpty ? nil : editTravelStyle
+    }
+
+    private func flashSaveToast() {
+        withAnimation(.easeInOut(duration: 0.25)) {
+            showSaveToast = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                showSaveToast = false
+            }
+        }
     }
 }
 

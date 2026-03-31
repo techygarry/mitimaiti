@@ -169,6 +169,8 @@ export interface FeedCard {
   daily_prompt_answer?: string;
 }
 
+export type MatchStatus = 'pending_first_message' | 'active' | 'expired' | 'unmatched' | 'dissolved';
+
 export interface Match {
   id: string;
   user: User;
@@ -182,7 +184,10 @@ export interface Match {
   is_dissolved: boolean;
   extended_once: boolean;
   expires_at: string;
+  status?: MatchStatus;
 }
+
+export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read';
 
 export interface Message {
   id: string;
@@ -191,16 +196,23 @@ export interface Message {
   content: string;
   type: 'text' | 'image' | 'voice' | 'gif' | 'icebreaker';
   read: boolean;
+  status?: MessageStatus;
   created_at: string;
 }
+
+export type CulturalBadge = 'gold' | 'green' | 'orange' | 'none';
 
 export interface Like {
   id: string;
   from_user: User;
   from_photos: Photo[];
   type: 'like' | 'pass';
+  culturalScore?: number;
+  culturalBadge?: CulturalBadge;
   created_at: string;
 }
+
+export interface LikedYouCard extends Like {}
 
 export interface FamilyPermissions {
   can_view_profile: boolean;
@@ -233,10 +245,36 @@ export interface FamilySuggestion {
   created_at: string;
 }
 
+export type IcebreakerCategory = 'sindhi' | 'general' | 'fun' | 'deep';
+
 export interface Icebreaker {
   id: string;
   text: string;
   category: string;
+  question?: string;
+}
+
+export interface IcebreakerTyped {
+  id: string;
+  category: IcebreakerCategory;
+  question: string;
+}
+
+export interface FamilyPermissionMeta {
+  key: keyof FamilyPermissions;
+  icon: string;
+  title: string;
+  description: string;
+}
+
+export interface CurrentUser extends User {
+  photos: Photo[];
+  basics?: UserBasics;
+  sindhi?: UserSindhi;
+  chatti?: UserChatti;
+  culture?: UserCulture;
+  personality?: UserPersonality;
+  settings?: UserSettings;
 }
 
 export interface City {
