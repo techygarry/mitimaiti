@@ -1,0 +1,14 @@
+package com.mitimaiti.app.navigation
+
+sealed class Screen(val route: String) {
+    object Welcome : Screen("welcome")
+    object PhoneAuth : Screen("phone_auth")
+    object OTPVerification : Screen("otp_verification")
+    object Onboarding : Screen("onboarding")
+    object Main : Screen("main")
+    object Chat : Screen("chat/{matchId}") {
+        fun createRoute(matchId: String) = "chat/$matchId"
+    }
+    object EditProfile : Screen("edit_profile")
+    object Settings : Screen("settings")
+}

@@ -1,0 +1,144 @@
+package com.mitimaiti.app.services
+
+import retrofit2.Response
+import retrofit2.http.*
+
+/**
+ * Retrofit interface mapping to all MitiMaiti backend endpoints.
+ * Mirrors: backend/src/routes/
+ */
+interface MitiMaitiApi {
+
+    // ──────────────────── AUTH (/v1/auth) ────────────────────
+
+    @POST("auth/login")
+    suspend fun sendOTP(@Body body: Map<String, String>): Response<Map<String, Any>>
+
+    @POST("auth/verify")
+    suspend fun verifyOTP(@Body body: Map<String, String>): Response<Map<String, Any>>
+
+    @POST("auth/refresh")
+    suspend fun refreshToken(@Body body: Map<String, String>): Response<Map<String, Any>>
+
+    @POST("auth/delete")
+    suspend fun deleteAccount(@Body body: Map<String, String>): Response<Map<String, Any>>
+
+    // ──────────────────── PROFILE (/v1/me) ────────────────────
+
+    @GET("me")
+    suspend fun getProfile(): Response<Map<String, Any>>
+
+    @PATCH("me")
+    suspend fun updateProfile(@Body body: Map<String, Any>): Response<Map<String, Any>>
+
+    @PATCH("me/basics")
+    suspend fun updateBasics(@Body body: Map<String, Any>): Response<Map<String, Any>>
+
+    @PATCH("me/sindhi")
+    suspend fun updateSindhi(@Body body: Map<String, Any>): Response<Map<String, Any>>
+
+    @PATCH("me/chatti")
+    suspend fun updateChatti(@Body body: Map<String, Any>): Response<Map<String, Any>>
+
+    @PATCH("me/personality")
+    suspend fun updatePersonality(@Body body: Map<String, Any>): Response<Map<String, Any>>
+
+    @PATCH("me/settings")
+    suspend fun updateSettings(@Body body: Map<String, Any>): Response<Map<String, Any>>
+
+    @POST("me/verify")
+    suspend fun requestVerification(): Response<Map<String, Any>>
+
+    // ──────────────────── DISCOVERY (/v1/feed) ────────────────────
+
+    @GET("feed")
+    suspend fun getFeed(
+        @Query("cursor") cursor: String? = null,
+        @Query("limit") limit: Int = 20
+    ): Response<Map<String, Any>>
+
+    @GET("feed/prompts")
+    suspend fun getDailyPrompts(): Response<Map<String, Any>>
+
+    // ──────────────────── ACTIONS (/v1/action) ────────────────────
+
+    @POST("action")
+    suspend fun performAction(@Body body: Map<String, String>): Response<Map<String, Any>>
+
+    @POST("action/rewind")
+    suspend fun rewind(): Response<Map<String, Any>>
+
+    @POST("action/prompt")
+    suspend fun answerPrompt(@Body body: Map<String, String>): Response<Map<String, Any>>
+
+    // ──────────────────── INBOX (/v1/inbox) ────────────────────
+
+    @GET("inbox")
+    suspend fun getInbox(): Response<Map<String, Any>>
+
+    // ──────────────────── CHAT (/v1/chat) ────────────────────
+
+    @GET("chat/{matchId}")
+    suspend fun getMessages(
+        @Path("matchId") matchId: String,
+        @Query("cursor") cursor: String? = null,
+        @Query("limit") limit: Int = 50
+    ): Response<Map<String, Any>>
+
+    @POST("chat/{matchId}/messages")
+    suspend fun sendMessage(
+        @Path("matchId") matchId: String,
+        @Body body: Map<String, String>
+    ): Response<Map<String, Any>>
+
+    @POST("chat/{matchId}/media")
+    suspend fun sendMedia(
+        @Path("matchId") matchId: String,
+        @Body body: Map<String, String>
+    ): Response<Map<String, Any>>
+
+    @POST("chat/{matchId}/extend")
+    suspend fun extendMatch(
+        @Path("matchId") matchId: String
+    ): Response<Map<String, Any>>
+
+    // ──────────────────── FAMILY (/v1/family) ────────────────────
+
+    @POST("family/invite")
+    suspend fun generateFamilyInvite(): Response<Map<String, Any>>
+
+    @POST("family/join")
+    suspend fun joinFamily(@Body body: Map<String, String>): Response<Map<String, Any>>
+
+    @GET("family")
+    suspend fun getFamily(): Response<Map<String, Any>>
+
+    @PATCH("family/{memberId}")
+    suspend fun updateFamilyMember(
+        @Path("memberId") memberId: String,
+        @Body body: Map<String, Any>
+    ): Response<Map<String, Any>>
+
+    @POST("family/suggest")
+    suspend fun suggestProfile(@Body body: Map<String, String>): Response<Map<String, Any>>
+
+    @GET("family/feed")
+    suspend fun getFamilyFeed(): Response<Map<String, Any>>
+
+    @GET("family/suggestions")
+    suspend fun getFamilySuggestions(): Response<Map<String, Any>>
+
+    // ──────────────────── SAFETY (/v1/safety) ────────────────────
+
+    @POST("safety/report")
+    suspend fun reportUser(@Body body: Map<String, String>): Response<Map<String, Any>>
+
+    @POST("safety/block")
+    suspend fun blockUser(@Body body: Map<String, String>): Response<Map<String, Any>>
+
+    @GET("safety/health")
+    suspend fun getSafetyHealth(): Response<Map<String, Any>>
+
+    @POST("safety/appeal")
+    suspend fun appealStrike(@Body body: Map<String, String>): Response<Map<String, Any>>
+}
