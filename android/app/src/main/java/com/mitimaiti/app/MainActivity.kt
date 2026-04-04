@@ -1,3 +1,4 @@
+@file:Suppress("DEPRECATION")
 package com.mitimaiti.app
 
 import android.os.Bundle
@@ -44,6 +45,8 @@ class MainActivity : ComponentActivity() {
                 val feedViewModel: FeedViewModel = viewModel()
                 val inboxViewModel: InboxViewModel = viewModel()
                 val profileViewModel: ProfileViewModel = viewModel()
+                val familyViewModel: FamilyViewModel = viewModel()
+                val settingsViewModel: SettingsViewModel = viewModel()
 
                 Surface(modifier = Modifier.fillMaxSize(), color = colors.background) {
                     NavHost(navController = navController, startDestination = Screen.Main.route) {
@@ -80,6 +83,7 @@ class MainActivity : ComponentActivity() {
                                 feedViewModel = feedViewModel,
                                 inboxViewModel = inboxViewModel,
                                 profileViewModel = profileViewModel,
+                                familyViewModel = familyViewModel,
                                 onNavigateToChat = { matchId -> navController.navigate(Screen.Chat.createRoute(matchId)) },
                                 onNavigateToEditProfile = { navController.navigate(Screen.EditProfile.route) },
                                 onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
@@ -102,6 +106,8 @@ class MainActivity : ComponentActivity() {
                         }
                         composable(Screen.Settings.route) {
                             SettingsScreen(
+                                viewModel = settingsViewModel,
+                                themeManager = app.themeManager,
                                 onBack = { navController.popBackStack() },
                                 onLogout = {
                                     authViewModel.logout()

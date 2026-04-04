@@ -1,3 +1,4 @@
+@file:Suppress("DEPRECATION")
 package com.mitimaiti.app.ui.main
 
 import androidx.compose.foundation.layout.*
@@ -20,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.mitimaiti.app.ui.theme.AppColors
 import com.mitimaiti.app.ui.theme.LocalAdaptiveColors
+import com.mitimaiti.app.viewmodels.FamilyViewModel
 import com.mitimaiti.app.viewmodels.FeedViewModel
 import com.mitimaiti.app.viewmodels.InboxViewModel
 import com.mitimaiti.app.viewmodels.ProfileViewModel
@@ -42,6 +44,7 @@ fun MainTabScreen(
     feedViewModel: FeedViewModel,
     inboxViewModel: InboxViewModel,
     profileViewModel: ProfileViewModel,
+    familyViewModel: FamilyViewModel,
     onNavigateToChat: (String) -> Unit,
     onNavigateToEditProfile: () -> Unit,
     onNavigateToSettings: () -> Unit,
@@ -56,6 +59,7 @@ fun MainTabScreen(
         feedViewModel.loadFeed()
         inboxViewModel.loadInbox()
         profileViewModel.loadProfile()
+        familyViewModel.loadFamily()
     }
 
     Scaffold(
@@ -119,7 +123,7 @@ fun MainTabScreen(
                     viewModel = inboxViewModel,
                     onNavigateToChat = onNavigateToChat
                 )
-                MainTab.FAMILY -> FamilyScreen()
+                MainTab.FAMILY -> FamilyScreen(viewModel = familyViewModel)
                 MainTab.PROFILE -> ProfileScreen(
                     viewModel = profileViewModel,
                     onEditProfile = onNavigateToEditProfile,
