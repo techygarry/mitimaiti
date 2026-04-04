@@ -1,3 +1,4 @@
+@file:Suppress("DEPRECATION")
 package com.mitimaiti.app.ui.onboarding
 
 import androidx.compose.animation.*
@@ -76,9 +77,9 @@ fun OnboardingScreen(onComplete: () -> Unit) {
             }
 
             // Progress indicator
-            @Suppress("DEPRECATION")
+            
             LinearProgressIndicator(
-                progress = (currentStep + 1).toFloat() / totalSteps,
+                progress = { (currentStep + 1).toFloat() / totalSteps },
                 modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
                 color = AppColors.Rose,
                 trackColor = colors.border

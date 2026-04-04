@@ -1,3 +1,4 @@
+@file:Suppress("DEPRECATION")
 package com.mitimaiti.app.ui.main
 
 import androidx.compose.foundation.background
@@ -78,7 +79,7 @@ fun SettingsScreen(onBack: () -> Unit, onLogout: () -> Unit) {
                         colors = SliderDefaults.colors(thumbColor = AppColors.Rose, activeTrackColor = AppColors.Rose)
                     )
                 }
-                Divider(color = colors.borderSubtle)
+                HorizontalDivider(color = colors.borderSubtle)
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                     Text("Age Range: ${ageRangeStart.toInt()} - ${ageRangeEnd.toInt()}", fontSize = 14.sp, color = colors.textPrimary)
                     RangeSlider(
