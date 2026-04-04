@@ -41,12 +41,12 @@ class FeedViewModel : ViewModel() {
 
     fun likeUser() {
         val cur = _cards.value.toMutableList(); if (cur.isEmpty() || _dailyLikesUsed.value >= MAX_DAILY_LIKES) return
-        val card = cur.removeFirst(); _cards.value = cur; _dailyLikesUsed.value++
+        val card = cur.removeAt(0); _cards.value = cur; _dailyLikesUsed.value++
         viewModelScope.launch { APIService.performAction(card.user.id, "like").onSuccess { match -> if (match != null) { _matchedUser.value = card.user; _showMatchAlert.value = true; AppNotificationManager.shared.addNotification(AppNotification(type = NotificationType.MATCH, title = "It's a Match!", body = "You and ${card.user.displayName} liked each other!")) } }; prefetchIfNeeded() }
     }
 
-    fun passUser() { val cur = _cards.value.toMutableList(); if (cur.isEmpty()) return; val card = cur.removeFirst(); passedCards.add(card); _cards.value = cur; viewModelScope.launch { APIService.performAction(card.user.id, "pass"); prefetchIfNeeded() } }
-    fun rewind() { if (passedCards.isEmpty() || _dailyRewindsUsed.value >= MAX_DAILY_REWINDS) return; val card = passedCards.removeLast(); _cards.value = listOf(card) + _cards.value; _dailyRewindsUsed.value++ }
+    fun passUser() { val cur = _cards.value.toMutableList(); if (cur.isEmpty()) return; val card = cur.removeAt(0); passedCards.add(card); _cards.value = cur; viewModelScope.launch { APIService.performAction(card.user.id, "pass"); prefetchIfNeeded() } }
+    fun rewind() { if (passedCards.isEmpty() || _dailyRewindsUsed.value >= MAX_DAILY_REWINDS) return; val card = passedCards.removeAt(passedCards.size - 1); _cards.value = listOf(card) + _cards.value; _dailyRewindsUsed.value++ }
     fun dismissMatchAlert() { _showMatchAlert.value = false; _matchedUser.value = null }
     fun showScoreBreakdown(card: FeedCard) { _selectedCard.value = card; _showScoreBreakdown.value = true }
     fun hideScoreBreakdown() { _showScoreBreakdown.value = false; _selectedCard.value = null }
