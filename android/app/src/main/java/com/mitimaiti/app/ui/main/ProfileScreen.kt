@@ -34,7 +34,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.mitimaiti.app.models.Intent
 import com.mitimaiti.app.models.User
-import com.mitimaiti.app.ui.components.GlassCard
+import com.mitimaiti.app.ui.components.*
 import com.mitimaiti.app.ui.theme.AppColors
 import com.mitimaiti.app.ui.theme.AppTheme
 import com.mitimaiti.app.ui.theme.LocalAdaptiveColors
@@ -52,8 +52,11 @@ fun ProfileScreen(
     val isLoading by viewModel.isLoading.collectAsState()
 
     if (isLoading || user == null) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = AppColors.Rose)
+        Column(
+            modifier = Modifier.fillMaxSize().statusBarsPadding().padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            ShimmerProfileCard()
         }
         return
     }
@@ -157,21 +160,7 @@ fun ProfileScreen(
                         .align(Alignment.Center)
                         .offset(x = 40.dp, y = 40.dp)
                 ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = AppColors.Info,
-                        modifier = Modifier.size(28.dp),
-                        shadowElevation = 2.dp
-                    ) {
-                        Icon(
-                            Icons.Default.Check,
-                            contentDescription = "Verified",
-                            tint = Color.White,
-                            modifier = Modifier
-                                .padding(4.dp)
-                                .size(20.dp)
-                        )
-                    }
+                    VerifiedBadge(size = 28.dp)
                 }
             }
 

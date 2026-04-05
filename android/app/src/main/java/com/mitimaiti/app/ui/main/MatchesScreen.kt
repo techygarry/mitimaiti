@@ -16,11 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -30,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.mitimaiti.app.models.Match
 import com.mitimaiti.app.models.MatchStatus
+import com.mitimaiti.app.ui.components.*
 import com.mitimaiti.app.ui.theme.AppColors
 import com.mitimaiti.app.ui.theme.AppTheme
 import com.mitimaiti.app.ui.theme.LocalAdaptiveColors
@@ -82,35 +79,18 @@ fun MatchesScreen(
         )
 
         if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = AppColors.Rose)
+            Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                repeat(4) { ShimmerMatchItem(); Spacer(modifier = Modifier.height(4.dp)) }
             }
         } else if (matches.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(32.dp)
-                ) {
-                    Icon(
-                        Icons.Default.ChatBubbleOutline, "No matches",
-                        tint = colors.textMuted,
-                        modifier = Modifier.size(64.dp)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        "No matches yet",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.textPrimary
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "Start swiping to find your match!",
-                        fontSize = 15.sp,
-                        color = colors.textSecondary,
-                        textAlign = TextAlign.Center
-                    )
-                }
+                EmptyState(
+                    icon = Icons.Default.ChatBubbleOutline,
+                    title = "No matches yet",
+                    description = "Start swiping to find your match!",
+                    actionLabel = "Discover",
+                    onAction = { }
+                )
             }
         } else {
             LazyColumn(
@@ -221,12 +201,6 @@ fun MatchesScreen(
 fun TimerAvatar(match: Match, onClick: () -> Unit) {
     val colors = LocalAdaptiveColors.current
     val user = match.otherUser
-    val totalDuration = 24f * 60f * 60f * 1000f // 24h in ms
-    val remaining = match.timeRemaining.toFloat()
-    val progress = if (totalDuration > 0f) (remaining / totalDuration).coerceIn(0f, 1f) else 0f
-
-    val hours = TimeUnit.MILLISECONDS.toHours(match.timeRemaining)
-    val minutes = TimeUnit.MILLISECONDS.toMinutes(match.timeRemaining) % 60
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -235,50 +209,24 @@ fun TimerAvatar(match: Match, onClick: () -> Unit) {
             .clickable(onClick = onClick)
     ) {
         Box(contentAlignment = Alignment.Center) {
-            // Gold circular progress ring
-            val ringColor = if (match.isExpiringSoon) AppColors.Error else AppColors.Gold
-            val ringBgColor = colors.borderSubtle
-
-            androidx.compose.foundation.Canvas(
-                modifier = Modifier.size(72.dp)
+            // Gold circular progress ring (shared component)
+            CountdownRing(
+                expiresAt = match.expiresAt ?: (System.currentTimeMillis() + 24 * 60 * 60 * 1000L),
+                size = 72.dp,
+                strokeWidth = 3.dp,
+                ringColor = if (match.isExpiringSoon) AppColors.Error else AppColors.Gold,
+                showText = false
             ) {
-                val strokeWidth = 3.dp.toPx()
-                val padding = strokeWidth / 2
-                val arcSize = Size(size.width - strokeWidth, size.height - strokeWidth)
-                val arcOffset = Offset(padding, padding)
-
-                // Background ring
-                drawArc(
-                    color = ringBgColor,
-                    startAngle = -90f,
-                    sweepAngle = 360f,
-                    useCenter = false,
-                    topLeft = arcOffset,
-                    size = arcSize,
-                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-                )
-
-                // Progress ring
-                drawArc(
-                    color = ringColor,
-                    startAngle = -90f,
-                    sweepAngle = 360f * progress,
-                    useCenter = false,
-                    topLeft = arcOffset,
-                    size = arcSize,
-                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                // Profile photo inside ring
+                AsyncImage(
+                    model = user.primaryPhoto?.urlThumb ?: user.primaryPhoto?.url ?: "",
+                    contentDescription = user.displayName,
+                    modifier = Modifier
+                        .size(60.dp)
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop
                 )
             }
-
-            // Profile photo inside ring
-            AsyncImage(
-                model = user.primaryPhoto?.urlThumb ?: user.primaryPhoto?.url ?: "",
-                contentDescription = user.displayName,
-                modifier = Modifier
-                    .size(60.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop
-            )
 
             // Lock icon overlay (bottom-right) if firstMsgLocked
             if (match.firstMsgLocked) {
@@ -290,11 +238,7 @@ fun TimerAvatar(match: Match, onClick: () -> Unit) {
                         .background(AppColors.Rose),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        Icons.Default.Lock, null,
-                        tint = Color.White,
-                        modifier = Modifier.size(12.dp)
-                    )
+                    Icon(Icons.Default.Lock, null, tint = Color.White, modifier = Modifier.size(12.dp))
                 }
             }
 
@@ -308,37 +252,16 @@ fun TimerAvatar(match: Match, onClick: () -> Unit) {
                         .background(AppColors.Gold),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        Icons.Default.Schedule, null,
-                        tint = Color.White,
-                        modifier = Modifier.size(12.dp)
-                    )
+                    Icon(Icons.Default.Schedule, null, tint = Color.White, modifier = Modifier.size(12.dp))
                 }
             }
 
-            // Unread count badge (top-left)
-            if (match.unreadCount > 0) {
-                Box(
-                    modifier = Modifier
-                        .size(22.dp)
-                        .align(Alignment.TopStart)
-                        .clip(CircleShape)
-                        .background(AppColors.Rose),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "${match.unreadCount}",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                }
-            }
+            // Unread count badge (top-left) - shared component
+            CountBadge(count = match.unreadCount, modifier = Modifier.align(Alignment.TopStart))
         }
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        // Name
         Text(
             user.displayName.split(" ").first(),
             fontSize = 12.sp,
@@ -348,14 +271,8 @@ fun TimerAvatar(match: Match, onClick: () -> Unit) {
             overflow = TextOverflow.Ellipsis
         )
 
-        // Timer text
         if (match.showCountdown) {
-            Text(
-                "${hours}h ${minutes}m",
-                fontSize = 10.sp,
-                color = if (match.isExpiringSoon) AppColors.Error else colors.textMuted,
-                fontWeight = FontWeight.Medium
-            )
+            CountdownBanner(expiresAt = match.expiresAt ?: 0L)
         }
     }
 }

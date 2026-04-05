@@ -22,6 +22,9 @@ import com.mitimaiti.app.ui.auth.PhoneAuthScreen
 import com.mitimaiti.app.ui.auth.WelcomeScreen
 import com.mitimaiti.app.ui.main.*
 import com.mitimaiti.app.ui.onboarding.OnboardingScreen
+import com.mitimaiti.app.ui.pages.GuidelinesScreen
+import com.mitimaiti.app.ui.pages.PrivacyScreen
+import com.mitimaiti.app.ui.pages.TermsScreen
 import com.mitimaiti.app.ui.theme.LocalAdaptiveColors
 import com.mitimaiti.app.ui.theme.MitiMaitiTheme
 import com.mitimaiti.app.viewmodels.*
@@ -51,7 +54,12 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize(), color = colors.background) {
                     NavHost(navController = navController, startDestination = Screen.Main.route) {
                         composable(Screen.Welcome.route) {
-                            WelcomeScreen(onGetStarted = { navController.navigate(Screen.PhoneAuth.route) })
+                            WelcomeScreen(
+                                onGetStarted = { navController.navigate(Screen.PhoneAuth.route) },
+                                onGuidelines = { navController.navigate(Screen.Guidelines.route) },
+                                onPrivacy = { navController.navigate(Screen.Privacy.route) },
+                                onTerms = { navController.navigate(Screen.Terms.route) }
+                            )
                         }
                         composable(Screen.PhoneAuth.route) {
                             PhoneAuthScreen(
@@ -114,6 +122,15 @@ class MainActivity : ComponentActivity() {
                                     navController.navigate(Screen.Welcome.route) { popUpTo(0) { inclusive = true } }
                                 }
                             )
+                        }
+                        composable(Screen.Guidelines.route) {
+                            GuidelinesScreen(onBack = { navController.popBackStack() })
+                        }
+                        composable(Screen.Privacy.route) {
+                            PrivacyScreen(onBack = { navController.popBackStack() })
+                        }
+                        composable(Screen.Terms.route) {
+                            TermsScreen(onBack = { navController.popBackStack() })
                         }
                     }
                 }

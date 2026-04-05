@@ -33,7 +33,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.mitimaiti.app.models.*
-import com.mitimaiti.app.ui.components.GlassCard
+import com.mitimaiti.app.ui.components.*
 import com.mitimaiti.app.ui.theme.AppColors
 import com.mitimaiti.app.ui.theme.AppTheme
 import com.mitimaiti.app.ui.theme.LocalAdaptiveColors
@@ -166,6 +166,20 @@ fun FamilyScreen(viewModel: FamilyViewModel = viewModel()) {
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth()
                         )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Lock, null, tint = colors.textMuted, modifier = Modifier.size(12.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                "Messages are never visible to family members",
+                                fontSize = 11.sp,
+                                color = colors.textMuted
+                            )
+                        }
                     }
                 }
 
@@ -354,31 +368,19 @@ private fun FamilyMembersList(
                             modifier = Modifier.padding(end = 8.dp)
                         )
 
-                        // Status badge
-                        Surface(
-                            shape = RoundedCornerShape(AppTheme.radiusFull),
-                            color = when (member.status) {
-                                FamilyMemberStatus.ACTIVE -> AppColors.Success.copy(alpha = 0.1f)
-                                FamilyMemberStatus.PENDING -> AppColors.Warning.copy(alpha = 0.1f)
-                                FamilyMemberStatus.REVOKED -> AppColors.Error.copy(alpha = 0.1f)
+                        // Status badge (shared component)
+                        StatusBadge(
+                            text = when (member.status) {
+                                FamilyMemberStatus.ACTIVE -> "Active"
+                                FamilyMemberStatus.PENDING -> "Pending"
+                                FamilyMemberStatus.REVOKED -> "Revoked"
+                            },
+                            variant = when (member.status) {
+                                FamilyMemberStatus.ACTIVE -> BadgeVariant.SUCCESS
+                                FamilyMemberStatus.PENDING -> BadgeVariant.WARNING
+                                FamilyMemberStatus.REVOKED -> BadgeVariant.DANGER
                             }
-                        ) {
-                            Text(
-                                when (member.status) {
-                                    FamilyMemberStatus.ACTIVE -> "Active"
-                                    FamilyMemberStatus.PENDING -> "Pending"
-                                    FamilyMemberStatus.REVOKED -> "Revoked"
-                                },
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = when (member.status) {
-                                    FamilyMemberStatus.ACTIVE -> AppColors.Success
-                                    FamilyMemberStatus.PENDING -> AppColors.Warning
-                                    FamilyMemberStatus.REVOKED -> AppColors.Error
-                                }
-                            )
-                        }
+                        )
 
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
@@ -402,23 +404,12 @@ private fun FamilySuggestionCards(
     val colors = LocalAdaptiveColors.current
 
     if (suggestions.isEmpty()) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    Icons.Default.FamilyRestroom, null,
-                    tint = colors.textMuted,
-                    modifier = Modifier.size(48.dp)
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    "No suggestions yet",
-                    fontSize = 16.sp,
-                    color = colors.textMuted
-                )
-            }
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            EmptyState(
+                icon = Icons.Default.FamilyRestroom,
+                title = "No suggestions yet",
+                description = "Family members can suggest matches for you"
+            )
         }
         return
     }

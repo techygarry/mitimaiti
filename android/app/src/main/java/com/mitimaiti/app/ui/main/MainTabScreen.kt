@@ -7,6 +7,7 @@ import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.ChatBubble
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.FavoriteBorder
@@ -15,12 +16,18 @@ import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
+import com.mitimaiti.app.ui.components.CountBadge
+import com.mitimaiti.app.ui.components.NotificationPanel
 import com.mitimaiti.app.ui.theme.AppColors
 import com.mitimaiti.app.ui.theme.LocalAdaptiveColors
+import com.mitimaiti.app.utils.AppNotificationManager
 import com.mitimaiti.app.viewmodels.FamilyViewModel
 import com.mitimaiti.app.viewmodels.FeedViewModel
 import com.mitimaiti.app.viewmodels.InboxViewModel
@@ -55,6 +62,11 @@ fun MainTabScreen(
     val totalLikes = inboxViewModel.totalLikes
     val unreadMessages = inboxViewModel.unreadMessages
 
+    // Notification panel state
+    var showNotificationPanel by remember { mutableStateOf(false) }
+    val notifications by AppNotificationManager.shared.notifications.collectAsState()
+    val unreadNotifCount = notifications.count { !it.isRead }
+
     LaunchedEffect(Unit) {
         feedViewModel.loadFeed()
         inboxViewModel.loadInbox()
@@ -64,6 +76,39 @@ fun MainTabScreen(
 
     Scaffold(
         containerColor = colors.background,
+        topBar = {
+            // Top bar with logo + notification bell
+            TopAppBar(
+                title = {
+                    Text(
+                        "MitiMaiti",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = AppColors.Rose
+                    )
+                },
+                actions = {
+                    Box {
+                        IconButton(onClick = { showNotificationPanel = !showNotificationPanel }) {
+                            Icon(
+                                Icons.Default.Notifications,
+                                "Notifications",
+                                tint = colors.textPrimary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        if (unreadNotifCount > 0) {
+                            CountBadge(
+                                count = unreadNotifCount,
+                                modifier = Modifier.align(Alignment.TopEnd).offset(x = (-4).dp, y = 4.dp),
+                                size = 18.dp
+                            )
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.surface)
+            )
+        },
         bottomBar = {
             NavigationBar(
                 containerColor = colors.surface,
@@ -116,6 +161,7 @@ fun MainTabScreen(
         }
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            // Tab content
             when (selectedTab) {
                 MainTab.DISCOVER -> DiscoverScreen(viewModel = feedViewModel)
                 MainTab.LIKED_YOU -> LikedYouScreen(viewModel = inboxViewModel)
@@ -131,6 +177,18 @@ fun MainTabScreen(
                     onLogout = onLogout
                 )
             }
+
+            // Notification panel overlay (on top of content)
+            NotificationPanel(
+                visible = showNotificationPanel,
+                onDismiss = { showNotificationPanel = false },
+                onNotificationTap = { notification ->
+                    showNotificationPanel = false
+                    // Navigate to relevant tab based on notification type
+                    val targetTab = MainTab.entries.getOrNull(notification.type.destinationTab)
+                    if (targetTab != null) selectedTab = targetTab
+                }
+            )
         }
     }
 }

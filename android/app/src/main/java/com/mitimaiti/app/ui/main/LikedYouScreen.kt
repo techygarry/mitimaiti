@@ -31,8 +31,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
+import androidx.compose.foundation.BorderStroke
 import com.mitimaiti.app.models.CulturalBadge
 import com.mitimaiti.app.models.LikedYouCard
+import com.mitimaiti.app.ui.components.*
 import com.mitimaiti.app.ui.theme.AppColors
 import com.mitimaiti.app.ui.theme.AppTheme
 import com.mitimaiti.app.ui.theme.LocalAdaptiveColors
@@ -77,43 +79,16 @@ fun LikedYouScreen(viewModel: InboxViewModel) {
         }
 
         if (isLoading) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = AppColors.Rose)
+            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                ShimmerDiscoverCard()
             }
         } else if (likes.isEmpty()) {
-            // Empty state with heart icon
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(32.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Favorite,
-                        "No likes",
-                        tint = AppColors.Rose.copy(alpha = 0.3f),
-                        modifier = Modifier.size(80.dp)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        "No likes yet",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.textPrimary
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "When someone likes your profile, they'll appear here",
-                        fontSize = 15.sp,
-                        color = colors.textSecondary,
-                        textAlign = TextAlign.Center
-                    )
-                }
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                EmptyState(
+                    icon = Icons.Default.FavoriteBorder,
+                    title = "No likes yet",
+                    description = "When someone likes your profile, they'll appear here"
+                )
             }
         } else {
             val featuredLike = likes.first()
@@ -307,105 +282,56 @@ fun FeaturedLikeCard(
                     )
             )
 
-            // Cultural badge - top right
-            val badgeColor = when (like.culturalBadge) {
-                CulturalBadge.GOLD -> AppColors.BadgeGold
-                CulturalBadge.GREEN -> AppColors.BadgeGreen
-                CulturalBadge.ORANGE -> AppColors.BadgeOrange
-                CulturalBadge.NONE -> colors.textMuted
-            }
-            Surface(
-                shape = RoundedCornerShape(AppTheme.radiusFull),
-                color = badgeColor.copy(alpha = 0.25f),
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        Icons.Default.Stars,
-                        contentDescription = null,
-                        tint = badgeColor,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        "${like.culturalScore}%",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = badgeColor
-                    )
-                }
-            }
+            // Cultural badge - top right (shared component)
+            CulturalScoreBadge(
+                score = like.culturalScore,
+                badge = like.culturalBadge,
+                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)
+            )
 
-            // Like label badge - top left
+            // "What they liked" pill - top left (randomized label like web)
+            val likedLabels = remember { listOf("Liked your photos", "Liked your profile", "Liked your vibe", "Loved your bio", "Liked your style", "Liked your prompts") }
+            val likedLabel = remember(like.id) { likedLabels[like.id.hashCode().mod(likedLabels.size).let { if (it < 0) it + likedLabels.size else it }] }
             Surface(
                 shape = RoundedCornerShape(AppTheme.radiusFull),
                 color = AppColors.Rose.copy(alpha = 0.9f),
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(12.dp)
+                modifier = Modifier.align(Alignment.TopStart).padding(12.dp)
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        Icons.Default.Favorite,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(12.dp)
-                    )
+                    Icon(Icons.Default.Favorite, null, tint = Color.White, modifier = Modifier.size(12.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        "Liked your profile",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White
-                    )
+                    Text(likedLabel, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                 }
             }
 
-            // LIKE overlay
+            // LIKE overlay (bordered style)
             if (likeAlpha > 0f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(AppTheme.radiusXl)),
-                    contentAlignment = Alignment.TopStart
-                ) {
-                    Text(
-                        "LIKE",
-                        fontSize = 40.sp,
-                        fontWeight = FontWeight.Black,
-                        color = AppColors.Success.copy(alpha = likeAlpha),
-                        modifier = Modifier
-                            .padding(28.dp)
-                            .rotate(-20f)
-                    )
+                Box(modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(AppTheme.radiusXl)), contentAlignment = Alignment.TopStart) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color.Transparent,
+                        border = BorderStroke(3.dp, AppColors.Success.copy(alpha = likeAlpha)),
+                        modifier = Modifier.padding(28.dp).rotate(-15f)
+                    ) {
+                        Text("LIKE", fontSize = 36.sp, fontWeight = FontWeight.Black, color = AppColors.Success.copy(alpha = likeAlpha), modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                    }
                 }
             }
 
-            // NOPE overlay
+            // NOPE overlay (bordered style)
             if (nopeAlpha > 0f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(AppTheme.radiusXl)),
-                    contentAlignment = Alignment.TopEnd
-                ) {
-                    Text(
-                        "NOPE",
-                        fontSize = 40.sp,
-                        fontWeight = FontWeight.Black,
-                        color = AppColors.Error.copy(alpha = nopeAlpha),
-                        modifier = Modifier
-                            .padding(28.dp)
-                            .rotate(20f)
-                    )
+                Box(modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(AppTheme.radiusXl)), contentAlignment = Alignment.TopEnd) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color.Transparent,
+                        border = BorderStroke(3.dp, AppColors.Error.copy(alpha = nopeAlpha)),
+                        modifier = Modifier.padding(28.dp).rotate(15f)
+                    ) {
+                        Text("NOPE", fontSize = 36.sp, fontWeight = FontWeight.Black, color = AppColors.Error.copy(alpha = nopeAlpha), modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                    }
                 }
             }
 
@@ -540,28 +466,12 @@ fun UpNextCard(
                     )
             )
 
-            // Cultural badge
-            val badgeColor = when (like.culturalBadge) {
-                CulturalBadge.GOLD -> AppColors.BadgeGold
-                CulturalBadge.GREEN -> AppColors.BadgeGreen
-                CulturalBadge.ORANGE -> AppColors.BadgeOrange
-                CulturalBadge.NONE -> colors.textMuted
-            }
-            Surface(
-                shape = RoundedCornerShape(AppTheme.radiusFull),
-                color = badgeColor.copy(alpha = 0.25f),
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(6.dp)
-            ) {
-                Text(
-                    "${like.culturalScore}%",
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = badgeColor
-                )
-            }
+            // Cultural badge (shared component)
+            CulturalScoreBadge(
+                score = like.culturalScore,
+                badge = like.culturalBadge,
+                modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)
+            )
 
             // Info at bottom
             Column(
@@ -579,19 +489,9 @@ fun UpNextCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 if (user.city.isNotEmpty()) {
-                    Text(
-                        user.city,
-                        fontSize = 10.sp,
-                        color = Color.White.copy(alpha = 0.7f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Text(user.city, fontSize = 10.sp, color = Color.White.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                Text(
-                    formatLikeTimestamp(like.likedAt),
-                    fontSize = 9.sp,
-                    color = Color.White.copy(alpha = 0.5f)
-                )
+                Text(formatLikeTimestamp(like.likedAt), fontSize = 9.sp, color = Color.White.copy(alpha = 0.5f))
             }
         }
     }
@@ -637,39 +537,12 @@ fun LikeCard(
                     )
             )
 
-            // Cultural badge
-            val badgeColor = when (like.culturalBadge) {
-                CulturalBadge.GOLD -> AppColors.BadgeGold
-                CulturalBadge.GREEN -> AppColors.BadgeGreen
-                CulturalBadge.ORANGE -> AppColors.BadgeOrange
-                CulturalBadge.NONE -> colors.textMuted
-            }
-            Surface(
-                shape = RoundedCornerShape(AppTheme.radiusFull),
-                color = badgeColor.copy(alpha = 0.2f),
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(8.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        Icons.Default.Stars,
-                        contentDescription = null,
-                        tint = badgeColor,
-                        modifier = Modifier.size(11.dp)
-                    )
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Text(
-                        "${like.culturalScore}%",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = badgeColor
-                    )
-                }
-            }
+            // Cultural badge (shared component)
+            CulturalScoreBadge(
+                score = like.culturalScore,
+                badge = like.culturalBadge,
+                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+            )
 
             // Like label badge - top left
             Surface(

@@ -20,10 +20,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mitimaiti.app.models.*
-import com.mitimaiti.app.ui.components.GlassCard
+import com.mitimaiti.app.ui.components.*
 import com.mitimaiti.app.ui.theme.AppColors
 import com.mitimaiti.app.ui.theme.AppTheme
 import com.mitimaiti.app.ui.theme.LocalAdaptiveColors
+import com.mitimaiti.app.utils.AppLanguage
+import com.mitimaiti.app.utils.LocalizationManager
 import com.mitimaiti.app.utils.ThemeManager
 import com.mitimaiti.app.viewmodels.SettingsViewModel
 
@@ -32,6 +34,7 @@ import com.mitimaiti.app.viewmodels.SettingsViewModel
 fun SettingsScreen(
     viewModel: SettingsViewModel,
     themeManager: ThemeManager,
+    localizationManager: LocalizationManager? = null,
     onBack: () -> Unit,
     onLogout: () -> Unit
 ) {
@@ -337,12 +340,55 @@ fun SettingsScreen(
                             }
                         }
                     }
+                    HorizontalDivider(color = colors.borderSubtle)
+                    // Language picker
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            "Language",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = colors.textSecondary
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        val currentLang = localizationManager?.language?.collectAsState()?.value ?: AppLanguage.ENGLISH
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            AppLanguage.entries.forEach { lang ->
+                                FilterChip(
+                                    selected = currentLang == lang,
+                                    onClick = {
+                                        localizationManager?.setLanguage(lang)
+                                        viewModel.showToast("Language: ${lang.displayName}")
+                                    },
+                                    label = { Text(lang.displayName) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = AppColors.Rose,
+                                        selectedLabelColor = Color.White
+                                    )
+                                )
+                            }
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // ── Account ──
                 SettingsSection(title = "Account", icon = Icons.Default.AccountCircle) {
+                    // Export Data
+                    TextButton(
+                        onClick = { viewModel.showToast("Data export requested. Check your email.") },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Download, null, tint = AppColors.Info, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Export My Data", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = AppColors.Info)
+                        }
+                    }
+                    HorizontalDivider(color = colors.borderSubtle)
                     // Log Out (yellow/warning)
                     TextButton(
                         onClick = { viewModel.showLogoutConfirmation.value = true },
