@@ -45,7 +45,13 @@ const deleteSchema = z.object({
 
 // ─── POST /v1/auth/login ────────────────────────────────────────────────────────
 // Sends a phone OTP via Supabase Auth (Twilio under the hood).
+// In development mode, skips Supabase and accepts a fixed OTP (123456).
 // No age-gate here — that's checked during onboarding.
+
+const isDev = process.env.NODE_ENV === 'development';
+
+// In-memory store for dev OTP sessions
+const devOtpSessions = new Map<string, { phone: string; createdAt: number }>();
 
 router.post(
   '/login',
@@ -53,6 +59,17 @@ router.post(
   validate(loginSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const { phone } = req.body;
+
+    if (isDev) {
+      // Dev mode: store phone and accept fixed OTP 123456
+      devOtpSessions.set(phone, { phone, createdAt: Date.now() });
+      console.log(`[Auth][DEV] OTP requested for ${phone} — use code 123456`);
+      res.json({
+        success: true,
+        message: 'Verification code sent',
+      });
+      return;
+    }
 
     const { error } = await supabase.auth.signInWithOtp({
       phone,
@@ -96,29 +113,99 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const { phone, token } = req.body;
 
-    // Verify OTP through Supabase Auth
-    const {
-      data: { session, user: authUser },
-      error: authError,
-    } = await supabase.auth.verifyOtp({
-      phone,
-      token,
-      type: 'sms',
-    });
+    let authUserId: string;
+    let sessionData: { access_token: string; refresh_token: string; expires_at?: number };
 
-    if (authError || !authUser || !session) {
-      throw new AppError(
-        401,
-        'Invalid or expired verification code',
-        'OTP_INVALID'
-      );
+    if (isDev) {
+      // Dev mode: accept fixed OTP 123456
+      const otpSession = devOtpSessions.get(phone);
+      if (!otpSession || token !== '123456') {
+        throw new AppError(
+          401,
+          'Invalid or expired verification code',
+          'OTP_INVALID'
+        );
+      }
+      // Expire OTP sessions older than 5 minutes
+      if (Date.now() - otpSession.createdAt > 5 * 60 * 1000) {
+        devOtpSessions.delete(phone);
+        throw new AppError(
+          401,
+          'Invalid or expired verification code',
+          'OTP_INVALID'
+        );
+      }
+      devOtpSessions.delete(phone);
+
+      // Dev mode: generate a deterministic auth ID from phone number and mock session
+      const crypto = await import('crypto');
+      authUserId = crypto.createHash('sha256').update(`dev-${phone}`).digest('hex').slice(0, 36);
+      // Format as UUID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+      authUserId = `${authUserId.slice(0,8)}-${authUserId.slice(8,12)}-${authUserId.slice(12,16)}-${authUserId.slice(16,20)}-${authUserId.slice(20,32)}`;
+
+      sessionData = {
+        access_token: `dev_${crypto.randomBytes(32).toString('hex')}`,
+        refresh_token: `dev_refresh_${crypto.randomBytes(32).toString('hex')}`,
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
+      };
+
+      console.log(`[Auth][DEV] Verified OTP for ${phone}, authUserId=${authUserId}`);
+    } else {
+      // Production: Verify OTP through Supabase Auth
+      const {
+        data: { session, user: authUser },
+        error: authError,
+      } = await supabase.auth.verifyOtp({
+        phone,
+        token,
+        type: 'sms',
+      });
+
+      if (authError || !authUser || !session) {
+        throw new AppError(
+          401,
+          'Invalid or expired verification code',
+          'OTP_INVALID'
+        );
+      }
+      authUserId = authUser.id;
+      sessionData = session;
+    }
+
+    if (isDev) {
+      // Dev mode: return mock user data without hitting the database
+      const crypto = await import('crypto');
+      const devUserId = crypto.createHash('md5').update(phone).digest('hex').slice(0, 36);
+      const devId = `${devUserId.slice(0,8)}-${devUserId.slice(8,12)}-${devUserId.slice(12,16)}-${devUserId.slice(16,20)}-${devUserId.slice(20,32)}`;
+
+      console.log(`[Auth][DEV] Returning mock user for ${phone}, id=${devId}`);
+
+      res.status(201).json({
+        success: true,
+        data: {
+          user: {
+            id: devId,
+            authId: authUserId,
+            phone,
+            isVerified: false,
+            profileCompleteness: 0,
+            isNew: true,
+          },
+          session: {
+            accessToken: sessionData.access_token,
+            refreshToken: sessionData.refresh_token,
+            expiresAt: sessionData.expires_at,
+          },
+        },
+      });
+      return;
     }
 
     // ── Check if user already exists in our database ──
     const { data: existingUser } = await supabase
       .from('users')
       .select('*')
-      .eq('auth_id', authUser.id)
+      .eq('auth_id', authUserId)
       .single();
 
     if (existingUser) {
@@ -144,7 +231,7 @@ router.post(
       await supabase.from('users').update(updates).eq('id', existingUser.id);
 
       // Clear any JWT blacklist for this user
-      await redis.del(`jwt_blacklist:${authUser.id}`);
+      await redis.del(`jwt_blacklist:${authUserId}`);
 
       res.json({
         success: true,
@@ -158,9 +245,9 @@ router.post(
             isNew: false,
           },
           session: {
-            accessToken: session.access_token,
-            refreshToken: session.refresh_token,
-            expiresAt: session.expires_at,
+            accessToken: sessionData.access_token,
+            refreshToken: sessionData.refresh_token,
+            expiresAt: sessionData.expires_at,
           },
         },
       });
@@ -170,7 +257,7 @@ router.post(
       const { data: newUser, error: createError } = await supabase
         .from('users')
         .insert({
-          auth_id: authUser.id,
+          auth_id: authUserId,
           phone,
           is_verified: false,
           is_active: true,
@@ -265,9 +352,9 @@ router.post(
             isNew: true,
           },
           session: {
-            accessToken: session.access_token,
-            refreshToken: session.refresh_token,
-            expiresAt: session.expires_at,
+            accessToken: sessionData.access_token,
+            refreshToken: sessionData.refresh_token,
+            expiresAt: sessionData.expires_at,
           },
         },
       });
