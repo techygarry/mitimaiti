@@ -1,46 +1,63 @@
-import axios from 'axios';
-import { getSupabaseClient } from './supabase';
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import { getTokens, isTokenExpired, refreshAccessToken, clearTokens } from './auth';
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1',
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/v1',
+  headers: { 'Content-Type': 'application/json' },
   timeout: 15000,
 });
 
-// Request interceptor to add auth token
-api.interceptors.request.use(
-  async (config) => {
-    try {
-      const supabase = getSupabaseClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+// ─── Request interceptor — attach token, auto-refresh if near expiry ─────────
 
-      if (session?.access_token) {
-        config.headers.Authorization = `Bearer ${session.access_token}`;
-      }
-    } catch (error) {
-      console.error('Error getting auth session:', error);
+api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+  let tokens = getTokens();
+
+  // If token is expired or about to expire, refresh first
+  if (tokens && isTokenExpired()) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) {
+      tokens = refreshed;
+    } else {
+      // Refresh failed — let the request go through, 401 interceptor will handle it
+      tokens = null;
     }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
   }
-);
 
-// Response interceptor for error handling
+  if (tokens?.accessToken) {
+    config.headers.Authorization = `Bearer ${tokens.accessToken}`;
+  }
+
+  return config;
+});
+
+// ─── Response interceptor — retry once on 401, then redirect ─────────────────
+
+let isRetrying = false;
+
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Redirect to auth if unauthorized
+  async (error: AxiosError) => {
+    const originalRequest = error.config;
+
+    // Only retry once for 401s
+    if (error.response?.status === 401 && originalRequest && !isRetrying) {
+      isRetrying = true;
+
+      const refreshed = await refreshAccessToken();
+      isRetrying = false;
+
+      if (refreshed && originalRequest) {
+        originalRequest.headers.Authorization = `Bearer ${refreshed.accessToken}`;
+        return api(originalRequest);
+      }
+
+      // Refresh failed — clear state and redirect
+      clearTokens();
       if (typeof window !== 'undefined') {
         window.location.href = '/auth/phone';
       }
     }
+
     return Promise.reject(error);
   }
 );

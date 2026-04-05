@@ -7,25 +7,37 @@ import { ArrowLeft } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { showToast } from '@/components/ui/Toast';
 import { useTranslation } from '@/lib/i18n';
+import { useAuth } from '@/context/AuthContext';
 
 export default function OtpPage() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { verifyOtp, sendOtp } = useAuth();
   const [otp, setOtp] = useState<string[]>(Array(6).fill(''));
   const [loading, setLoading] = useState(false);
   const [countdown, setCountdown] = useState(30);
   const [resendCount, setResendCount] = useState(0);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [phoneDisplay, setPhoneDisplay] = useState('');
+  const [fullPhone, setFullPhone] = useState('');
+  const fullPhoneRef = useRef('');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const display = sessionStorage.getItem('auth_phone_display') || '+91 98XXX XXXXX';
+      const phone = sessionStorage.getItem('auth_phone') || '';
       setPhoneDisplay(display);
+      setFullPhone(phone);
+      fullPhoneRef.current = phone;
+
+      // If no phone stored, user navigated here directly — send back
+      if (!phone) {
+        router.replace('/auth/phone');
+        return;
+      }
     }
-    // Focus first input
     inputRefs.current[0]?.focus();
-  }, []);
+  }, [router]);
 
   // Countdown timer
   useEffect(() => {
@@ -89,17 +101,35 @@ export default function OtpPage() {
   }, []);
 
   const handleVerify = async (code: string) => {
+    const phone = fullPhoneRef.current;
+    if (!phone || code.length !== 6) return;
     setLoading(true);
 
-    // Demo: accept any 6-digit code
-    await new Promise((r) => setTimeout(r, 1000));
+    const result = await verifyOtp(phone, code);
 
-    if (code.length === 6) {
+    if (result.success) {
       showToast.success(t('auth.phoneVerified'));
-      // For demo, treat as new user
-      router.push('/onboarding/name');
+
+      // Set lightweight cookie for middleware route guard
+      document.cookie = 'mm_authenticated=1; path=/; max-age=604800; SameSite=Lax';
+
+      // Clean up sessionStorage auth flow data
+      sessionStorage.removeItem('auth_phone');
+      sessionStorage.removeItem('auth_phone_display');
+
+      if (result.isNew) {
+        // New user — go to onboarding
+        router.replace('/onboarding/name');
+      } else {
+        // Returning user — go to discover
+        router.replace('/discover');
+      }
     } else {
-      showToast.error(t('auth.invalidCode'));
+      if (result.error?.includes('expired')) {
+        showToast.error('Code expired. Please request a new one.');
+      } else {
+        showToast.error(result.error || t('auth.invalidCode'));
+      }
       setOtp(Array(6).fill(''));
       inputRefs.current[0]?.focus();
     }
@@ -107,11 +137,17 @@ export default function OtpPage() {
     setLoading(false);
   };
 
-  const handleResend = () => {
-    if (countdown > 0 || resendCount >= 3) return;
-    setResendCount((prev) => prev + 1);
-    setCountdown(30);
-    showToast.info(t('auth.newCodeSent'));
+  const handleResend = async () => {
+    if (countdown > 0 || resendCount >= 3 || !fullPhone) return;
+
+    const result = await sendOtp(fullPhone);
+    if (result.success) {
+      setResendCount((prev) => prev + 1);
+      setCountdown(30);
+      showToast.info(t('auth.newCodeSent'));
+    } else {
+      showToast.error(result.error || 'Failed to resend code.');
+    }
   };
 
   const otpComplete = otp.every((d) => d !== '');

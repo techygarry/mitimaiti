@@ -48,25 +48,32 @@ async function checkLimit(
   res: Response,
   next: NextFunction
 ): Promise<void> {
-  const current = await redis.incr(key);
+  try {
+    const current = await redis.incr(key);
 
-  if (current === 1) {
-    // First request in this window - set expiry
-    await redis.expire(key, windowSeconds);
-  }
+    if (current === 1) {
+      // First request in this window - set expiry
+      await redis.expire(key, windowSeconds);
+    }
 
-  // Set rate limit headers
-  const ttl = await redis.ttl(key);
-  res.setHeader('X-RateLimit-Limit', maxRequests);
-  res.setHeader('X-RateLimit-Remaining', Math.max(0, maxRequests - current));
-  res.setHeader('X-RateLimit-Reset', Math.floor(Date.now() / 1000) + Math.max(0, ttl));
+    // Set rate limit headers
+    const ttl = await redis.ttl(key);
+    res.setHeader('X-RateLimit-Limit', maxRequests);
+    res.setHeader('X-RateLimit-Remaining', Math.max(0, maxRequests - current));
+    res.setHeader('X-RateLimit-Reset', Math.floor(Date.now() / 1000) + Math.max(0, ttl));
 
-  if (current > maxRequests) {
-    throw new AppError(
-      429,
-      `Rate limit exceeded. Try again in ${Math.max(0, ttl)} seconds.`,
-      'RATE_LIMIT_EXCEEDED'
-    );
+    if (current > maxRequests) {
+      throw new AppError(
+        429,
+        `Rate limit exceeded. Try again in ${Math.max(0, ttl)} seconds.`,
+        'RATE_LIMIT_EXCEEDED'
+      );
+    }
+  } catch (err) {
+    // Re-throw AppError (rate limit exceeded) but swallow Redis connection errors
+    if (err instanceof AppError) throw err;
+    // Redis down — allow request through (fail open for availability)
+    console.warn('[RateLimit] Redis unavailable, skipping rate limit check');
   }
 
   next();

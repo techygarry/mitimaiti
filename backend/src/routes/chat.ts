@@ -216,10 +216,10 @@ router.get(
       throw new AppError(500, 'Failed to fetch messages', 'MESSAGES_FETCH_FAILED');
     }
 
-    // Mark unread messages from other user as read
+    // Mark unread messages from other user as read (with timestamp)
     await supabase
       .from('messages')
-      .update({ is_read: true })
+      .update({ is_read: true, read_at: new Date().toISOString() })
       .eq('match_id', matchId)
       .eq('sender_id', otherId)
       .eq('is_read', false);
@@ -272,6 +272,7 @@ router.get(
       mediaUrl: m.media_url,
       mediaType: m.media_type,
       isRead: m.is_read,
+      readAt: m.read_at || null,
       createdAt: m.created_at,
     }));
 

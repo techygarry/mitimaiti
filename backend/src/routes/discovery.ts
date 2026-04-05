@@ -8,6 +8,7 @@ import { validate } from '../middleware/validate';
 import { getCulturalScore } from '../services/scoring';
 import { getKundliScore } from '../services/kundli';
 import { AuthenticatedRequest, FeedCard, CulturalBadge, KundliTier, FamilyValues, FoodPreference, SindhiFluency } from '../types';
+import { cityDistance } from '../utils/geo';
 
 const router = Router();
 
@@ -874,7 +875,7 @@ router.get(
         kundli_breakdown: null, // populated on detail view
         common_interests: commonCount,
         daily_prompt_answer: dailyPromptMap.get(c.userId) || null,
-        distance_km: null, // TODO: geo distance calculation
+        distance_km: cityDistance(discoveryCity || '', c.profile.city || ''),
         is_online: c.userMeta.is_online || false,
         last_active: c.userMeta.last_active_at || c.userMeta.last_active || null,
         // Sindhi identity

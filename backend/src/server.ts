@@ -31,12 +31,23 @@ const PORT = parseInt(process.env.PORT || '4000', 10);
 // Security headers
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
-// CORS
+// CORS — supports web, Android, iOS, and Capacitor/Expo origins
 app.use(
   cors({
-    origin: process.env.CORS_ORIGINS?.split(',') || '*',
+    origin: (origin, callback) => {
+      const allowedOrigins = process.env.CORS_ORIGINS?.split(',').map(o => o.trim()) || [];
+      // Allow requests with no origin (mobile apps, curl, server-to-server)
+      if (!origin) return callback(null, true);
+      // Allow configured origins
+      if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) return callback(null, true);
+      // Allow mobile deep link schemes (capacitor, expo, ionic)
+      if (/^(capacitor|ionic|exp|mitimaiti):\/\//.test(origin)) return callback(null, true);
+      // Allow localhost variants (dev)
+      if (/^https?:\/\/(localhost|127\.0\.0\.1|10\.0\.2\.2)(:\d+)?$/.test(origin)) return callback(null, true);
+      callback(null, false);
+    },
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Platform', 'X-App-Version'],
     credentials: true,
     maxAge: 86400,
   })
@@ -57,29 +68,40 @@ app.use(compression());
 // Global rate limiting: 60 req/min
 app.use(rateLimit());
 
-// Health check
+// Health check — used by all platforms (web, iOS, Android)
 app.get('/health', async (_req, res) => {
   const { supabase } = await import('./config/supabase');
   const { redis } = await import('./config/redis');
 
   let dbOk = false;
   let redisOk = false;
+  let dbLatency = -1;
+  let redisLatency = -1;
 
   try {
+    const start = Date.now();
     const { error } = await supabase.from('users').select('id').limit(1);
+    dbLatency = Date.now() - start;
     dbOk = !error;
   } catch {}
 
   try {
+    const start = Date.now();
     await redis.ping();
+    redisLatency = Date.now() - start;
     redisOk = true;
   } catch {}
 
+  const status = dbOk && redisOk ? 'ok' : dbOk ? 'degraded' : 'error';
+
   res.json({
-    status: dbOk ? 'ok' : 'degraded',
-    db: dbOk ? 'ok' : 'error',
-    redis: redisOk ? 'ok' : 'error',
-    uptime: process.uptime(),
+    status,
+    version: '1.0.0',
+    platforms: ['web', 'android', 'ios'],
+    db: { status: dbOk ? 'ok' : 'error', latencyMs: dbLatency },
+    redis: { status: redisOk ? 'ok' : 'error', latencyMs: redisLatency },
+    uptime: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
   });
 });
 

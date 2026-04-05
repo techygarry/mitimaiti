@@ -63,6 +63,7 @@ router.post(
     });
 
     if (error) {
+      console.error('[Auth] Supabase OTP error:', JSON.stringify({ message: error.message, status: error.status, name: error.name }));
       // Surface rate-limit or provider errors cleanly
       if (error.message.includes('rate') || error.status === 429) {
         throw new AppError(

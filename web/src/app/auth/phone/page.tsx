@@ -5,24 +5,27 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { ArrowLeft, ChevronDown, Phone } from 'lucide-react';
 import Button from '@/components/ui/Button';
+import { showToast } from '@/components/ui/Toast';
 import { useTranslation } from '@/lib/i18n';
+import { useAuth } from '@/context/AuthContext';
 
 const countryCodes = [
-  { code: '+91', country: 'India', flag: '🇮🇳' },
-  { code: '+971', country: 'UAE', flag: '🇦🇪' },
-  { code: '+44', country: 'UK', flag: '🇬🇧' },
-  { code: '+1', country: 'USA', flag: '🇺🇸' },
-  { code: '+1', country: 'Canada', flag: '🇨🇦' },
-  { code: '+65', country: 'Singapore', flag: '🇸🇬' },
-  { code: '+852', country: 'Hong Kong', flag: '🇭🇰' },
-  { code: '+61', country: 'Australia', flag: '🇦🇺' },
-  { code: '+254', country: 'Kenya', flag: '🇰🇪' },
-  { code: '+234', country: 'Nigeria', flag: '🇳🇬' },
+  { code: '+91', country: 'India', flag: '\u{1F1EE}\u{1F1F3}' },
+  { code: '+971', country: 'UAE', flag: '\u{1F1E6}\u{1F1EA}' },
+  { code: '+44', country: 'UK', flag: '\u{1F1EC}\u{1F1E7}' },
+  { code: '+1', country: 'USA', flag: '\u{1F1FA}\u{1F1F8}' },
+  { code: '+1', country: 'Canada', flag: '\u{1F1E8}\u{1F1E6}' },
+  { code: '+65', country: 'Singapore', flag: '\u{1F1F8}\u{1F1EC}' },
+  { code: '+852', country: 'Hong Kong', flag: '\u{1F1ED}\u{1F1F0}' },
+  { code: '+61', country: 'Australia', flag: '\u{1F1E6}\u{1F1FA}' },
+  { code: '+254', country: 'Kenya', flag: '\u{1F1F0}\u{1F1EA}' },
+  { code: '+234', country: 'Nigeria', flag: '\u{1F1F3}\u{1F1EC}' },
 ];
 
 export default function PhoneAuthPage() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { sendOtp } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
   const [phone, setPhone] = useState('');
   const [selectedCountry, setSelectedCountry] = useState(countryCodes[0]);
@@ -30,9 +33,7 @@ export default function PhoneAuthPage() {
   const [loading, setLoading] = useState(false);
 
   const formatPhone = (value: string) => {
-    // Remove all non-digits
     const digits = value.replace(/\D/g, '');
-    // Format as groups for display
     if (digits.length <= 5) return digits;
     if (digits.length <= 10) return `${digits.slice(0, 5)} ${digits.slice(5)}`;
     return `${digits.slice(0, 5)} ${digits.slice(5, 10)}`;
@@ -45,20 +46,30 @@ export default function PhoneAuthPage() {
     if (!isValid) return;
     setLoading(true);
 
-    // For demo, skip actual OTP sending
     const fullPhone = `${selectedCountry.code}${rawPhone}`;
 
-    // Store phone for OTP page
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem('auth_phone', fullPhone);
-      sessionStorage.setItem('auth_phone_display', `${selectedCountry.code} ${formatPhone(rawPhone)}`);
+    const result = await sendOtp(fullPhone);
+
+    if (result.success) {
+      // Store phone for OTP page to display
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('auth_phone', fullPhone);
+        sessionStorage.setItem(
+          'auth_phone_display',
+          `${selectedCountry.code} ${formatPhone(rawPhone)}`
+        );
+      }
+      router.push('/auth/otp');
+    } else {
+      if (result.code === 'OTP_RATE_LIMITED') {
+        showToast.error('Too many attempts. Please wait a moment and try again.');
+      } else {
+        showToast.error(result.error || 'Failed to send code. Please try again.');
+      }
     }
 
-    // Simulate network delay
-    await new Promise((r) => setTimeout(r, 800));
     setLoading(false);
-    router.push('/auth/otp');
-  }, [isValid, selectedCountry.code, rawPhone, router]);
+  }, [isValid, selectedCountry.code, rawPhone, router, sendOtp]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-cream px-4">
@@ -76,7 +87,7 @@ export default function PhoneAuthPage() {
               MitiMaiti
             </span>
           </div>
-          <div className="w-9" /> {/* Spacer */}
+          <div className="w-9" />
         </div>
 
         {/* Content */}
@@ -107,7 +118,6 @@ export default function PhoneAuthPage() {
                 <ChevronDown className="w-4 h-4 text-textLight" />
               </button>
 
-              {/* Dropdown */}
               {showDropdown && (
                 <motion.div
                   initial={{ opacity: 0, y: -5 }}

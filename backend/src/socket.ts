@@ -20,7 +20,15 @@ let io: Server;
 export function createSocketServer(httpServer?: HttpServer): Server {
   io = new Server(httpServer || parseInt(process.env.SOCKET_PORT || '4001', 10), {
     cors: {
-      origin: process.env.CORS_ORIGINS?.split(',') || '*',
+      origin: (origin, callback) => {
+        // Allow all origins for mobile (they don't send Origin headers)
+        if (!origin) return callback(null, true);
+        const allowed = process.env.CORS_ORIGINS?.split(',').map(o => o.trim()) || [];
+        if (allowed.includes('*') || allowed.includes(origin)) return callback(null, true);
+        if (/^(capacitor|ionic|exp|mitimaiti):\/\//.test(origin)) return callback(null, true);
+        if (/^https?:\/\/(localhost|127\.0\.0\.1|10\.0\.2\.2)(:\d+)?$/.test(origin)) return callback(null, true);
+        callback(null, false);
+      },
       methods: ['GET', 'POST'],
     },
     pingInterval: 25000,
@@ -91,10 +99,27 @@ export function createSocketServer(httpServer?: HttpServer): Server {
     // Set online presence in Redis with 5min TTL
     redis.set(`online:${userId}`, '1', 'EX', ONLINE_TTL_SECONDS).catch(() => {});
 
+    // ─── Per-socket rate limiting ─────────────────────────────────────────
+    const socketRateLimit = new Map<string, number[]>();
+    function checkSocketRate(event: string, maxPerMinute: number): boolean {
+      const now = Date.now();
+      const windowMs = 60000;
+      const timestamps = socketRateLimit.get(event) || [];
+      const recent = timestamps.filter(t => now - t < windowMs);
+      if (recent.length >= maxPerMinute) return false;
+      recent.push(now);
+      socketRateLimit.set(event, recent);
+      return true;
+    }
+
     // ─── send_msg — THE CORE USP: Respect-First Chat Enforcement ──────────
 
     socket.on('send_msg', async (data: SocketSendMessage, ack?: Function) => {
       try {
+        if (!checkSocketRate('send_msg', 30)) {
+          return ack?.({ error: 'Rate limit: too many messages. Slow down.' });
+        }
+
         const { matchId, content, mediaUrl, msgType } = data;
 
         if (!matchId) {
@@ -277,6 +302,7 @@ export function createSocketServer(httpServer?: HttpServer): Server {
 
     socket.on('typing', async (data: SocketTypingEvent) => {
       try {
+        if (!checkSocketRate('typing', 60)) return;
         const { matchId } = data;
 
         // Verify match access
@@ -329,18 +355,20 @@ export function createSocketServer(httpServer?: HttpServer): Server {
 
         const otherId = match.user_a_id === userId ? match.user_b_id : match.user_a_id;
 
-        // Mark all unread messages from the other user as read
+        // Mark all unread messages from the other user as read (with timestamp)
+        const readAt = new Date().toISOString();
         await supabase
           .from('messages')
-          .update({ is_read: true })
+          .update({ is_read: true, read_at: readAt })
           .eq('match_id', matchId)
           .eq('sender_id', otherId)
           .eq('is_read', false);
 
-        // Emit read receipt to other user
+        // Emit read receipt to other user with timestamp
         io.to(`user:${otherId}`).emit('messages_read', {
           matchId,
           readBy: userId,
+          readAt,
         });
       } catch (err) {
         console.error('[Socket] enter_chat error:', err);
