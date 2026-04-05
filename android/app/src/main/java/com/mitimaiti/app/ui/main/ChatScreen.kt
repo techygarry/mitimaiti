@@ -3,6 +3,7 @@ package com.mitimaiti.app.ui.main
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,13 +22,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.sp
+import android.view.HapticFeedbackConstants
 import coil.compose.AsyncImage
 import com.mitimaiti.app.models.*
 import com.mitimaiti.app.services.MockData
@@ -135,7 +140,10 @@ fun ChatScreen(
                             if (match.otherUser.isOnline) {
                                 Text("Online", fontSize = 12.sp, color = AppColors.Success)
                             } else {
-                                Text("Offline", fontSize = 12.sp, color = colors.textMuted)
+                                val lastActiveText = match.otherUser.lastActive?.let {
+                                    com.mitimaiti.app.utils.timeAgoShort(it)
+                                } ?: "Offline"
+                                Text(lastActiveText, fontSize = 12.sp, color = colors.textMuted)
                             }
                         }
                     }
@@ -146,13 +154,12 @@ fun ChatScreen(
                     }
                 },
                 actions = {
-                    if (viewModel.callsUnlocked) {
-                        IconButton(onClick = { }) {
-                            Icon(Icons.Default.Phone, "Call", tint = AppColors.Rose)
-                        }
-                        IconButton(onClick = { }) {
-                            Icon(Icons.Default.Videocam, "Video", tint = AppColors.Rose)
-                        }
+                    val callTint = if (viewModel.callsUnlocked) AppColors.Rose else colors.textMuted.copy(alpha = 0.4f)
+                    IconButton(onClick = { }, enabled = viewModel.callsUnlocked) {
+                        Icon(Icons.Default.Phone, "Call", tint = callTint)
+                    }
+                    IconButton(onClick = { }, enabled = viewModel.callsUnlocked) {
+                        Icon(Icons.Default.Videocam, "Video", tint = callTint)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.surface)
@@ -261,7 +268,7 @@ fun ChatScreen(
 
             // ── Scroll-to-bottom FAB ──
             if (showScrollToBottom) {
-                FloatingActionButton(
+                Surface(
                     onClick = {
                         scope.launch {
                             if (messages.isNotEmpty()) {
@@ -273,14 +280,18 @@ fun ChatScreen(
                         .align(Alignment.BottomEnd)
                         .padding(end = 16.dp, bottom = 80.dp)
                         .size(40.dp),
-                    containerColor = colors.surface,
-                    contentColor = AppColors.Rose,
-                    shape = CircleShape
+                    color = colors.surface,
+                    shape = CircleShape,
+                    shadowElevation = 6.dp,
+                    border = BorderStroke(1.dp, colors.border)
                 ) {
-                    Icon(
-                        Icons.Default.KeyboardArrowDown, "Scroll to bottom",
-                        modifier = Modifier.size(24.dp)
-                    )
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Icon(
+                            Icons.Default.KeyboardArrowDown, "Scroll to bottom",
+                            tint = AppColors.Rose,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
                 }
             }
         }
@@ -406,24 +417,53 @@ fun IcebreakerSection(icebreakers: List<Icebreaker>, onSelect: (String) -> Unit)
             items(icebreakers) { icebreaker ->
                 Surface(
                     onClick = { onSelect(icebreaker.question) },
-                    shape = RoundedCornerShape(AppTheme.radiusMd),
+                    shape = RoundedCornerShape(AppTheme.radiusLg),
                     color = AppColors.Rose.copy(alpha = 0.06f),
                     modifier = Modifier
+                        .shadow(
+                            elevation = 4.dp,
+                            shape = RoundedCornerShape(AppTheme.radiusLg),
+                            ambientColor = AppColors.Rose.copy(alpha = 0.1f),
+                            spotColor = AppColors.Rose.copy(alpha = 0.1f)
+                        )
                         .border(
                             width = 1.dp,
-                            color = AppColors.Rose.copy(alpha = 0.3f),
-                            shape = RoundedCornerShape(AppTheme.radiusMd)
+                            brush = Brush.linearGradient(
+                                listOf(
+                                    AppColors.Rose.copy(alpha = 0.3f),
+                                    AppColors.Rose.copy(alpha = 0.1f)
+                                )
+                            ),
+                            shape = RoundedCornerShape(AppTheme.radiusLg)
                         )
                 ) {
-                    Text(
-                        icebreaker.question,
+                    Column(
                         modifier = Modifier
                             .padding(horizontal = 14.dp, vertical = 10.dp)
-                            .widthIn(max = 200.dp),
-                        fontSize = 14.sp,
-                        color = AppColors.Rose,
-                        fontWeight = FontWeight.Medium
-                    )
+                            .widthIn(max = 200.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "\u2728",
+                                fontSize = 10.sp
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                "ICEBREAKER",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = AppColors.Rose,
+                                letterSpacing = 1.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            icebreaker.question,
+                            fontSize = 14.sp,
+                            color = AppColors.Rose,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
         }
@@ -612,6 +652,7 @@ fun ChatInputBar(
     isLocked: Boolean = false
 ) {
     val colors = LocalAdaptiveColors.current
+    val view = LocalView.current
 
     Surface(
         color = colors.surface,
@@ -688,7 +729,10 @@ fun ChatInputBar(
             if (messageText.isNotBlank()) {
                 // Send button
                 FilledIconButton(
-                    onClick = onSend,
+                    onClick = {
+                        view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                        onSend()
+                    },
                     enabled = !disabled,
                     modifier = Modifier.size(40.dp),
                     colors = IconButtonDefaults.filledIconButtonColors(

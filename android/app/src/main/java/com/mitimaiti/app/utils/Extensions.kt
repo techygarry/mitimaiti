@@ -4,6 +4,9 @@ import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
 
+@JvmName("timeAgoShortStandalone")
+fun timeAgoShort(timestamp: Long): String = timestamp.timeAgoShort()
+
 fun Long.timeAgoShort(): String {
     val now = System.currentTimeMillis()
     val diff = now - this
@@ -64,10 +67,25 @@ fun Long.countdownString(): String {
     }
 }
 
+fun Long.shortCountdown(): String {
+    val hours = TimeUnit.MILLISECONDS.toHours(this)
+    val minutes = TimeUnit.MILLISECONDS.toMinutes(this) % 60
+    return when {
+        hours > 0 -> "${hours}h ${minutes}m"
+        else -> "${minutes}m"
+    }
+}
+
 fun String.initials(): String {
     return this.split(" ")
         .filter { it.isNotBlank() }
         .take(2)
         .mapNotNull { it.firstOrNull()?.uppercase() }
         .joinToString("")
+}
+
+fun Long.fromAge(age: Int): Long {
+    val cal = Calendar.getInstance()
+    cal.add(Calendar.YEAR, -age)
+    return cal.timeInMillis
 }

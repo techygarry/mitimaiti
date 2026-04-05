@@ -1,6 +1,9 @@
 @file:Suppress("DEPRECATION")
 package com.mitimaiti.app.ui.main
 
+import android.view.HapticFeedbackConstants
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Explore
@@ -18,7 +21,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -66,6 +74,7 @@ fun MainTabScreen(
     var showNotificationPanel by remember { mutableStateOf(false) }
     val notifications by AppNotificationManager.shared.notifications.collectAsState()
     val unreadNotifCount = notifications.count { !it.isRead }
+    val view = LocalView.current
 
     LaunchedEffect(Unit) {
         feedViewModel.loadFeed()
@@ -111,22 +120,48 @@ fun MainTabScreen(
         },
         bottomBar = {
             NavigationBar(
+                modifier = Modifier.drawBehind {
+                    val shadowColor = Color.Black.copy(alpha = 0.08f)
+                    drawRect(
+                        color = shadowColor,
+                        topLeft = Offset(0f, -8.dp.toPx()),
+                        size = size.copy(height = 8.dp.toPx())
+                    )
+                },
                 containerColor = colors.surface,
                 contentColor = colors.textPrimary
             ) {
                 MainTab.entries.forEach { tab ->
                     val selected = selectedTab == tab
+                    val scaleTarget = if (selected) 1.15f else 1.0f
+                    val iconScale by animateFloatAsState(
+                        targetValue = scaleTarget,
+                        animationSpec = spring(
+                            dampingRatio = 0.4f,
+                            stiffness = 300f
+                        ),
+                        label = "tabBounce"
+                    )
+                    val familyBadgeCount = AppNotificationManager.shared.unreadCountForTypes(
+                        listOf(com.mitimaiti.app.utils.NotificationType.FAMILY, com.mitimaiti.app.utils.NotificationType.FAMILY_SUGGESTION)
+                    )
                     val badgeCount = when (tab) {
                         MainTab.LIKED_YOU -> totalLikes
                         MainTab.MATCHES -> unreadMessages
+                        MainTab.FAMILY -> familyBadgeCount
                         else -> 0
                     }
                     NavigationBarItem(
                         selected = selected,
-                        onClick = { selectedTab = tab },
+                        onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                            selectedTab = tab
+                        },
                         icon = {
                             if (badgeCount > 0) {
-                                BadgedBox(badge = {
+                                BadgedBox(
+                                    modifier = Modifier.scale(iconScale),
+                                    badge = {
                                     Badge(containerColor = AppColors.Rose) {
                                         Text(
                                             if (badgeCount > 99) "99+" else badgeCount.toString(),
@@ -143,7 +178,8 @@ fun MainTabScreen(
                             } else {
                                 Icon(
                                     if (selected) tab.selectedIcon else tab.unselectedIcon,
-                                    contentDescription = tab.title
+                                    contentDescription = tab.title,
+                                    modifier = Modifier.scale(iconScale)
                                 )
                             }
                         },
@@ -161,21 +197,30 @@ fun MainTabScreen(
         }
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            // Tab content
-            when (selectedTab) {
-                MainTab.DISCOVER -> DiscoverScreen(viewModel = feedViewModel)
-                MainTab.LIKED_YOU -> LikedYouScreen(viewModel = inboxViewModel)
-                MainTab.MATCHES -> MatchesScreen(
-                    viewModel = inboxViewModel,
-                    onNavigateToChat = onNavigateToChat
-                )
-                MainTab.FAMILY -> FamilyScreen(viewModel = familyViewModel)
-                MainTab.PROFILE -> ProfileScreen(
-                    viewModel = profileViewModel,
-                    onEditProfile = onNavigateToEditProfile,
-                    onSettings = onNavigateToSettings,
-                    onLogout = onLogout
-                )
+            // Tab content with animated transitions
+            AnimatedContent(
+                targetState = selectedTab,
+                transitionSpec = {
+                    fadeIn(animationSpec = tween(200)) togetherWith
+                        fadeOut(animationSpec = tween(200))
+                },
+                label = "tabContent"
+            ) { currentTab ->
+                when (currentTab) {
+                    MainTab.DISCOVER -> DiscoverScreen(viewModel = feedViewModel)
+                    MainTab.LIKED_YOU -> LikedYouScreen(viewModel = inboxViewModel)
+                    MainTab.MATCHES -> MatchesScreen(
+                        viewModel = inboxViewModel,
+                        onNavigateToChat = onNavigateToChat
+                    )
+                    MainTab.FAMILY -> FamilyScreen(viewModel = familyViewModel)
+                    MainTab.PROFILE -> ProfileScreen(
+                        viewModel = profileViewModel,
+                        onEditProfile = onNavigateToEditProfile,
+                        onSettings = onNavigateToSettings,
+                        onLogout = onLogout
+                    )
+                }
             }
 
             // Notification panel overlay (on top of content)
@@ -185,7 +230,7 @@ fun MainTabScreen(
                 onNotificationTap = { notification ->
                     showNotificationPanel = false
                     // Navigate to relevant tab based on notification type
-                    val targetTab = MainTab.entries.getOrNull(notification.type.destinationTab)
+                    val targetTab = notification.type.destinationTab?.let { MainTab.entries.getOrNull(it) }
                     if (targetTab != null) selectedTab = targetTab
                 }
             )

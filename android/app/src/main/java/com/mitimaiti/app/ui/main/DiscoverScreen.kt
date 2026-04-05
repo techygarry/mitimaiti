@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -33,6 +34,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import android.view.HapticFeedbackConstants
 import coil.compose.AsyncImage
 import com.mitimaiti.app.models.*
 import com.mitimaiti.app.ui.components.*
@@ -89,16 +91,30 @@ fun DiscoverScreen(viewModel: FeedViewModel) {
                 Text("Discover", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = colors.textPrimary)
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box {
-                        IconButton(onClick = { showFilters = true }) {
-                            Icon(Icons.Default.Tune, "Filters", tint = colors.textPrimary, modifier = Modifier.size(24.dp))
-                        }
-                        if (activeFilterCount > 0) {
-                            CountBadge(
-                                count = activeFilterCount,
-                                modifier = Modifier.align(Alignment.TopEnd).offset(x = (-4).dp, y = 4.dp),
-                                size = 16.dp
-                            )
+                    Surface(
+                        onClick = { showFilters = true },
+                        shape = RoundedCornerShape(AppTheme.radiusFull),
+                        color = Color.Transparent,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, colors.textMuted.copy(alpha = 0.3f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(Icons.Default.Tune, "Filters", tint = colors.textPrimary, modifier = Modifier.size(18.dp))
+                            Text("Filters", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.textPrimary)
+                            if (activeFilterCount > 0) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = AppColors.Rose,
+                                    modifier = Modifier.size(20.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                        Text("$activeFilterCount", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    }
+                                }
+                            }
                         }
                     }
                     Spacer(modifier = Modifier.width(4.dp))
@@ -261,6 +277,7 @@ private fun countActiveFilters(state: FilterState): Int {
     if (state.smokingFilter != null) count++
     if (state.drinkingFilter != null) count++
     if (state.familyPlansFilter != null) count++
+    if (state.exerciseFilter != null) count++
     return count
 }
 
@@ -382,9 +399,40 @@ fun DiscoveryCard(
 ) {
     val colors = LocalAdaptiveColors.current
     val user = card.user
+    val view = LocalView.current
+
+    // Entrance animation
+    val entranceScale = remember { Animatable(0.95f) }
+    val entranceAlpha = remember { Animatable(0f) }
+    LaunchedEffect(card.id) {
+        launch { entranceScale.animateTo(1f, animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f)) }
+        launch { entranceAlpha.animateTo(1f, animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f)) }
+    }
+
+    // Pass button press animation
+    var isPassPressed by remember { mutableStateOf(false) }
+    val passScale by animateFloatAsState(
+        targetValue = if (isPassPressed) 0.96f else 1.0f,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = 500f),
+        label = "passScale"
+    )
+
+    // Like button press animation
+    var isLikePressed by remember { mutableStateOf(false) }
+    val likeScale by animateFloatAsState(
+        targetValue = if (isLikePressed) 0.96f else 1.0f,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = 500f),
+        label = "likeScale"
+    )
 
     Card(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                scaleX = entranceScale.value
+                scaleY = entranceScale.value
+                alpha = entranceAlpha.value
+            },
         shape = RoundedCornerShape(AppTheme.radiusXl),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
@@ -408,13 +456,19 @@ fun DiscoveryCard(
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
-                    // Gradient overlay
+                    // Gradient overlay (multi-stop, matching iOS)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .fillMaxHeight(0.55f)
                             .align(Alignment.BottomCenter)
-                            .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))))
+                            .background(Brush.verticalGradient(
+                                0.0f to Color.Transparent,
+                                0.35f to Color.Black.copy(alpha = 0.05f),
+                                0.6f to Color.Black.copy(alpha = 0.25f),
+                                0.85f to Color.Black.copy(alpha = 0.65f),
+                                1.0f to Color.Black.copy(alpha = 0.80f)
+                            ))
                     )
                     // Name + age + location
                     Column(
@@ -619,11 +673,22 @@ fun DiscoveryCard(
                 ) {
                     // Pass button
                     FloatingActionButton(
-                        onClick = onPass,
+                        onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                            isPassPressed = true
+                            onPass()
+                            isPassPressed = false
+                        },
                         containerColor = colors.surface,
                         contentColor = colors.textSecondary,
                         shape = CircleShape,
-                        modifier = Modifier.size(60.dp).shadow(8.dp, CircleShape),
+                        modifier = Modifier
+                            .size(60.dp)
+                            .shadow(8.dp, CircleShape)
+                            .graphicsLayer {
+                                scaleX = passScale
+                                scaleY = passScale
+                            },
                         elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
                     ) {
                         Icon(Icons.Default.Close, "Pass", modifier = Modifier.size(28.dp))
@@ -631,11 +696,22 @@ fun DiscoveryCard(
 
                     // Like button
                     FloatingActionButton(
-                        onClick = onLike,
+                        onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                            isLikePressed = true
+                            onLike()
+                            isLikePressed = false
+                        },
                         containerColor = AppColors.Rose,
                         contentColor = Color.White,
                         shape = CircleShape,
-                        modifier = Modifier.size(60.dp).shadow(8.dp, CircleShape),
+                        modifier = Modifier
+                            .size(60.dp)
+                            .shadow(8.dp, CircleShape)
+                            .graphicsLayer {
+                                scaleX = likeScale
+                                scaleY = likeScale
+                            },
                         elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
                     ) {
                         Icon(Icons.Default.Favorite, "Like", modifier = Modifier.size(28.dp))

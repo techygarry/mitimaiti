@@ -1,6 +1,7 @@
 package com.mitimaiti.app.navigation
 
 sealed class Screen(val route: String) {
+    object Splash : Screen("splash")
     object Welcome : Screen("welcome")
     object PhoneAuth : Screen("phone_auth")
     object OTPVerification : Screen("otp_verification")

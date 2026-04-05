@@ -22,6 +22,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -32,6 +34,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import kotlinx.coroutines.delay
 import com.mitimaiti.app.models.Intent
 import com.mitimaiti.app.models.User
 import com.mitimaiti.app.ui.components.*
@@ -72,6 +75,7 @@ fun ProfileScreen(
     LaunchedEffect(Unit) {
         alphaValues.forEach { animatable ->
             animatable.animateTo(1f, animationSpec = tween(durationMillis = 300))
+            delay(50L)
         }
     }
 
@@ -100,6 +104,21 @@ fun ProfileScreen(
                 Icon(Icons.Default.Settings, "Settings", tint = colors.textSecondary)
             }
         }
+
+        // Header gradient background behind avatar
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(160.dp)
+                .clip(RoundedCornerShape(bottomStart = AppTheme.radiusLg, bottomEnd = AppTheme.radiusLg))
+                .background(
+                    Brush.verticalGradient(
+                        0f to AppColors.Rose.copy(alpha = 0.40f),
+                        0.50f to AppColors.RoseDark.copy(alpha = 0.50f),
+                        1f to AppColors.Rose.copy(alpha = 0.25f)
+                    )
+                )
+        )
 
         // Section 0: Avatar with animated completeness ring + verified badge
         Box(
@@ -161,6 +180,33 @@ fun ProfileScreen(
                         .offset(x = 40.dp, y = 40.dp)
                 ) {
                     VerifiedBadge(size = 28.dp)
+                }
+            }
+
+            // Camera edit button at bottom-right of avatar
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .offset(x = 42.dp, y = 30.dp)
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.linearGradient(listOf(AppColors.Rose, AppColors.RoseDark)),
+                        CircleShape
+                    )
+                    .border(2.dp, Color.White, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                IconButton(
+                    onClick = onEditProfile,
+                    modifier = Modifier.size(34.dp)
+                ) {
+                    Icon(
+                        Icons.Default.CameraAlt,
+                        contentDescription = "Edit photo",
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
             }
 
@@ -499,21 +545,15 @@ fun ProfileScreen(
                         }
                     }
                     Spacer(modifier = Modifier.height(12.dp))
-                    profile.education?.let { DetailRow(Icons.Default.School, "Education", it) }
-                    profile.occupation?.let { DetailRow(Icons.Default.Work, "Occupation", it) }
-                    profile.company?.let { DetailRow(Icons.Default.Business, "Company", it) }
-                    profile.heightCm?.let { DetailRow(Icons.Default.Height, "Height", "${it}cm") }
-                    profile.religion?.let {
-                        DetailRow(Icons.Default.TempleBuddhist, "Religion", it)
-                    }
-                    profile.smoking?.let { DetailRow(Icons.Default.SmokeFree, "Smoking", it) }
-                    profile.drinking?.let { DetailRow(Icons.Default.LocalBar, "Drinking", it) }
-                    profile.exercise?.let {
-                        DetailRow(Icons.Default.FitnessCenter, "Exercise", it)
-                    }
-                    profile.wantKids?.let {
-                        DetailRow(Icons.Default.ChildCare, "Want Kids", it)
-                    }
+                    AboutMeFieldOrAdd(Icons.Default.School, "Education", profile.education, onEditProfile)
+                    AboutMeFieldOrAdd(Icons.Default.Work, "Occupation", profile.occupation, onEditProfile)
+                    AboutMeFieldOrAdd(Icons.Default.Business, "Company", profile.company, onEditProfile)
+                    AboutMeFieldOrAdd(Icons.Default.Height, "Height", profile.heightCm?.let { "${it}cm" }, onEditProfile)
+                    AboutMeFieldOrAdd(Icons.Default.TempleBuddhist, "Religion", profile.religion, onEditProfile)
+                    AboutMeFieldOrAdd(Icons.Default.SmokeFree, "Smoking", profile.smoking, onEditProfile)
+                    AboutMeFieldOrAdd(Icons.Default.LocalBar, "Drinking", profile.drinking, onEditProfile)
+                    AboutMeFieldOrAdd(Icons.Default.FitnessCenter, "Exercise", profile.exercise, onEditProfile)
+                    AboutMeFieldOrAdd(Icons.Default.ChildCare, "Want Kids", profile.wantKids, onEditProfile)
                 }
             }
         }
@@ -564,28 +604,20 @@ fun ProfileScreen(
                         }
                     }
                     Spacer(modifier = Modifier.height(12.dp))
-                    profile.sindhiFluency?.let {
-                        DetailRow(Icons.Default.Language, "Fluency", it.displayName)
-                    }
-                    profile.sindhiDialect?.let {
-                        DetailRow(Icons.Default.Translate, "Dialect", it)
-                    }
-                    profile.generation?.let {
-                        DetailRow(Icons.Default.Timeline, "Generation", it)
-                    }
-                    profile.gotra?.let {
-                        DetailRow(Icons.Default.AccountTree, "Gotra", it)
-                    }
-                    profile.familyOriginCity?.let { city ->
-                        val country = profile.familyOriginCountry ?: ""
-                        DetailRow(Icons.Default.Home, "Family Origin", "$city, $country")
-                    }
-                    profile.communitySubGroup?.let {
-                        DetailRow(Icons.Default.Groups, "Community", it)
-                    }
-                    profile.motherTongue?.let {
-                        DetailRow(Icons.Default.RecordVoiceOver, "Mother Tongue", it)
-                    }
+                    AboutMeFieldOrAdd(Icons.Default.Language, "Fluency", profile.sindhiFluency?.displayName, onEditProfile)
+                    AboutMeFieldOrAdd(Icons.Default.Translate, "Dialect", profile.sindhiDialect, onEditProfile)
+                    AboutMeFieldOrAdd(Icons.Default.Timeline, "Generation", profile.generation, onEditProfile)
+                    AboutMeFieldOrAdd(Icons.Default.AccountTree, "Gotra", profile.gotra, onEditProfile)
+                    AboutMeFieldOrAdd(
+                        Icons.Default.Home, "Family Origin",
+                        profile.familyOriginCity?.let { city ->
+                            val country = profile.familyOriginCountry ?: ""
+                            "$city, $country"
+                        },
+                        onEditProfile
+                    )
+                    AboutMeFieldOrAdd(Icons.Default.Groups, "Community", profile.communitySubGroup, onEditProfile)
+                    AboutMeFieldOrAdd(Icons.Default.RecordVoiceOver, "Mother Tongue", profile.motherTongue, onEditProfile)
                 }
             }
         }
@@ -643,23 +675,49 @@ fun ProfileScreen(
                 .padding(horizontal = 16.dp)
                 .alpha(alphaValues[10].value)
         ) {
-            // Edit Profile (rose filled)
+            // Edit Profile (rose gradient)
             Button(
                 onClick = onEditProfile,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp),
+                    .height(50.dp)
+                    .shadow(
+                        14.dp,
+                        RoundedCornerShape(AppTheme.radiusLg),
+                        ambientColor = AppColors.Rose.copy(alpha = 0.45f)
+                    ),
                 shape = RoundedCornerShape(AppTheme.radiusLg),
-                colors = ButtonDefaults.buttonColors(containerColor = AppColors.Rose)
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                contentPadding = PaddingValues(0.dp)
             ) {
-                Icon(Icons.Default.Edit, null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    "Edit Profile",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.linearGradient(listOf(AppColors.Rose, AppColors.RoseDark)),
+                            RoundedCornerShape(AppTheme.radiusLg)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Edit,
+                            null,
+                            modifier = Modifier.size(18.dp),
+                            tint = Color.White
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "Edit Profile",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -751,6 +809,47 @@ private fun DetailRow(icon: ImageVector, label: String, value: String) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+@Composable
+private fun AboutMeFieldOrAdd(
+    icon: ImageVector,
+    label: String,
+    value: String?,
+    onAdd: () -> Unit
+) {
+    val colors = LocalAdaptiveColors.current
+    if (!value.isNullOrEmpty()) {
+        DetailRow(icon, label, value)
+    } else {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(icon, label, tint = AppColors.Rose.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                label,
+                fontSize = 14.sp,
+                color = colors.textMuted,
+                modifier = Modifier.width(110.dp)
+            )
+            TextButton(
+                onClick = onAdd,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                modifier = Modifier.height(28.dp)
+            ) {
+                Text(
+                    "+ Add",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = AppColors.Rose
+                )
+            }
+        }
     }
 }
 

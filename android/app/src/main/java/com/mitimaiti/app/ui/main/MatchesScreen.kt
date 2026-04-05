@@ -1,12 +1,16 @@
 @file:Suppress("DEPRECATION")
 package com.mitimaiti.app.ui.main
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -17,6 +21,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -160,11 +166,50 @@ fun MatchesScreen(
                             modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
                         )
                     }
-                    items(activeMatches, key = { it.id }) { match ->
-                        ChatRow(
-                            match = match,
-                            onClick = { onNavigateToChat(match.id) }
+                    itemsIndexed(activeMatches, key = { _, match -> match.id }) { index, match ->
+                        // Staggered fade-in animation
+                        var itemVisible by remember { mutableStateOf(false) }
+                        val itemAlpha by animateFloatAsState(
+                            targetValue = if (itemVisible) 1f else 0f,
+                            animationSpec = spring(stiffness = 300f),
+                            label = "chatRowAlpha"
                         )
+                        LaunchedEffect(match.id) {
+                            delay(index * 50L)
+                            itemVisible = true
+                        }
+
+                        // Press scale animation
+                        var isPressed by remember { mutableStateOf(false) }
+                        val scale by animateFloatAsState(
+                            targetValue = if (isPressed) 0.97f else 1f,
+                            animationSpec = spring(stiffness = 500f),
+                            label = "chatRowScale"
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .graphicsLayer {
+                                    alpha = itemAlpha
+                                    scaleX = scale
+                                    scaleY = scale
+                                }
+                                .pointerInput(match.id) {
+                                    detectTapGestures(
+                                        onPress = {
+                                            isPressed = true
+                                            tryAwaitRelease()
+                                            isPressed = false
+                                        },
+                                        onTap = { onNavigateToChat(match.id) }
+                                    )
+                                }
+                        ) {
+                            ChatRow(
+                                match = match,
+                                onClick = { }
+                            )
+                        }
                     }
                 }
 

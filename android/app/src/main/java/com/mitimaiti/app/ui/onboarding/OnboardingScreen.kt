@@ -2,9 +2,7 @@
 package com.mitimaiti.app.ui.onboarding
 
 import androidx.compose.animation.*
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -18,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -189,7 +188,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                 )
             ) {
                 Text(
-                    if (currentStep == OnboardingStep.READY) "Let's Go" else "Continue",
+                    if (currentStep == OnboardingStep.READY) "Start Discovering" else "Continue",
                     fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White
@@ -614,56 +613,148 @@ private fun LocationStep(location: String, onLocationChange: (String) -> Unit) {
 @Composable
 private fun ReadyStep(name: String) {
     val colors = LocalAdaptiveColors.current
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        // Celebration icon
-        Box(
-            modifier = Modifier
-                .size(80.dp)
-                .clip(CircleShape)
-                .background(AppColors.Rose.copy(alpha = 0.1f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                Icons.Default.Favorite,
-                "Heart",
-                tint = AppColors.Rose,
-                modifier = Modifier.size(40.dp)
+
+    // Confetti particles
+    val confettiColors = listOf(AppColors.Rose, AppColors.Gold, AppColors.Saffron, AppColors.Success, AppColors.Info)
+    val infiniteTransition = rememberInfiniteTransition(label = "confetti")
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Confetti layer
+        repeat(20) { i ->
+            val xOffset by infiniteTransition.animateFloat(
+                initialValue = (-200..400).random().toFloat(),
+                targetValue = (-200..400).random().toFloat(),
+                animationSpec = infiniteRepeatable(
+                    animation = tween((3000..6000).random(), easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "confettiX$i"
+            )
+            val yOffset by infiniteTransition.animateFloat(
+                initialValue = -50f,
+                targetValue = 800f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween((4000..8000).random(), easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart,
+                    initialStartOffset = StartOffset((0..3000).random())
+                ),
+                label = "confettiY$i"
+            )
+            Box(
+                modifier = Modifier
+                    .offset(x = xOffset.dp, y = yOffset.dp)
+                    .size(if (i % 3 == 0) 8.dp else 6.dp)
+                    .background(
+                        confettiColors[i % confettiColors.size].copy(alpha = 0.6f),
+                        if (i % 2 == 0) CircleShape else RoundedCornerShape(2.dp)
+                    )
             )
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        // Main content
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // Welcome text
+            Text(
+                "Welcome to the Sindhi community,",
+                fontSize = 16.sp,
+                color = colors.textSecondary,
+                textAlign = TextAlign.Center
+            )
 
-        Text(
-            "You're all set!",
-            fontSize = 32.sp,
-            fontWeight = FontWeight.Bold,
-            color = colors.textPrimary,
-            textAlign = TextAlign.Center
-        )
+            Spacer(modifier = Modifier.height(8.dp))
 
-        Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                name,
+                fontSize = 36.sp,
+                fontWeight = FontWeight.Bold,
+                color = colors.textPrimary,
+                textAlign = TextAlign.Center
+            )
 
-        Text(
-            "Time to find your MitiMaiti",
-            fontSize = 18.sp,
-            color = AppColors.Rose,
-            textAlign = TextAlign.Center,
-            fontWeight = FontWeight.Medium
-        )
+            Spacer(modifier = Modifier.height(24.dp))
 
-        Spacer(modifier = Modifier.height(16.dp))
+            // Profile preview card
+            Surface(
+                modifier = Modifier
+                    .padding(horizontal = 32.dp)
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(AppTheme.radiusCard),
+                color = colors.cardDark,
+                shadowElevation = 12.dp
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Avatar
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .background(
+                                Brush.linearGradient(listOf(AppColors.Rose.copy(alpha = 0.7f), AppColors.RoseDark.copy(alpha = 0.5f))),
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            name.take(1).uppercase(),
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(name, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = colors.textPrimary)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Profile created", fontSize = 14.sp, color = AppColors.Success)
+                }
+            }
 
-        Text(
-            "Your profile is ready, $name. Start discovering meaningful connections in the Sindhi community!",
-            fontSize = 16.sp,
-            color = colors.textSecondary,
-            textAlign = TextAlign.Center,
-            lineHeight = 24.sp,
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // "Complete your Sindhi Identity" card
+            Surface(
+                modifier = Modifier
+                    .padding(horizontal = 32.dp)
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(AppTheme.radiusMd),
+                color = AppColors.Gold.copy(alpha = 0.1f)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.AutoAwesome, null, tint = AppColors.Gold, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Complete your Sindhi Identity",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = AppColors.Gold
+                        )
+                        Text(
+                            "Add fluency, gotra & festivals for 3x more matches",
+                            fontSize = 12.sp,
+                            color = colors.textSecondary
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                "Start discovering meaningful connections!",
+                fontSize = 15.sp,
+                color = colors.textSecondary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 32.dp)
+            )
+        }
     }
 }

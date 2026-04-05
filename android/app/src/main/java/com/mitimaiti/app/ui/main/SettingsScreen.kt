@@ -374,6 +374,59 @@ fun SettingsScreen(
 
                 // ── Account ──
                 SettingsSection(title = "Account", icon = Icons.Default.AccountCircle) {
+                    // Edit Profile
+                    TextButton(
+                        onClick = { onBack() }, // Navigate back then to edit profile
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Edit, null, tint = AppColors.Rose, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Edit Profile", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = colors.textPrimary)
+                            Spacer(modifier = Modifier.weight(1f))
+                            Icon(Icons.Default.ChevronRight, null, tint = colors.textMuted, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                    HorizontalDivider(color = colors.borderSubtle)
+                    // Family Mode
+                    TextButton(
+                        onClick = { viewModel.showToast("Navigate to Family Mode") },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.FamilyRestroom, null, tint = AppColors.Gold, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Family Mode", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = colors.textPrimary)
+                            Spacer(modifier = Modifier.weight(1f))
+                            Icon(Icons.Default.ChevronRight, null, tint = colors.textMuted, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                    HorizontalDivider(color = colors.borderSubtle)
+                    // Change Phone
+                    TextButton(
+                        onClick = { viewModel.showToast("Phone change flow coming soon") },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Phone, null, tint = colors.textSecondary, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Change Phone", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = colors.textPrimary)
+                            Spacer(modifier = Modifier.weight(1f))
+                            Text("+91 ****3210", fontSize = 13.sp, color = colors.textMuted)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(Icons.Default.ChevronRight, null, tint = colors.textMuted, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                    HorizontalDivider(color = colors.borderSubtle)
                     // Export Data
                     TextButton(
                         onClick = { viewModel.showToast("Data export requested. Check your email.") },
@@ -441,6 +494,61 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // ── About ──
+                SettingsSection(title = "About", icon = Icons.Default.Info) {
+                    // Terms of Service
+                    TextButton(
+                        onClick = { viewModel.showToast("Opening Terms of Service") },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Description, null, tint = colors.textSecondary, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Terms of Service", fontSize = 15.sp, color = colors.textPrimary)
+                            Spacer(modifier = Modifier.weight(1f))
+                            Icon(Icons.Default.ChevronRight, null, tint = colors.textMuted, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                    HorizontalDivider(color = colors.borderSubtle)
+                    // Privacy Policy
+                    TextButton(
+                        onClick = { viewModel.showToast("Opening Privacy Policy") },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Policy, null, tint = colors.textSecondary, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Privacy Policy", fontSize = 15.sp, color = colors.textPrimary)
+                            Spacer(modifier = Modifier.weight(1f))
+                            Icon(Icons.Default.ChevronRight, null, tint = colors.textMuted, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                    HorizontalDivider(color = colors.borderSubtle)
+                    // Community Guidelines
+                    TextButton(
+                        onClick = { viewModel.showToast("Opening Community Guidelines") },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Gavel, null, tint = colors.textSecondary, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Community Guidelines", fontSize = 15.sp, color = colors.textPrimary)
+                            Spacer(modifier = Modifier.weight(1f))
+                            Icon(Icons.Default.ChevronRight, null, tint = colors.textMuted, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally

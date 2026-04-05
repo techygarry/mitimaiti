@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.mitimaiti.app.models.*
 import com.mitimaiti.app.services.APIService
 import com.mitimaiti.app.utils.AppNotificationManager
-import com.mitimaiti.app.utils.AppNotification
 import com.mitimaiti.app.utils.NotificationType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,7 +27,7 @@ class InboxViewModel : ViewModel() {
     fun loadInbox() {
         viewModelScope.launch {
             _isLoading.value = true
-            APIService.fetchInbox().onSuccess { (likes, matches) -> val prev = _likes.value.size; _likes.value = likes; _matches.value = matches; if (likes.size > prev && prev > 0) { AppNotificationManager.shared.addNotification(AppNotification(type = NotificationType.LIKE, title = "New likes!", body = "${likes.size - prev} people liked your profile")) } }.onFailure { _error.value = "Failed to load inbox" }
+            APIService.fetchInbox().onSuccess { (likes, matches) -> val prev = _likes.value.size; _likes.value = likes; _matches.value = matches; if (likes.size > prev && prev > 0) { AppNotificationManager.shared.addNotification(type = NotificationType.LIKE, title = "New likes!", body = "${likes.size - prev} people liked your profile") } }.onFailure { _error.value = "Failed to load inbox" }
             _isLoading.value = false
         }
     }
@@ -36,7 +35,7 @@ class InboxViewModel : ViewModel() {
     fun likeBack(likeId: String) {
         val like = _likes.value.firstOrNull { it.id == likeId } ?: return; _likes.value = _likes.value.filter { it.id != likeId }
         _matches.value = listOf(Match(otherUser = like.user, status = MatchStatus.PENDING_FIRST_MESSAGE, matchedAt = System.currentTimeMillis(), expiresAt = System.currentTimeMillis() + 24 * 60 * 60 * 1000L)) + _matches.value
-        AppNotificationManager.shared.addNotification(AppNotification(type = NotificationType.MATCH, title = "It's a Match!", body = "You and ${like.user.displayName} liked each other!"))
+        AppNotificationManager.shared.addNotification(type = NotificationType.MATCH, title = "It's a Match!", body = "You and ${like.user.displayName} liked each other!")
     }
 
     fun passLike(likeId: String) { _likes.value = _likes.value.filter { it.id != likeId } }

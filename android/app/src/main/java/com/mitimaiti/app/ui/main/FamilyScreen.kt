@@ -2,12 +2,15 @@
 package com.mitimaiti.app.ui.main
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -28,8 +31,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.view.HapticFeedbackConstants
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.mitimaiti.app.models.*
@@ -185,7 +190,24 @@ fun FamilyScreen(viewModel: FamilyViewModel = viewModel()) {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Tab bar with counts
+                // Tab bar with spring-animated indicator
+                val indicatorOffset by animateDpAsState(
+                    targetValue = if (selectedTab == 0) 0.dp else 1.dp,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessLow
+                    ),
+                    label = "tabIndicatorOffset"
+                )
+                val indicatorWidth by animateDpAsState(
+                    targetValue = if (selectedTab == 0) 100.dp else 140.dp,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessLow
+                    ),
+                    label = "tabIndicatorWidth"
+                )
+
                 TabRow(
                     selectedTabIndex = selectedTab,
                     containerColor = Color.Transparent,
@@ -403,6 +425,8 @@ private fun FamilySuggestionCards(
 ) {
     val colors = LocalAdaptiveColors.current
 
+    val view = LocalView.current
+
     if (suggestions.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             EmptyState(
@@ -442,153 +466,211 @@ private fun FamilySuggestionCards(
 
     var offsetX by remember { mutableFloatStateOf(0f) }
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp, vertical = 12.dp),
-        contentAlignment = Alignment.Center
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        GlassCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .offset { IntOffset(offsetX.roundToInt(), 0) }
-                .graphicsLayer {
-                    rotationZ = offsetX / 40f
-                    alpha = 1f - (offsetX.absoluteValue / 1000f).coerceAtMost(0.3f)
-                }
-                .pointerInput(currentSuggestion.id) {
-                    detectHorizontalDragGestures(
-                        onDragEnd = {
-                            if (offsetX > 150f) {
-                                onLike(currentSuggestion.id)
-                                currentIndex++
-                            } else if (offsetX < -150f) {
+        Box(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            GlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .offset { IntOffset(offsetX.roundToInt(), 0) }
+                    .graphicsLayer {
+                        rotationZ = offsetX / 40f
+                        alpha = 1f - (offsetX.absoluteValue / 1000f).coerceAtMost(0.3f)
+                    }
+                    .pointerInput(currentSuggestion.id) {
+                        detectHorizontalDragGestures(
+                            onDragEnd = {
+                                if (offsetX > 150f) {
+                                    onLike(currentSuggestion.id)
+                                    currentIndex++
+                                } else if (offsetX < -150f) {
+                                    onPass(currentSuggestion.id)
+                                    currentIndex++
+                                }
+                                offsetX = 0f
+                            },
+                            onHorizontalDrag = { _, dragAmount ->
+                                offsetX += dragAmount
+                            }
+                        )
+                    }
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    // Photo and info
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AsyncImage(
+                            model = currentSuggestion.suggestedUser.primaryPhoto?.urlThumb ?: "",
+                            contentDescription = null,
+                            modifier = Modifier.size(72.dp).clip(RoundedCornerShape(AppTheme.radiusMd)),
+                            contentScale = ContentScale.Crop
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                "${currentSuggestion.suggestedUser.displayName}, ${currentSuggestion.suggestedUser.age ?: ""}",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.textPrimary
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                currentSuggestion.suggestedUser.city,
+                                fontSize = 14.sp,
+                                color = colors.textSecondary
+                            )
+                        }
+                    }
+
+                    // Note in gold-tinted quote card
+                    currentSuggestion.note?.let { note ->
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Surface(
+                            shape = RoundedCornerShape(AppTheme.radiusMd),
+                            color = AppColors.Gold.copy(alpha = 0.1f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Icon(
+                                    Icons.Default.FormatQuote, null,
+                                    tint = AppColors.Gold,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    note,
+                                    fontSize = 14.sp,
+                                    color = colors.textSecondary,
+                                    fontStyle = FontStyle.Italic,
+                                    lineHeight = 20.sp
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Suggested by
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Person, null,
+                            tint = colors.textMuted,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            "Suggested by ${currentSuggestion.suggestedBy.name} (${currentSuggestion.suggestedBy.relationship})",
+                            fontSize = 13.sp,
+                            color = colors.textMuted
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Like / Pass buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
                                 onPass(currentSuggestion.id)
                                 currentIndex++
-                            }
-                            offsetX = 0f
-                        },
-                        onHorizontalDrag = { _, dragAmount ->
-                            offsetX += dragAmount
-                        }
-                    )
-                }
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                // Photo and info
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    AsyncImage(
-                        model = currentSuggestion.suggestedUser.primaryPhoto?.urlThumb ?: "",
-                        contentDescription = null,
-                        modifier = Modifier.size(72.dp).clip(RoundedCornerShape(AppTheme.radiusMd)),
-                        contentScale = ContentScale.Crop
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            "${currentSuggestion.suggestedUser.displayName}, ${currentSuggestion.suggestedUser.age ?: ""}",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = colors.textPrimary
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            currentSuggestion.suggestedUser.city,
-                            fontSize = 14.sp,
-                            color = colors.textSecondary
-                        )
-                    }
-                }
-
-                // Note in gold-tinted quote card
-                currentSuggestion.note?.let { note ->
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Surface(
-                        shape = RoundedCornerShape(AppTheme.radiusMd),
-                        color = AppColors.Gold.copy(alpha = 0.1f)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.Top
+                                offsetX = 0f
+                            },
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            shape = RoundedCornerShape(AppTheme.radiusMd)
                         ) {
                             Icon(
-                                Icons.Default.FormatQuote, null,
-                                tint = AppColors.Gold,
-                                modifier = Modifier.size(18.dp)
+                                Icons.Default.Close, null,
+                                tint = colors.textSecondary,
+                                modifier = Modifier.size(20.dp)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                note,
-                                fontSize = 14.sp,
-                                color = colors.textSecondary,
-                                fontStyle = FontStyle.Italic,
-                                lineHeight = 20.sp
-                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Pass", fontSize = 15.sp, color = colors.textSecondary)
                         }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Suggested by
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.Person, null,
-                        tint = colors.textMuted,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        "Suggested by ${currentSuggestion.suggestedBy.name} (${currentSuggestion.suggestedBy.relationship})",
-                        fontSize = 13.sp,
-                        color = colors.textMuted
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Like / Pass buttons
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = {
-                            onPass(currentSuggestion.id)
-                            currentIndex++
-                            offsetX = 0f
-                        },
-                        modifier = Modifier.weight(1f).height(48.dp),
-                        shape = RoundedCornerShape(AppTheme.radiusMd)
-                    ) {
-                        Icon(
-                            Icons.Default.Close, null,
-                            tint = colors.textSecondary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Pass", fontSize = 15.sp, color = colors.textSecondary)
-                    }
-                    Button(
-                        onClick = {
-                            onLike(currentSuggestion.id)
-                            currentIndex++
-                            offsetX = 0f
-                        },
-                        modifier = Modifier.weight(1f).height(48.dp),
-                        shape = RoundedCornerShape(AppTheme.radiusMd),
-                        colors = ButtonDefaults.buttonColors(containerColor = AppColors.Rose)
-                    ) {
-                        Icon(
-                            Icons.Default.Favorite, null,
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Like", fontSize = 15.sp, color = Color.White)
+                        Button(
+                            onClick = {
+                                view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                                onLike(currentSuggestion.id)
+                                currentIndex++
+                                offsetX = 0f
+                            },
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            shape = RoundedCornerShape(AppTheme.radiusMd),
+                            colors = ButtonDefaults.buttonColors(containerColor = AppColors.Rose)
+                        ) {
+                            Icon(
+                                Icons.Default.Favorite, null,
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Like", fontSize = 15.sp, color = Color.White)
+                        }
                     }
                 }
             }
+        }
+
+        // ── Up Next thumbnails ──
+        val upNextSuggestions = suggestions.drop(currentIndex + 1).take(3)
+        if (upNextSuggestions.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                "Up Next",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = colors.textMuted,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(upNextSuggestions, key = { it.id }) { suggestion ->
+                    Box(
+                        modifier = Modifier
+                            .width(80.dp)
+                            .height(100.dp)
+                            .clip(RoundedCornerShape(AppTheme.radiusMd))
+                    ) {
+                        AsyncImage(
+                            model = suggestion.suggestedUser.primaryPhoto?.urlThumb ?: "",
+                            contentDescription = suggestion.suggestedUser.displayName,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                        // Name overlay at bottom
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .align(Alignment.BottomCenter)
+                                .background(Color.Black.copy(alpha = 0.5f))
+                                .padding(horizontal = 4.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                suggestion.suggestedUser.displayName.split(" ").first(),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }
@@ -762,6 +844,7 @@ private fun PermissionToggleRow(
     onToggle: (Boolean) -> Unit
 ) {
     val colors = LocalAdaptiveColors.current
+    val view = LocalView.current
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -782,7 +865,10 @@ private fun PermissionToggleRow(
         }
         Switch(
             checked = enabled,
-            onCheckedChange = onToggle,
+            onCheckedChange = { newValue ->
+                view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                onToggle(newValue)
+            },
             colors = SwitchDefaults.colors(
                 checkedTrackColor = AppColors.Rose,
                 checkedThumbColor = Color.White

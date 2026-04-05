@@ -1,12 +1,16 @@
 @file:Suppress("DEPRECATION")
 package com.mitimaiti.app.ui.main
 
+import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -15,6 +19,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
@@ -23,11 +28,13 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
@@ -128,21 +135,29 @@ fun LikedYouScreen(viewModel: InboxViewModel) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
                                 .padding(horizontal = 12.dp),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            upNextLikes.forEach { like ->
-                                Box(modifier = Modifier.weight(1f)) {
+                            upNextLikes.forEachIndexed { index, like ->
+                                // Staggered fade-in animation
+                                val itemAlpha = remember { Animatable(0f) }
+                                LaunchedEffect(like.id) {
+                                    kotlinx.coroutines.delay(index * 80L)
+                                    itemAlpha.animateTo(1f, tween(300))
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .width(120.dp)
+                                        .height(150.dp)
+                                        .alpha(itemAlpha.value)
+                                ) {
                                     UpNextCard(
                                         like = like,
                                         onLikeBack = { viewModel.likeBack(like.id) },
                                         onPass = { viewModel.passLike(like.id) }
                                     )
                                 }
-                            }
-                            // Fill remaining slots if less than 3
-                            repeat(3 - upNextLikes.size) {
-                                Spacer(modifier = Modifier.weight(1f))
                             }
                         }
                     }
@@ -202,6 +217,15 @@ fun FeaturedLikeCard(
 ) {
     val colors = LocalAdaptiveColors.current
     val user = like.user
+    val view = LocalView.current
+
+    // Entrance animation
+    val entranceScale = remember { Animatable(0.95f) }
+    val entranceAlpha = remember { Animatable(0f) }
+    LaunchedEffect(like.id) {
+        launch { entranceScale.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = 300f)) }
+        launch { entranceAlpha.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = 300f)) }
+    }
 
     var offsetX by remember { mutableFloatStateOf(0f) }
     var swiped by remember { mutableStateOf(false) }
@@ -231,6 +255,11 @@ fun FeaturedLikeCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
+            .graphicsLayer {
+                scaleX = entranceScale.value
+                scaleY = entranceScale.value
+                alpha = entranceAlpha.value
+            }
             .offset { IntOffset(animatedOffset.roundToInt(), 0) }
             .graphicsLayer { rotationZ = rotation }
             .pointerInput(like.id) {
@@ -240,10 +269,12 @@ fun FeaturedLikeCard(
                             offsetX > swipeThreshold -> {
                                 swiped = true
                                 offsetX = screenWidthPx * 1.5f
+                                view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
                             }
                             offsetX < -swipeThreshold -> {
                                 swiped = true
                                 offsetX = -screenWidthPx * 1.5f
+                                view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
                             }
                             else -> offsetX = 0f
                         }
@@ -277,7 +308,13 @@ fun FeaturedLikeCard(
                     .align(Alignment.BottomCenter)
                     .background(
                         Brush.verticalGradient(
-                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))
+                            colorStops = arrayOf(
+                                0.0f to Color.Transparent,
+                                0.35f to Color.Black.copy(alpha = 0.05f),
+                                0.6f to Color.Black.copy(alpha = 0.25f),
+                                0.85f to Color.Black.copy(alpha = 0.65f),
+                                1.0f to Color.Black.copy(alpha = 0.80f)
+                            )
                         )
                     )
             )

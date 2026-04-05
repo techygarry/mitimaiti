@@ -38,7 +38,8 @@ data class FilterState(
     val educationFilter: String? = null,
     val smokingFilter: String? = null,
     val drinkingFilter: String? = null,
-    val familyPlansFilter: String? = null
+    val familyPlansFilter: String? = null,
+    val exerciseFilter: String? = null
 )
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -326,6 +327,23 @@ fun FilterSheet(
                         FilterChip(
                             selected = state.familyPlansFilter == option,
                             onClick = { state = state.copy(familyPlansFilter = if (state.familyPlansFilter == option) null else option) },
+                            label = { Text(option, fontSize = 13.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = AppColors.Rose.copy(alpha = 0.15f),
+                                selectedLabelColor = AppColors.Rose
+                            )
+                        )
+                    }
+                }
+            }
+
+            // Exercise
+            FilterSection(title = "Exercise") {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("Active", "Sometimes", "Rarely", "Never").forEach { option ->
+                        FilterChip(
+                            selected = state.exerciseFilter == option,
+                            onClick = { state = state.copy(exerciseFilter = if (state.exerciseFilter == option) null else option) },
                             label = { Text(option, fontSize = 13.sp) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = AppColors.Rose.copy(alpha = 0.15f),
