@@ -53,13 +53,11 @@ class MainActivity : ComponentActivity() {
                 val settingsViewModel: SettingsViewModel = viewModel()
 
                 Surface(modifier = Modifier.fillMaxSize(), color = colors.background) {
-                    // DEV: startDestination = Screen.Main.route skips auth/onboarding
-                    // PROD: change to Screen.Splash.route to restore full flow
-                    NavHost(navController = navController, startDestination = Screen.Main.route) {
+                    NavHost(navController = navController, startDestination = Screen.Splash.route) {
                         composable(Screen.Splash.route) {
                             SplashScreen(
                                 onFinished = {
-                                    navController.navigate(Screen.Main.route) {
+                                    navController.navigate(Screen.Welcome.route) {
                                         popUpTo(Screen.Splash.route) { inclusive = true }
                                     }
                                 }
