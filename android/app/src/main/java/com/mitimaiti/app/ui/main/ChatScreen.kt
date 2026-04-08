@@ -9,7 +9,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -21,8 +20,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -30,12 +27,9 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.sp
-import android.view.HapticFeedbackConstants
 import coil.compose.AsyncImage
 import com.mitimaiti.app.models.*
-import com.mitimaiti.app.services.MockData
 import com.mitimaiti.app.ui.theme.AppColors
 import com.mitimaiti.app.ui.theme.AppTheme
 import com.mitimaiti.app.ui.theme.LocalAdaptiveColors
@@ -44,7 +38,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
-import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,21 +56,20 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    // Live countdown tick
-    var tick by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1000L)
-            tick++
-        }
-    }
+    // Menu state
+    var showMenu by remember { mutableStateOf(false) }
+    var showUnmatchDialog by remember { mutableStateOf(false) }
+    var showReportSheet by remember { mutableStateOf(false) }
+
+    // Ice breaker prompts
+    var currentPrompts by remember { mutableStateOf(IceBreakerPrompts.getRandomPrompts(3)) }
 
     LaunchedEffect(match) { viewModel.loadMessages(match) }
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
     }
 
-    // Detect if user has scrolled up from bottom
+    // Scroll-to-bottom detection
     val showScrollToBottom by remember {
         derivedStateOf {
             val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
@@ -87,43 +79,42 @@ fun ChatScreen(
     }
 
     // Group messages by date
-    val groupedMessages = remember(messages) {
-        groupMessagesByDate(messages)
-    }
+    val groupedMessages = remember(messages) { groupMessagesByDate(messages) }
 
-    // Chat unlock toast visibility with slide animation
+    // Chat unlock toast
     var showUnlockToast by remember { mutableStateOf(false) }
     LaunchedEffect(chatUnlocked) {
-        if (chatUnlocked) {
-            showUnlockToast = true
-            delay(3000L)
-            showUnlockToast = false
-        }
+        if (chatUnlocked) { showUnlockToast = true; delay(3000L); showUnlockToast = false }
     }
+
+    val otherUser = match.otherUser
 
     Scaffold(
         containerColor = colors.background,
         topBar = {
+            // ── Bumble-style header ──
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { /* open profile detail */ }
+                    ) {
+                        // Avatar with online dot
                         Box {
                             AsyncImage(
-                                model = match.otherUser.primaryPhoto?.urlThumb ?: "",
+                                model = otherUser.primaryPhoto?.urlThumb ?: otherUser.primaryPhoto?.url ?: "",
                                 contentDescription = null,
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape),
+                                modifier = Modifier.size(40.dp).clip(CircleShape),
                                 contentScale = ContentScale.Crop
                             )
-                            if (match.otherUser.isOnline) {
+                            if (otherUser.isOnline) {
                                 Box(
                                     modifier = Modifier
-                                        .size(10.dp)
+                                        .size(12.dp)
                                         .align(Alignment.BottomEnd)
                                         .clip(CircleShape)
                                         .background(Color.White)
-                                        .padding(1.5.dp)
+                                        .padding(2.dp)
                                         .clip(CircleShape)
                                         .background(AppColors.Success)
                                 )
@@ -131,20 +122,23 @@ fun ChatScreen(
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
-                            Text(
-                                match.otherUser.displayName,
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = colors.textPrimary
-                            )
-                            if (match.otherUser.isOnline) {
-                                Text("Online", fontSize = 12.sp, color = AppColors.Success)
-                            } else {
-                                val lastActiveText = match.otherUser.lastActive?.let {
-                                    com.mitimaiti.app.utils.timeAgoShort(it)
-                                } ?: "Offline"
-                                Text(lastActiveText, fontSize = 12.sp, color = colors.textMuted)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    "${otherUser.displayName}${otherUser.age?.let { ", $it" } ?: ""}",
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.textPrimary
+                                )
+                                if (otherUser.isVerified) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(Icons.Default.Verified, null, tint = AppColors.Info, modifier = Modifier.size(16.dp))
+                                }
                             }
+                            Text(
+                                if (otherUser.isOnline) "Online" else "Offline",
+                                fontSize = 12.sp,
+                                color = if (otherUser.isOnline) AppColors.Success else colors.textMuted
+                            )
                         }
                     }
                 },
@@ -154,12 +148,39 @@ fun ChatScreen(
                     }
                 },
                 actions = {
-                    val callTint = if (viewModel.callsUnlocked) AppColors.Rose else colors.textMuted.copy(alpha = 0.4f)
-                    IconButton(onClick = { }, enabled = viewModel.callsUnlocked) {
-                        Icon(Icons.Default.Phone, "Call", tint = callTint)
+                    // Video call
+                    IconButton(onClick = { }) {
+                        Icon(Icons.Default.Videocam, "Video call", tint = AppColors.Rose)
                     }
-                    IconButton(onClick = { }, enabled = viewModel.callsUnlocked) {
-                        Icon(Icons.Default.Videocam, "Video", tint = callTint)
+                    // Voice call
+                    IconButton(onClick = { }) {
+                        Icon(Icons.Default.Phone, "Voice call", tint = AppColors.Rose)
+                    }
+                    // More menu
+                    Box {
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(Icons.Default.MoreVert, "More", tint = colors.textSecondary)
+                        }
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Unmatch") },
+                                onClick = { showMenu = false; showUnmatchDialog = true },
+                                leadingIcon = { Icon(Icons.Default.HeartBroken, null, tint = colors.textSecondary) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Block") },
+                                onClick = { showMenu = false; showUnmatchDialog = true },
+                                leadingIcon = { Icon(Icons.Default.Block, null, tint = AppColors.Error) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Report", color = AppColors.Error) },
+                                onClick = { showMenu = false; showReportSheet = true },
+                                leadingIcon = { Icon(Icons.Default.Flag, null, tint = AppColors.Error) }
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.surface)
@@ -168,469 +189,366 @@ fun ChatScreen(
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // ── Lock banner with live countdown ──
-                viewModel.lockBannerMessage?.let { banner ->
-                    @Suppress("UNUSED_EXPRESSION")
-                    tick // reference so banner recomposes with new time
-                    LockBanner(
-                        title = banner.title,
-                        subtitle = banner.subtitle,
-                        isLocked = banner.isLocked,
-                        timeRemaining = chatMatch?.timeRemaining
-                    )
+                // ── Lock banner (only during ice breaker phase) ──
+                if (viewModel.isLockedForMe) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = AppColors.Rose.copy(alpha = 0.08f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Lock, null, tint = AppColors.Rose, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text("Message sent!", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = colors.textPrimary)
+                                Text("Waiting for ${otherUser.displayName.split(" ").first()} to reply...", fontSize = 12.sp, color = colors.textSecondary)
+                            }
+                        }
+                    }
                 }
 
-                // ── Match announcement capsule ──
-                MatchAnnouncementCapsule(match = match)
-
-                // ── Chat unlock toast (slides in from top) ──
+                // ── Chat unlock toast ──
                 AnimatedVisibility(
                     visible = showUnlockToast,
                     enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
                     exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
                 ) {
                     Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
                         shape = RoundedCornerShape(AppTheme.radiusMd),
                         color = AppColors.Success.copy(alpha = 0.12f)
                     ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                Icons.Default.LockOpen, null,
-                                tint = AppColors.Success,
-                                modifier = Modifier.size(18.dp)
-                            )
+                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                            Icon(Icons.Default.LockOpen, null, tint = AppColors.Success, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                "Chat unlocked! You can now send more messages.",
-                                fontSize = 14.sp,
-                                color = AppColors.Success,
-                                fontWeight = FontWeight.Medium
-                            )
+                            Text("Chat unlocked! You can now chat freely.", fontSize = 14.sp, color = AppColors.Success, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
 
+                // ── Match announcement ──
+                MatchAnnouncementCapsule(match = match)
+
                 // ── Messages list ──
                 LazyColumn(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp),
+                    modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp),
                     state = listState,
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                     contentPadding = PaddingValues(vertical = 8.dp)
                 ) {
-                    // Icebreaker chips when chat is new
-                    if (messages.isEmpty() && !isLoading) {
+                    // Ice breaker section (only when no messages sent yet)
+                    if (messages.isEmpty() && !isLoading && viewModel.awaitingFirstMessage) {
                         item {
-                            IcebreakerSection(
-                                icebreakers = MockData.icebreakers,
-                                onSelect = { viewModel.sendIcebreaker(it) }
+                            IceBreakerSection(
+                                prompts = currentPrompts,
+                                onSelect = { viewModel.sendIcebreaker(it) },
+                                onShuffle = { currentPrompts = IceBreakerPrompts.getRandomPrompts(3) }
                             )
                         }
                     }
 
                     // Messages grouped by date
                     groupedMessages.forEach { (dateLabel, dateMessages) ->
-                        // Date header
-                        item(key = "date_header_$dateLabel") {
-                            DateHeader(label = dateLabel)
-                        }
-                        // Messages in this group
+                        item(key = "date_$dateLabel") { DateHeader(label = dateLabel) }
                         items(dateMessages, key = { it.id }) { message ->
-                            MessageBubble(message = message)
+                            BumbleMessageBubble(
+                                message = message,
+                                otherUserPhoto = otherUser.primaryPhoto?.urlThumb ?: otherUser.primaryPhoto?.url ?: ""
+                            )
                         }
                     }
 
                     // Typing indicator
                     if (isOtherTyping) {
-                        item(key = "typing_indicator") { TypingIndicator() }
+                        item(key = "typing") {
+                            TypingIndicatorBubble(
+                                photoUrl = otherUser.primaryPhoto?.urlThumb ?: otherUser.primaryPhoto?.url ?: ""
+                            )
+                        }
                     }
                 }
 
-                // ── Input area ──
+                // ── Input bar ──
                 ChatInputBar(
                     messageText = messageText,
                     onTextChange = { viewModel.updateMessageText(it) },
                     onSend = { viewModel.sendMessage() },
                     disabled = viewModel.inputDisabled,
-                    placeholder = viewModel.inputPlaceholder,
+                    placeholder = if (viewModel.isLockedForMe) "Waiting for reply..." else if (viewModel.awaitingFirstMessage) "Send the first message!" else "Type a message...",
                     isLocked = viewModel.isLockedForMe
                 )
             }
 
-            // ── Scroll-to-bottom FAB ──
+            // ── New message ↓ button ──
             if (showScrollToBottom) {
                 Surface(
-                    onClick = {
-                        scope.launch {
-                            if (messages.isNotEmpty()) {
-                                listState.animateScrollToItem(messages.size - 1)
-                            }
-                        }
-                    },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 16.dp, bottom = 80.dp)
-                        .size(40.dp),
+                    onClick = { scope.launch { if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1) } },
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 80.dp).size(40.dp),
                     color = colors.surface,
                     shape = CircleShape,
                     shadowElevation = 6.dp,
                     border = BorderStroke(1.dp, colors.border)
                 ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                        Icon(
-                            Icons.Default.KeyboardArrowDown, "Scroll to bottom",
-                            tint = AppColors.Rose,
-                            modifier = Modifier.size(24.dp)
-                        )
+                        Icon(Icons.Default.KeyboardArrowDown, "New messages", tint = AppColors.Rose, modifier = Modifier.size(24.dp))
                     }
                 }
             }
         }
     }
-}
 
-/**
- * Match announcement capsule at top of chat.
- * "You matched with X on date"
- */
-@Composable
-fun MatchAnnouncementCapsule(match: Match) {
-    val colors = LocalAdaptiveColors.current
-    val dateFormat = remember { SimpleDateFormat("MMM d, yyyy", Locale.getDefault()) }
-    val matchDateStr = dateFormat.format(Date(match.matchedAt))
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 40.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Surface(
-            shape = RoundedCornerShape(AppTheme.radiusFull),
-            color = AppColors.Rose.copy(alpha = 0.08f)
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Default.Favorite, null,
-                    tint = AppColors.Rose,
-                    modifier = Modifier.size(14.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    "You matched with ${match.otherUser.displayName.split(" ").first()} on $matchDateStr",
-                    fontSize = 12.sp,
-                    color = AppColors.Rose,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
-    }
-}
-
-/**
- * Lock banner with rose tint (locked for me) or gold (awaiting first message).
- * Live countdown timer updates every second.
- */
-@Composable
-fun LockBanner(title: String, subtitle: String, isLocked: Boolean, timeRemaining: Long?) {
-    val colors = LocalAdaptiveColors.current
-    val bannerColor = if (isLocked) AppColors.Rose.copy(alpha = 0.1f) else AppColors.Gold.copy(alpha = 0.1f)
-    val accentColor = if (isLocked) AppColors.Rose else AppColors.Gold
-
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = bannerColor
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    if (isLocked) Icons.Default.Lock else Icons.Default.ChatBubble,
-                    null,
-                    tint = accentColor,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    title,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = colors.textPrimary
-                )
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(subtitle, fontSize = 13.sp, color = colors.textSecondary)
-
-            // Live countdown timer
-            timeRemaining?.let { remaining ->
-                if (remaining > 0) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    val hours = TimeUnit.MILLISECONDS.toHours(remaining)
-                    val minutes = TimeUnit.MILLISECONDS.toMinutes(remaining) % 60
-                    val seconds = TimeUnit.MILLISECONDS.toSeconds(remaining) % 60
-                    Text(
-                        "Expires in ${hours}h ${minutes}m ${seconds}s",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = if (remaining < 4 * 60 * 60 * 1000L) AppColors.Error else colors.textMuted
-                    )
+    // ── Unmatch confirmation dialog ──
+    if (showUnmatchDialog) {
+        AlertDialog(
+            onDismissRequest = { showUnmatchDialog = false },
+            title = { Text("Unmatch?", fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to unmatch with ${otherUser.displayName}? This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = { showUnmatchDialog = false; onBack() }) {
+                    Text("Unmatch", color = AppColors.Error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showUnmatchDialog = false }) {
+                    Text("Cancel")
                 }
             }
-        }
+        )
+    }
+
+    // ── Report sheet ──
+    if (showReportSheet) {
+        ReportSheet(
+            userName = otherUser.displayName,
+            onDismiss = { showReportSheet = false },
+            onReport = { showReportSheet = false; onBack() }
+        )
     }
 }
 
-/**
- * Icebreaker section with horizontal scroll chips, rose border styling.
- */
+// ───────────────────────────────────────────
+// Ice Breaker Section with Dice Shuffle
+// ───────────────────────────────────────────
+
 @Composable
-fun IcebreakerSection(icebreakers: List<Icebreaker>, onSelect: (String) -> Unit) {
+private fun IceBreakerSection(
+    prompts: List<IceBreakerPrompt>,
+    onSelect: (String) -> Unit,
+    onShuffle: () -> Unit
+) {
     val colors = LocalAdaptiveColors.current
     Column(modifier = Modifier.padding(vertical = 16.dp)) {
-        Text(
-            "Break the ice!",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            color = colors.textPrimary,
-            modifier = Modifier.padding(horizontal = 4.dp)
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            "Tap a question to send it",
-            fontSize = 14.sp,
-            color = colors.textSecondary,
-            modifier = Modifier.padding(horizontal = 4.dp)
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text("Break the ice!", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = colors.textPrimary)
+                Text("Tap a prompt or type your own", fontSize = 14.sp, color = colors.textSecondary)
+            }
+            // Dice shuffle button
+            IconButton(onClick = onShuffle) {
+                Icon(Icons.Default.Casino, "Shuffle prompts", tint = AppColors.Rose, modifier = Modifier.size(28.dp))
+            }
+        }
         Spacer(modifier = Modifier.height(12.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(icebreakers) { icebreaker ->
-                Surface(
-                    onClick = { onSelect(icebreaker.question) },
-                    shape = RoundedCornerShape(AppTheme.radiusLg),
-                    color = AppColors.Rose.copy(alpha = 0.06f),
-                    modifier = Modifier
-                        .shadow(
-                            elevation = 4.dp,
-                            shape = RoundedCornerShape(AppTheme.radiusLg),
-                            ambientColor = AppColors.Rose.copy(alpha = 0.1f),
-                            spotColor = AppColors.Rose.copy(alpha = 0.1f)
-                        )
-                        .border(
-                            width = 1.dp,
-                            brush = Brush.linearGradient(
-                                listOf(
-                                    AppColors.Rose.copy(alpha = 0.3f),
-                                    AppColors.Rose.copy(alpha = 0.1f)
-                                )
-                            ),
-                            shape = RoundedCornerShape(AppTheme.radiusLg)
-                        )
+        prompts.forEach { prompt ->
+            Surface(
+                onClick = { onSelect(prompt.text) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = AppColors.Rose.copy(alpha = 0.06f),
+                border = BorderStroke(1.dp, AppColors.Rose.copy(alpha = 0.2f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .padding(horizontal = 14.dp, vertical = 10.dp)
-                            .widthIn(max = 200.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                "\u2728",
-                                fontSize = 10.sp
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                "ICEBREAKER",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = AppColors.Rose,
-                                letterSpacing = 1.sp
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
+                    Text(prompt.category.emoji, fontSize = 20.sp)
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            icebreaker.question,
-                            fontSize = 14.sp,
+                            prompt.category.displayName.uppercase(),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
                             color = AppColors.Rose,
+                            letterSpacing = 1.sp
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            prompt.text,
+                            fontSize = 14.sp,
+                            color = colors.textPrimary,
                             fontWeight = FontWeight.Medium
                         )
                     }
+                    Icon(Icons.Default.Send, null, tint = AppColors.Rose.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
                 }
             }
         }
     }
 }
 
-/**
- * Date header for message grouping ("Today", "Yesterday", "MMM d").
- */
-@Composable
-fun DateHeader(label: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 12.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Surface(
-            shape = RoundedCornerShape(AppTheme.radiusFull),
-            color = LocalAdaptiveColors.current.surfaceMedium
-        ) {
-            Text(
-                label,
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                color = LocalAdaptiveColors.current.textMuted
-            )
-        }
-    }
-}
+// ───────────────────────────────────────────
+// Bumble-style Message Bubble with Profile Photo
+// ───────────────────────────────────────────
 
-/**
- * Message bubble with read receipts:
- * - Single check (sent)
- * - Double check white (delivered)
- * - Double check blue (read)
- */
 @Composable
-fun MessageBubble(message: Message) {
+private fun BumbleMessageBubble(message: Message, otherUserPhoto: String) {
     val isFromMe = message.isFromMe
     val colors = LocalAdaptiveColors.current
     val timeFormat = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
 
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp),
-        horizontalArrangement = if (isFromMe) Arrangement.End else Arrangement.Start
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        horizontalArrangement = if (isFromMe) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.Bottom
     ) {
+        // Other user's profile photo (left side)
+        if (!isFromMe) {
+            AsyncImage(
+                model = otherUserPhoto,
+                contentDescription = null,
+                modifier = Modifier.size(32.dp).clip(CircleShape),
+                contentScale = ContentScale.Crop
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+
+        // Message bubble
         Surface(
             shape = RoundedCornerShape(
-                topStart = 16.dp,
-                topEnd = 16.dp,
-                bottomStart = if (isFromMe) 16.dp else 4.dp,
-                bottomEnd = if (isFromMe) 4.dp else 16.dp
+                topStart = 18.dp,
+                topEnd = 18.dp,
+                bottomStart = if (isFromMe) 18.dp else 4.dp,
+                bottomEnd = if (isFromMe) 4.dp else 18.dp
             ),
             color = if (isFromMe) AppColors.Rose else colors.surfaceMedium,
-            modifier = Modifier.widthIn(max = 280.dp)
+            modifier = Modifier.widthIn(max = 260.dp)
         ) {
             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+                // Ice breaker card styling (if message matches a prompt)
+                val isIceBreaker = IceBreakerPrompts.getAll().any { it.text == message.content }
+                if (isIceBreaker && isFromMe) {
+                    Text(
+                        "ICE BREAKER",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White.copy(alpha = 0.7f),
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+
                 Text(
                     message.content,
                     fontSize = 15.sp,
                     color = if (isFromMe) Color.White else colors.textPrimary,
                     lineHeight = 20.sp
                 )
+
                 Spacer(modifier = Modifier.height(3.dp))
+
+                // Timestamp + read receipts
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Edited tag
+                    if (message.msgType == MessageType.TEXT && message.content.contains("[edited]")) {
+                        Text("edited ", fontSize = 10.sp, fontStyle = FontStyle.Italic,
+                            color = if (isFromMe) Color.White.copy(alpha = 0.5f) else colors.textMuted)
+                    }
+
                     Text(
                         timeFormat.format(Date(message.createdAt)),
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         color = if (isFromMe) Color.White.copy(alpha = 0.6f) else colors.textMuted
                     )
-                    // Read receipts for sent messages
+
+                    // Read receipts (only for sent messages)
                     if (isFromMe) {
                         Spacer(modifier = Modifier.width(4.dp))
                         when (message.status) {
-                            MessageStatus.SENDING -> {
-                                // Clock icon for sending
-                                Icon(
-                                    Icons.Default.Schedule, "Sending",
-                                    modifier = Modifier.size(14.dp),
-                                    tint = Color.White.copy(alpha = 0.5f)
-                                )
-                            }
-                            MessageStatus.SENT -> {
-                                // Single check
-                                Icon(
-                                    Icons.Default.Check, "Sent",
-                                    modifier = Modifier.size(14.dp),
-                                    tint = Color.White.copy(alpha = 0.6f)
-                                )
-                            }
-                            MessageStatus.DELIVERED -> {
-                                // Double check white
-                                Icon(
-                                    Icons.Default.DoneAll, "Delivered",
-                                    modifier = Modifier.size(14.dp),
-                                    tint = Color.White.copy(alpha = 0.6f)
-                                )
-                            }
-                            MessageStatus.READ -> {
-                                // Double check blue
-                                Icon(
-                                    Icons.Default.DoneAll, "Read",
-                                    modifier = Modifier.size(14.dp),
-                                    tint = AppColors.Info
-                                )
-                            }
+                            MessageStatus.SENT -> Icon(
+                                Icons.Default.Check, "Sent",
+                                tint = Color.White.copy(alpha = 0.6f),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            MessageStatus.DELIVERED -> Icon(
+                                Icons.Default.DoneAll, "Delivered",
+                                tint = Color.White.copy(alpha = 0.6f),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            MessageStatus.READ -> Icon(
+                                Icons.Default.DoneAll, "Read",
+                                tint = Color(0xFF4FC3F7), // Blue ticks
+                                modifier = Modifier.size(14.dp)
+                            )
+                            else -> {}
                         }
                     }
                 }
             }
         }
+
+        // Spacer for sent messages (no photo on right)
+        if (isFromMe) {
+            Spacer(modifier = Modifier.width(4.dp))
+        }
     }
 }
 
-/**
- * Typing indicator with 3 animated dots (scale + opacity).
- */
+// ───────────────────────────────────────────
+// Typing Indicator Bubble (iMessage-style)
+// ───────────────────────────────────────────
+
 @Composable
-fun TypingIndicator() {
+private fun TypingIndicatorBubble(photoUrl: String) {
     val colors = LocalAdaptiveColors.current
+    val infiniteTransition = rememberInfiniteTransition(label = "typing")
+
     Row(
-        modifier = Modifier.padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.Start
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        horizontalArrangement = Arrangement.Start,
+        verticalAlignment = Alignment.Bottom
     ) {
+        AsyncImage(
+            model = photoUrl,
+            contentDescription = null,
+            modifier = Modifier.size(32.dp).clip(CircleShape),
+            contentScale = ContentScale.Crop
+        )
+        Spacer(modifier = Modifier.width(8.dp))
         Surface(
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp),
             color = colors.surfaceMedium
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 repeat(3) { index ->
-                    val infiniteTransition = rememberInfiniteTransition(label = "dot$index")
-                    val alpha by infiniteTransition.animateFloat(
+                    val dotAlpha by infiniteTransition.animateFloat(
                         initialValue = 0.3f,
                         targetValue = 1f,
                         animationSpec = infiniteRepeatable(
                             animation = tween(600, delayMillis = index * 200),
                             repeatMode = RepeatMode.Reverse
                         ),
-                        label = "alpha$index"
-                    )
-                    val dotScale by infiniteTransition.animateFloat(
-                        initialValue = 0.7f,
-                        targetValue = 1.0f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(600, delayMillis = index * 200),
-                            repeatMode = RepeatMode.Reverse
-                        ),
-                        label = "scale$index"
+                        label = "dot$index"
                     )
                     Box(
                         modifier = Modifier
                             .size(8.dp)
-                            .scale(dotScale)
                             .clip(CircleShape)
-                            .background(colors.textMuted.copy(alpha = alpha))
+                            .background(colors.textMuted.copy(alpha = dotAlpha))
                     )
                 }
             }
@@ -638,166 +556,168 @@ fun TypingIndicator() {
     }
 }
 
-/**
- * Enhanced chat input bar with camera, emoji, and mic/send toggle buttons.
- * Shows lock icon when input is disabled.
- */
+// ───────────────────────────────────────────
+// Match Announcement Capsule
+// ───────────────────────────────────────────
+
 @Composable
-fun ChatInputBar(
+private fun MatchAnnouncementCapsule(match: Match) {
+    val dateFormat = remember { SimpleDateFormat("MMM d, yyyy", Locale.getDefault()) }
+    Box(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            shape = RoundedCornerShape(AppTheme.radiusFull),
+            color = AppColors.Rose.copy(alpha = 0.08f)
+        ) {
+            Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Favorite, null, tint = AppColors.Rose, modifier = Modifier.size(14.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    "You matched on ${dateFormat.format(Date(match.matchedAt))}",
+                    fontSize = 12.sp, color = AppColors.Rose, fontWeight = FontWeight.Medium
+                )
+            }
+        }
+    }
+}
+
+// ───────────────────────────────────────────
+// Date Header
+// ───────────────────────────────────────────
+
+@Composable
+private fun DateHeader(label: String) {
+    Box(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+        Surface(shape = RoundedCornerShape(AppTheme.radiusFull), color = LocalAdaptiveColors.current.surfaceMedium) {
+            Text(label, modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = LocalAdaptiveColors.current.textMuted)
+        }
+    }
+}
+
+// ───────────────────────────────────────────
+// Report Sheet
+// ───────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReportSheet(userName: String, onDismiss: () -> Unit, onReport: (String) -> Unit) {
+    val colors = LocalAdaptiveColors.current
+    val reasons = listOf("Inappropriate behavior", "Fake profile", "Spam", "Underage", "Other")
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = colors.surface) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text("Report $userName", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = colors.textPrimary)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text("Why are you reporting this person?", fontSize = 14.sp, color = colors.textSecondary)
+            Spacer(modifier = Modifier.height(16.dp))
+            reasons.forEach { reason ->
+                Surface(
+                    onClick = { onReport(reason) },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    shape = RoundedCornerShape(AppTheme.radiusMd),
+                    color = colors.surfaceMedium
+                ) {
+                    Text(reason, modifier = Modifier.padding(16.dp), fontSize = 15.sp, color = colors.textPrimary)
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+// ───────────────────────────────────────────
+// Helpers
+// ───────────────────────────────────────────
+
+// ───────────────────────────────────────────
+// Chat Input Bar (with emoji, camera, mic buttons)
+// ───────────────────────────────────────────
+
+@Composable
+private fun ChatInputBar(
     messageText: String,
     onTextChange: (String) -> Unit,
     onSend: () -> Unit,
     disabled: Boolean,
     placeholder: String,
-    isLocked: Boolean = false
+    isLocked: Boolean
 ) {
     val colors = LocalAdaptiveColors.current
-    val view = LocalView.current
-
     Surface(
+        modifier = Modifier.fillMaxWidth(),
         color = colors.surface,
-        shadowElevation = 4.dp
+        shadowElevation = 8.dp
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp)
-                .navigationBarsPadding(),
-            verticalAlignment = Alignment.Bottom
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             // Camera button
-            IconButton(
-                onClick = { },
-                enabled = !disabled,
-                modifier = Modifier.size(40.dp)
-            ) {
-                Icon(
-                    Icons.Default.CameraAlt, "Camera",
-                    tint = if (disabled) colors.textMuted.copy(alpha = 0.4f) else colors.textMuted,
-                    modifier = Modifier.size(22.dp)
-                )
+            IconButton(onClick = { }, enabled = !disabled) {
+                Icon(Icons.Default.CameraAlt, "Photo", tint = if (disabled) colors.textMuted.copy(alpha = 0.3f) else AppColors.Rose)
             }
 
-            // Text field with emoji button inside
+            // Text field
             OutlinedTextField(
                 value = messageText,
                 onValueChange = onTextChange,
                 modifier = Modifier.weight(1f),
-                placeholder = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (isLocked) {
-                            Icon(
-                                Icons.Default.Lock, null,
-                                tint = colors.textMuted.copy(alpha = 0.5f),
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                        }
-                        Text(placeholder, color = colors.textMuted, fontSize = 15.sp)
-                    }
-                },
+                placeholder = { Text(placeholder, fontSize = 14.sp, color = colors.textMuted) },
                 enabled = !disabled,
-                shape = RoundedCornerShape(AppTheme.radiusFull),
+                shape = RoundedCornerShape(24.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = AppColors.Rose,
                     unfocusedBorderColor = colors.border,
-                    focusedTextColor = colors.textPrimary,
-                    unfocusedTextColor = colors.textPrimary,
-                    disabledBorderColor = colors.border.copy(alpha = 0.5f),
-                    disabledTextColor = colors.textMuted
+                    disabledBorderColor = colors.border.copy(alpha = 0.3f)
                 ),
-                leadingIcon = {
-                    IconButton(
-                        onClick = { },
-                        enabled = !disabled,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.EmojiEmotions, "Emoji",
-                            tint = if (disabled) colors.textMuted.copy(alpha = 0.4f) else AppColors.Gold,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                },
+                singleLine = false,
                 maxLines = 4,
-                singleLine = false
+                trailingIcon = {
+                    // Emoji button
+                    IconButton(onClick = { }) {
+                        Icon(Icons.Default.EmojiEmotions, "Emoji", tint = if (disabled) colors.textMuted.copy(alpha = 0.3f) else colors.textMuted)
+                    }
+                }
             )
 
             Spacer(modifier = Modifier.width(4.dp))
 
-            // Mic/Send toggle button
+            // Send or Mic button
             if (messageText.isNotBlank()) {
-                // Send button
-                FilledIconButton(
-                    onClick = {
-                        view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                        onSend()
-                    },
-                    enabled = !disabled,
-                    modifier = Modifier.size(40.dp),
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = AppColors.Rose,
-                        disabledContainerColor = AppColors.Rose.copy(alpha = 0.4f)
-                    )
+                IconButton(
+                    onClick = onSend,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .background(AppColors.Rose, CircleShape)
                 ) {
                     Icon(Icons.Default.Send, "Send", tint = Color.White, modifier = Modifier.size(20.dp))
                 }
             } else {
-                // Mic button
-                FilledIconButton(
-                    onClick = { },
-                    enabled = !disabled,
-                    modifier = Modifier.size(40.dp),
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = if (disabled) colors.surfaceMedium else AppColors.Rose.copy(alpha = 0.1f),
-                        disabledContainerColor = colors.surfaceMedium
-                    )
-                ) {
-                    Icon(
-                        Icons.Default.Mic, "Voice",
-                        tint = if (disabled) colors.textMuted.copy(alpha = 0.4f) else AppColors.Rose,
-                        modifier = Modifier.size(20.dp)
-                    )
+                IconButton(onClick = { }, enabled = !disabled) {
+                    Icon(Icons.Default.Mic, "Voice", tint = if (disabled) colors.textMuted.copy(alpha = 0.3f) else AppColors.Rose)
                 }
             }
         }
     }
 }
 
-/**
- * Groups messages by date, returning a list of (label, messages) pairs.
- * Labels are "Today", "Yesterday", or "MMM d" format.
- */
-private fun groupMessagesByDate(messages: List<Message>): List<Pair<String, List<Message>>> {
-    if (messages.isEmpty()) return emptyList()
+// ───────────────────────────────────────────
+// Helpers
+// ───────────────────────────────────────────
 
-    val calendar = Calendar.getInstance()
+private fun groupMessagesByDate(messages: List<Message>): List<Pair<String, List<Message>>> {
+    val cal = Calendar.getInstance()
     val today = Calendar.getInstance()
     val yesterday = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
     val dateFormat = SimpleDateFormat("MMM d", Locale.getDefault())
 
-    val groups = mutableListOf<Pair<String, MutableList<Message>>>()
-
-    for (message in messages) {
-        calendar.timeInMillis = message.createdAt
-        val label = when {
-            isSameDay(calendar, today) -> "Today"
-            isSameDay(calendar, yesterday) -> "Yesterday"
-            else -> dateFormat.format(Date(message.createdAt))
+    return messages.groupBy { msg ->
+        cal.timeInMillis = msg.createdAt
+        when {
+            cal.get(Calendar.YEAR) == today.get(Calendar.YEAR) && cal.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR) -> "Today"
+            cal.get(Calendar.YEAR) == yesterday.get(Calendar.YEAR) && cal.get(Calendar.DAY_OF_YEAR) == yesterday.get(Calendar.DAY_OF_YEAR) -> "Yesterday"
+            else -> dateFormat.format(Date(msg.createdAt))
         }
-
-        val lastGroup = groups.lastOrNull()
-        if (lastGroup != null && lastGroup.first == label) {
-            lastGroup.second.add(message)
-        } else {
-            groups.add(label to mutableListOf(message))
-        }
-    }
-
-    return groups
-}
-
-private fun isSameDay(cal1: Calendar, cal2: Calendar): Boolean {
-    return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
-            cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR)
+    }.toList()
 }

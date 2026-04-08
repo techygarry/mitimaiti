@@ -194,20 +194,10 @@ fun MatchesScreen(
                                     scaleX = scale
                                     scaleY = scale
                                 }
-                                .pointerInput(match.id) {
-                                    detectTapGestures(
-                                        onPress = {
-                                            isPressed = true
-                                            tryAwaitRelease()
-                                            isPressed = false
-                                        },
-                                        onTap = { onNavigateToChat(match.id) }
-                                    )
-                                }
                         ) {
                             ChatRow(
                                 match = match,
-                                onClick = { }
+                                onClick = { onNavigateToChat(match.id) }
                             )
                         }
                     }
