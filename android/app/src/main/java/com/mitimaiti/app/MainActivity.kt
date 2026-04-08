@@ -117,6 +117,7 @@ class MainActivity : ComponentActivity() {
                         composable(Screen.Chat.route) { backStackEntry ->
                             val matchId = backStackEntry.arguments?.getString("matchId") ?: ""
                             val chatViewModel: ChatViewModel = viewModel()
+                            chatViewModel.onMatchActivated = { id, msg -> inboxViewModel.activateMatch(id, msg) }
                             val match = inboxViewModel.matches.value.firstOrNull { it.id == matchId }
                             if (match != null) {
                                 ChatScreen(viewModel = chatViewModel, match = match, onBack = { navController.popBackStack() })

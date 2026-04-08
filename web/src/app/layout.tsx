@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from '@/context/AuthContext';
+import { MatchesProvider } from '@/context/MatchesContext';
 import './globals.css';
 
 const inter = Inter({
@@ -40,7 +41,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="bg-cream font-sans min-h-screen">
         <AuthProvider>
-        {children}
+          <MatchesProvider>
+            {children}
+          </MatchesProvider>
         </AuthProvider>
         <Toaster
           position="top-right"

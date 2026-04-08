@@ -15,6 +15,10 @@ class ChatViewModel: ObservableObject {
     private let api = APIService.shared
     private let currentUserId = "current-user-id"
 
+    /// Injected so that when a reply unlocks the match we can update the
+    /// shared InboxViewModel and move the match into the Chats section.
+    weak var inboxViewModel: InboxViewModel?
+
     var hasMessages: Bool { !messages.isEmpty }
 
     // MARK: - Respect-First Lock State
@@ -211,8 +215,13 @@ class ChatViewModel: ObservableObject {
             self.match?.firstMsgLocked = false
             self.chatUnlocked = true
 
-            // Match is now fully active, timer goes away
+            // Match is now fully active: no expiry, promote status
             self.match?.expiresAt = nil
+            self.match?.status = .active
+
+            // Propagate to InboxViewModel so MatchesView moves the row
+            // from the timer-avatar section into the permanent Chats list.
+            inboxViewModel?.activateMatch(id: match.id)
         }
     }
 
@@ -230,6 +239,10 @@ class ChatViewModel: ObservableObject {
             self.match?.firstMsgLocked = false
             self.chatUnlocked = true
             self.match?.expiresAt = nil
+            self.match?.status = .active
+
+            // Propagate to InboxViewModel so MatchesView reflects the change
+            inboxViewModel?.activateMatch(id: match.id)
         }
     }
 

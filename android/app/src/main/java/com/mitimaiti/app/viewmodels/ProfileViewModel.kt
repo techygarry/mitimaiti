@@ -76,6 +76,53 @@ class ProfileViewModel : ViewModel() {
 
     val profileStats = ProfileStats(views = 142, likes = 38, matches = 12)
 
+    /**
+     * Calculates profile completeness based on filled fields.
+     * Total fields: 28 (photos + bio + 8 basics + 7 sindhi + 5 lifestyle + 4 culture + 5 personality - 2 overlapping)
+     */
+    val computedCompleteness: Int get() {
+        var filled = 0
+        val total = 28
+
+        // Photos (1 point if any uploaded)
+        if (PhotoRepository.photos.value.isNotEmpty()) filled++
+        // Bio
+        if (editBio.value.isNotBlank()) filled++
+        // Basics (8)
+        if (editHeight.value != null) filled++
+        if (editEducation.value.isNotBlank()) filled++
+        if (editOccupation.value.isNotBlank()) filled++
+        if (editCompany.value.isNotBlank()) filled++
+        if (editReligion.value.isNotBlank()) filled++
+        if (editSmoking.value.isNotBlank()) filled++
+        if (editDrinking.value.isNotBlank()) filled++
+        if (editExercise.value.isNotBlank()) filled++
+        // Lifestyle (3)
+        if (editWantKids.value.isNotBlank()) filled++
+        if (editSettlingTimeline.value.isNotBlank()) filled++
+        // Sindhi Identity (7)
+        if (editFluency.value != null) filled++
+        if (editDialect.value.isNotBlank()) filled++
+        if (editGeneration.value.isNotBlank()) filled++
+        if (editGotra.value.isNotBlank()) filled++
+        if (editFamilyOriginCity.value.isNotBlank()) filled++
+        if (editCommunitySubGroup.value.isNotBlank()) filled++
+        if (editMotherTongue.value.isNotBlank()) filled++
+        // Culture (4)
+        if (editFamilyValues.value != null) filled++
+        if (editFoodPreference.value != null) filled++
+        if (editFestivals.value.isNotEmpty()) filled++
+        if (editCuisinePreferences.value.isNotEmpty()) filled++
+        // Personality (5)
+        if (editInterests.value.isNotEmpty()) filled++
+        if (editMusicPreferences.value.isNotEmpty()) filled++
+        if (editMovieGenres.value.isNotEmpty()) filled++
+        if (editTravelStyle.value.isNotBlank()) filled++
+        if (editLanguages.value.isNotEmpty()) filled++
+
+        return ((filled.toFloat() / total) * 100).toInt()
+    }
+
     fun loadProfile() {
         viewModelScope.launch {
             _isLoading.value = true

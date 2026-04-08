@@ -907,379 +907,498 @@ private struct DimensionProgressRow: View {
 struct FilterSheetView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.adaptiveColors) private var colors
-    private let localization = LocalizationManager.shared
 
-    // MARK: Basic
-    @State private var selectedGender: ShowMe = .women
+    // MARK: - Tab
+    @State private var selectedTab: Int = 0
+
+    // MARK: - Essentials
     @State private var ageMin: Double = 21
     @State private var ageMax: Double = 35
-    @State private var heightMin: Double = 150
-    @State private var heightMax: Double = 190
-    @State private var verifiedOnly = false
+    @State private var expandAgeRange: Bool = false
 
-    // MARK: Intent & Interests
-    @State private var selectedIntents: Set<Intent> = []
+    @State private var heightMin: Double = 140
+    @State private var heightMax: Double = 200
+    @State private var flexibleHeight: Bool = false
+
+    @State private var selectedIntents: Set<String> = []
+    @State private var includeOtherIntents: Bool = false
+
     @State private var selectedInterests: Set<String> = []
 
-    // MARK: Community & Culture
-    @State private var selectedReligion: String = "Any"
-    @State private var selectedFluency: String = "Any"
-    @State private var selectedGeneration: String = "Any"
-    @State private var selectedDietary: String = "Any"
-    @State private var gotraText: String = ""
+    @State private var verifiedOnly: Bool = false
 
-    // MARK: Lifestyle
-    @State private var selectedEducation: String = "Any"
-    @State private var selectedSmoking: String = "Any"
-    @State private var selectedDrinking: String = "Any"
-    @State private var selectedExercise: String = "Any"
-    @State private var selectedWantsKids: String = "Any"
+    // MARK: - Lifestyle / Culture
+    @State private var selectedFluency: Set<String> = []
+    @State private var selectedReligion: Set<String> = []
+    @State private var selectedDietary: Set<String> = []
+    @State private var selectedGotra: Set<String> = []
 
-    // MARK: Option Lists
-    private let religionOptions = ["Hindu", "Muslim", "Sikh", "Christian", "Jain", "Buddhist", "Other", "Any"]
-    private let fluencyOptions = ["Native", "Fluent", "Conversational", "Basic", "Learning", "None", "Any"]
-    private let generationOptions = ["1st Gen", "2nd Gen", "3rd Gen+", "Any"]
-    private let dietaryOptions = ["Vegetarian", "Non-Vegetarian", "Vegan", "Jain", "Any"]
-    private let educationOptions = ["High School", "Bachelor's", "Master's", "Doctorate", "Any"]
-    private let smokingOptions = ["Never", "Sometimes", "Regularly", "Any"]
-    private let drinkingOptions = ["Never", "Sometimes", "Regularly", "Any"]
-    private let exerciseOptions = ["Daily", "Often", "Sometimes", "Never", "Any"]
-    private let wantsKidsOptions = ["Yes", "No", "Maybe", "Any"]
+    // MARK: - Education
+    @State private var selectedEducation: Set<String> = []
+
+    // MARK: - Habits
+    @State private var selectedSmoking: Set<String> = []
+    @State private var selectedDrinking: Set<String> = []
+    @State private var selectedExercise: Set<String> = []
+
+    // MARK: - Family Plans
+    @State private var selectedFamilyPlans: Set<String> = []
+
+    // MARK: - Static option lists
+    private let intentOptions = ["Marriage", "Open to anything", "Something casual"]
+    private let interestOptions = ["Travel", "Cooking", "Cricket", "Music", "Fitness", "Reading",
+                                   "Photography", "Dancing", "Art", "Movies", "Yoga", "Hiking",
+                                   "Coffee", "Food", "Gaming"]
+    private let fluencyOptions = ["Fluent", "Conversational", "Basic", "Learning"]
+    private let religionOptions = ["Hindu", "Sikh", "Muslim", "Other"]
+    private let dietaryOptions = ["Veg", "Non-Veg", "Vegan", "Jain"]
+    private let gotraOptions = ["Lohana", "Amil", "Bhatia", "Sahiti", "Chhapru"]
+    private let educationOptions = ["Bachelors", "Masters", "PhD", "Professional"]
+    private let smokingOptions = ["Never", "Social", "Regular"]
+    private let drinkingOptions = ["Never", "Social", "Regular"]
+    private let exerciseOptions = ["Daily", "Often", "Sometimes", "Never"]
+    private let familyPlanOptions = ["Yes", "No", "Open to it", "Already has"]
+
+    // MARK: - Body
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            // Custom header
+            headerBar
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 12)
+
+            // Tab bar
+            tabBar
+                .padding(.horizontal, 20)
+                .padding(.bottom, 16)
+
+            Divider().overlay(colors.border)
+
+            // Tab content
             ScrollView {
-                VStack(spacing: 20) {
-                    basicSection
-                    intentAndInterestsSection
-                    communityAndCultureSection
-                    lifestyleSection
-                    filterButtons
-                }
-                .padding(AppTheme.spacingMD)
-            }
-            .appBackground()
-            .navigationTitle(localization.t("filter.title"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(localization.t("common.done")) { dismiss() }
-                        .foregroundColor(AppTheme.rose)
+                if selectedTab == 0 {
+                    essentialsTab
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 20)
+                } else {
+                    lifestyleTab
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 20)
                 }
             }
+
+            Divider().overlay(colors.border)
+
+            // Show Results button
+            showResultsButton
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
         }
+        .appBackground()
         .presentationDetents([.large])
     }
 
-    // MARK: - Basic Section
+    // MARK: - Header
 
-    private var basicSection: some View {
-        ContentCard {
-            VStack(alignment: .leading, spacing: 16) {
-                filterSectionHeader(localization.t("filter.basic"), icon: "person.fill")
+    private var headerBar: some View {
+        ZStack {
+            // Left: X button
+            HStack {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(colors.textPrimary)
+                        .frame(width: 36, height: 36)
+                        .background(
+                            Circle().fill(colors.surfaceMedium)
+                        )
+                }
+                Spacer()
+            }
 
-                // Show Me
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(localization.t("filter.showMe"))
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(colors.textSecondary)
+            // Center: Title
+            Text("Refine Discovery")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(colors.textPrimary)
 
-                    Picker("Gender", selection: $selectedGender) {
-                        ForEach(ShowMe.allCases) { option in
-                            Text(option.display).tag(option)
+            // Right: Reset button
+            HStack {
+                Spacer()
+                Button {
+                    resetAllFilters()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("Reset")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundColor(AppTheme.rose)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(
+                        Capsule()
+                            .fill(AppTheme.rose.opacity(0.1))
+                    )
+                }
+            }
+        }
+    }
+
+    // MARK: - Tab Bar
+
+    private var tabBar: some View {
+        HStack(spacing: 0) {
+            tabButton(title: "Essentials", index: 0)
+            tabButton(title: "Lifestyle", index: 1)
+        }
+        .padding(3)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(colors.surfaceMedium)
+        )
+    }
+
+    private func tabButton(title: String, index: Int) -> some View {
+        let isSelected = selectedTab == index
+        return Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                selectedTab = index
+            }
+        } label: {
+            Text(title)
+                .font(.system(size: 15, weight: isSelected ? .semibold : .medium))
+                .foregroundColor(isSelected ? .white : colors.textSecondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(
+                    Group {
+                        if isSelected {
+                            Capsule().fill(AppTheme.rose)
+                        } else {
+                            Capsule().fill(Color.clear)
                         }
                     }
-                    .pickerStyle(.segmented)
+                )
+        }
+    }
+
+    // MARK: - Essentials Tab
+
+    private var essentialsTab: some View {
+        VStack(spacing: 16) {
+            // Age Range card
+            ContentCard {
+                VStack(alignment: .leading, spacing: 14) {
+                    cardHeader(title: "Age range", subtitle: "Between \(Int(ageMin)) and \(Int(ageMax))")
+
+                    VStack(spacing: 4) {
+                        HStack {
+                            Text("Min: \(Int(ageMin))")
+                                .font(.system(size: 12))
+                                .foregroundColor(colors.textMuted)
+                            Spacer()
+                            Text("Max: \(Int(ageMax))")
+                                .font(.system(size: 12))
+                                .foregroundColor(colors.textMuted)
+                        }
+                        Slider(value: $ageMin, in: 18...60, step: 1)
+                            .tint(AppTheme.rose)
+                        Slider(value: $ageMax, in: 18...60, step: 1)
+                            .tint(AppTheme.rose)
+                    }
+
+                    Divider().overlay(colors.border)
+
+                    toggleRow(label: "Expand range if few results", isOn: $expandAgeRange)
                 }
+                .padding(16)
+            }
 
-                Divider().overlay(colors.border)
+            // Height card
+            ContentCard {
+                VStack(alignment: .leading, spacing: 14) {
+                    cardHeader(title: "Height", subtitle: "\(Int(heightMin)) cm — \(Int(heightMax)) cm")
 
-                // Age Range
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text(localization.t("filter.ageRange"))
-                            .font(.system(size: 14, weight: .medium))
+                    VStack(spacing: 4) {
+                        HStack {
+                            Text("Min: \(Int(heightMin)) cm")
+                                .font(.system(size: 12))
+                                .foregroundColor(colors.textMuted)
+                            Spacer()
+                            Text("Max: \(Int(heightMax)) cm")
+                                .font(.system(size: 12))
+                                .foregroundColor(colors.textMuted)
+                        }
+                        Slider(value: $heightMin, in: 100...220, step: 1)
+                            .tint(AppTheme.rose)
+                        Slider(value: $heightMax, in: 100...220, step: 1)
+                            .tint(AppTheme.rose)
+                    }
+
+                    Divider().overlay(colors.border)
+
+                    toggleRow(label: "Flexible on height", isOn: $flexibleHeight)
+                }
+                .padding(16)
+            }
+
+            // Looking for card
+            ContentCard {
+                VStack(alignment: .leading, spacing: 14) {
+                    cardHeader(title: "Looking for", subtitle: nil)
+
+                    FlowLayout(spacing: 8) {
+                        ForEach(intentOptions, id: \.self) { option in
+                            FilterChip(
+                                label: option,
+                                isSelected: selectedIntents.contains(option)
+                            ) {
+                                toggleSet(&selectedIntents, value: option)
+                            }
+                        }
+                    }
+
+                    Divider().overlay(colors.border)
+
+                    toggleRow(label: "Include others if few results", isOn: $includeOtherIntents)
+                }
+                .padding(16)
+            }
+
+            // Shared interests card
+            ContentCard {
+                VStack(alignment: .leading, spacing: 14) {
+                    cardHeader(title: "Shared interests",
+                               subtitle: "Tap to prioritize people who share these")
+
+                    FlowLayout(spacing: 8) {
+                        ForEach(interestOptions, id: \.self) { interest in
+                            FilterChip(
+                                label: interest,
+                                isSelected: selectedInterests.contains(interest)
+                            ) {
+                                toggleSet(&selectedInterests, value: interest)
+                            }
+                        }
+                    }
+                }
+                .padding(16)
+            }
+
+            // Verified profiles only card
+            ContentCard {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Verified profiles only")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(colors.textPrimary)
+                        Text("Photo-verified members")
+                            .font(.system(size: 13))
                             .foregroundColor(colors.textSecondary)
-                        Spacer()
-                        Text("\(Int(ageMin)) - \(Int(ageMax))")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(AppTheme.rose)
                     }
-                    HStack {
-                        Slider(value: $ageMin, in: 18...50, step: 1)
-                            .tint(AppTheme.rose)
-                        Slider(value: $ageMax, in: 18...50, step: 1)
-                            .tint(AppTheme.rose)
-                    }
-                }
-
-                Divider().overlay(colors.border)
-
-                // Height Range
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text(localization.t("filter.heightRange"))
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(colors.textSecondary)
-                        Spacer()
-                        Text("\(Int(heightMin)) - \(Int(heightMax)) cm")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(AppTheme.rose)
-                    }
-                    HStack {
-                        Slider(value: $heightMin, in: 140...200, step: 1)
-                            .tint(AppTheme.rose)
-                        Slider(value: $heightMax, in: 140...200, step: 1)
-                            .tint(AppTheme.rose)
-                    }
-                }
-
-                Divider().overlay(colors.border)
-
-                // Verified Only
-                HStack {
-                    Image(systemName: "checkmark.seal.fill")
-                        .foregroundColor(AppTheme.rose)
-                        .frame(width: 24)
-                    Text(localization.t("filter.verifiedOnly"))
-                        .foregroundColor(colors.textPrimary)
-                        .font(.system(size: 15))
                     Spacer()
                     Toggle("", isOn: $verifiedOnly)
                         .tint(AppTheme.rose)
                         .labelsHidden()
                 }
+                .padding(16)
             }
-            .padding(AppTheme.spacingMD)
         }
     }
 
-    // MARK: - Intent & Interests Section
+    // MARK: - Lifestyle Tab
 
-    private var intentAndInterestsSection: some View {
-        ContentCard {
-            VStack(alignment: .leading, spacing: 16) {
-                filterSectionHeader(localization.t("filter.intentAndInterests"), icon: "heart.circle.fill")
+    private var lifestyleTab: some View {
+        VStack(spacing: 16) {
+            // Culture card
+            ContentCard {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Culture")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundColor(colors.textPrimary)
 
-                // Intent multi-select
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(localization.t("filter.intent"))
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(colors.textSecondary)
-
-                    HStack(spacing: 8) {
-                        ForEach(Intent.allCases) { intent in
-                            FilterChip(
-                                label: intent.display,
-                                icon: intent.icon,
-                                isSelected: selectedIntents.contains(intent)
-                            ) {
-                                if selectedIntents.contains(intent) {
-                                    selectedIntents.remove(intent)
-                                } else {
-                                    selectedIntents.insert(intent)
-                                }
-                            }
-                        }
-                    }
+                    chipSubSection(label: "SINDHI FLUENCY", options: fluencyOptions, selection: $selectedFluency)
+                    Divider().overlay(colors.border)
+                    chipSubSection(label: "RELIGION", options: religionOptions, selection: $selectedReligion)
+                    Divider().overlay(colors.border)
+                    chipSubSection(label: "DIETARY PREFERENCE", options: dietaryOptions, selection: $selectedDietary)
+                    Divider().overlay(colors.border)
+                    chipSubSection(label: "GOTRA", options: gotraOptions, selection: $selectedGotra)
                 }
+                .padding(16)
+            }
 
-                Divider().overlay(colors.border)
-
-                // Interests multi-select chips
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text(localization.t("filter.interests"))
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(colors.textSecondary)
-                        Spacer()
-                        if !selectedInterests.isEmpty {
-                            Text("\(selectedInterests.count) \(localization.t("filter.selected"))")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(AppTheme.rose)
-                        }
-                    }
+            // Education card
+            ContentCard {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Education")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundColor(colors.textPrimary)
 
                     FlowLayout(spacing: 8) {
-                        ForEach(MockData.allInterests, id: \.self) { interest in
+                        ForEach(educationOptions, id: \.self) { option in
                             FilterChip(
-                                label: interest,
-                                isSelected: selectedInterests.contains(interest)
+                                label: option,
+                                isSelected: selectedEducation.contains(option)
                             ) {
-                                if selectedInterests.contains(interest) {
-                                    selectedInterests.remove(interest)
-                                } else {
-                                    selectedInterests.insert(interest)
-                                }
+                                toggleSet(&selectedEducation, value: option)
                             }
                         }
                     }
                 }
+                .padding(16)
             }
-            .padding(AppTheme.spacingMD)
-        }
-    }
 
-    // MARK: - Community & Culture Section
-
-    private var communityAndCultureSection: some View {
-        ContentCard {
-            VStack(alignment: .leading, spacing: 16) {
-                filterSectionHeader(localization.t("filter.communityAndCulture"), icon: "globe.asia.australia.fill")
-
-                filterPickerRow(title: localization.t("filter.religion"), selection: $selectedReligion, options: religionOptions)
-                Divider().overlay(colors.border)
-                filterPickerRow(title: localization.t("filter.sindhiFluency"), selection: $selectedFluency, options: fluencyOptions)
-                Divider().overlay(colors.border)
-                filterPickerRow(title: localization.t("filter.generation"), selection: $selectedGeneration, options: generationOptions)
-                Divider().overlay(colors.border)
-                filterPickerRow(title: localization.t("filter.dietary"), selection: $selectedDietary, options: dietaryOptions)
-                Divider().overlay(colors.border)
-
-                // Gotra text field
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(localization.t("filter.gotra"))
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(colors.textSecondary)
-
-                    TextField("Any", text: $gotraText)
-                        .font(.system(size: 15))
+            // Habits card
+            ContentCard {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Habits")
+                        .font(.system(size: 17, weight: .bold))
                         .foregroundColor(colors.textPrimary)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: AppTheme.radiusMD)
-                                .fill(colors.surfaceMedium)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: AppTheme.radiusMD)
-                                        .stroke(colors.borderSubtle, lineWidth: 0.5)
-                                )
-                        )
-                        .autocorrectionDisabled()
+
+                    chipSubSection(label: "SMOKING", options: smokingOptions, selection: $selectedSmoking)
+                    Divider().overlay(colors.border)
+                    chipSubSection(label: "DRINKING", options: drinkingOptions, selection: $selectedDrinking)
+                    Divider().overlay(colors.border)
+                    chipSubSection(label: "EXERCISE", options: exerciseOptions, selection: $selectedExercise)
                 }
+                .padding(16)
             }
-            .padding(AppTheme.spacingMD)
+
+            // Family Plans card
+            ContentCard {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Family Plans")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundColor(colors.textPrimary)
+
+                    FlowLayout(spacing: 8) {
+                        ForEach(familyPlanOptions, id: \.self) { option in
+                            FilterChip(
+                                label: option,
+                                isSelected: selectedFamilyPlans.contains(option)
+                            ) {
+                                toggleSet(&selectedFamilyPlans, value: option)
+                            }
+                        }
+                    }
+                }
+                .padding(16)
+            }
         }
     }
 
-    // MARK: - Lifestyle Section
+    // MARK: - Show Results Button
 
-    private var lifestyleSection: some View {
-        ContentCard {
-            VStack(alignment: .leading, spacing: 16) {
-                filterSectionHeader(localization.t("filter.lifestyle"), icon: "leaf.fill")
-
-                filterPickerRow(title: localization.t("filter.education"), selection: $selectedEducation, options: educationOptions)
-                Divider().overlay(colors.border)
-                filterPickerRow(title: localization.t("filter.smoking"), selection: $selectedSmoking, options: smokingOptions)
-                Divider().overlay(colors.border)
-                filterPickerRow(title: localization.t("filter.drinking"), selection: $selectedDrinking, options: drinkingOptions)
-                Divider().overlay(colors.border)
-                filterPickerRow(title: localization.t("filter.exercise"), selection: $selectedExercise, options: exerciseOptions)
-                Divider().overlay(colors.border)
-                filterPickerRow(title: localization.t("filter.wantsKids"), selection: $selectedWantsKids, options: wantsKidsOptions)
-            }
-            .padding(AppTheme.spacingMD)
+    private var showResultsButton: some View {
+        Button {
+            dismiss()
+        } label: {
+            Text("Show Results")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(
+                    Capsule().fill(AppTheme.rose)
+                )
         }
     }
 
-    // MARK: - Buttons
+    // MARK: - Reusable sub-views
 
-    private var filterButtons: some View {
-        HStack(spacing: 12) {
-            SecondaryButton(title: localization.t("filter.reset")) {
-                resetAllFilters()
+    private func cardHeader(title: String, subtitle: String?) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.system(size: 17, weight: .bold))
+                .foregroundColor(colors.textPrimary)
+            if let subtitle {
+                Text(subtitle)
+                    .font(.system(size: 13))
+                    .foregroundColor(colors.textSecondary)
             }
+        }
+    }
 
-            PrimaryButton(title: localization.t("filter.apply")) {
-                dismiss()
+    private func toggleRow(label: String, isOn: Binding<Bool>) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(colors.textSecondary)
+            Spacer()
+            Toggle("", isOn: isOn)
+                .tint(AppTheme.rose)
+                .labelsHidden()
+        }
+    }
+
+    private func chipSubSection(label: String, options: [String], selection: Binding<Set<String>>) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(label)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(colors.textMuted)
+                .kerning(0.5)
+
+            FlowLayout(spacing: 8) {
+                ForEach(options, id: \.self) { option in
+                    FilterChip(
+                        label: option,
+                        isSelected: selection.wrappedValue.contains(option)
+                    ) {
+                        var updated = selection.wrappedValue
+                        if updated.contains(option) {
+                            updated.remove(option)
+                        } else {
+                            updated.insert(option)
+                        }
+                        selection.wrappedValue = updated
+                    }
+                }
             }
         }
     }
 
     // MARK: - Helpers
 
-    private func filterSectionHeader(_ title: String, icon: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 14))
-                .foregroundColor(AppTheme.rose)
-            Text(title)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(colors.textPrimary)
-        }
-    }
-
-    private func filterPickerRow(title: String, selection: Binding<String>, options: [String]) -> some View {
-        HStack {
-            Text(title)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(colors.textSecondary)
-
-            Spacer()
-
-            Menu {
-                ForEach(options, id: \.self) { option in
-                    Button {
-                        selection.wrappedValue = option
-                    } label: {
-                        HStack {
-                            Text(option)
-                            if selection.wrappedValue == option {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Text(selection.wrappedValue)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(selection.wrappedValue == "Any" ? colors.textMuted : AppTheme.rose)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(colors.textMuted)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule()
-                        .fill(colors.surfaceMedium)
-                        .overlay(
-                            Capsule()
-                                .stroke(colors.borderSubtle, lineWidth: 0.5)
-                        )
-                )
-            }
+    private func toggleSet(_ set: inout Set<String>, value: String) {
+        if set.contains(value) {
+            set.remove(value)
+        } else {
+            set.insert(value)
         }
     }
 
     private func resetAllFilters() {
-        // Basic
-        selectedGender = .women
+        selectedTab = 0
+
         ageMin = 21
         ageMax = 35
-        heightMin = 150
-        heightMax = 190
+        expandAgeRange = false
+
+        heightMin = 140
+        heightMax = 200
+        flexibleHeight = false
+
+        selectedIntents = []
+        includeOtherIntents = false
+        selectedInterests = []
         verifiedOnly = false
 
-        // Intent & Interests
-        selectedIntents = []
-        selectedInterests = []
+        selectedFluency = []
+        selectedReligion = []
+        selectedDietary = []
+        selectedGotra = []
 
-        // Community & Culture
-        selectedReligion = "Any"
-        selectedFluency = "Any"
-        selectedGeneration = "Any"
-        selectedDietary = "Any"
-        gotraText = ""
-
-        // Lifestyle
-        selectedEducation = "Any"
-        selectedSmoking = "Any"
-        selectedDrinking = "Any"
-        selectedExercise = "Any"
-        selectedWantsKids = "Any"
+        selectedEducation = []
+        selectedSmoking = []
+        selectedDrinking = []
+        selectedExercise = []
+        selectedFamilyPlans = []
     }
 }
 

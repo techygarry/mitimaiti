@@ -85,39 +85,7 @@ fun MainTabScreen(
 
     Scaffold(
         containerColor = colors.background,
-        topBar = {
-            // Top bar with logo + notification bell
-            TopAppBar(
-                title = {
-                    Text(
-                        "MitiMaiti",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = AppColors.Rose
-                    )
-                },
-                actions = {
-                    Box {
-                        IconButton(onClick = { showNotificationPanel = !showNotificationPanel }) {
-                            Icon(
-                                Icons.Default.Notifications,
-                                "Notifications",
-                                tint = colors.textPrimary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                        if (unreadNotifCount > 0) {
-                            CountBadge(
-                                count = unreadNotifCount,
-                                modifier = Modifier.align(Alignment.TopEnd).offset(x = (-4).dp, y = 4.dp),
-                                size = 18.dp
-                            )
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.surface)
-            )
-        },
+        topBar = { },
         bottomBar = {
             NavigationBar(
                 modifier = Modifier.drawBehind {
@@ -207,7 +175,11 @@ fun MainTabScreen(
                 label = "tabContent"
             ) { currentTab ->
                 when (currentTab) {
-                    MainTab.DISCOVER -> DiscoverScreen(viewModel = feedViewModel)
+                    MainTab.DISCOVER -> DiscoverScreen(
+                        viewModel = feedViewModel,
+                        onNavigateToEditProfile = onNavigateToEditProfile,
+                        userProfileCompleteness = profileViewModel.computedCompleteness
+                    )
                     MainTab.LIKED_YOU -> LikedYouScreen(viewModel = inboxViewModel)
                     MainTab.MATCHES -> MatchesScreen(
                         viewModel = inboxViewModel,

@@ -29,6 +29,12 @@ class ChatViewModel : ViewModel() {
     private val _chatUnlocked = MutableStateFlow(false)
     val chatUnlocked: StateFlow<Boolean> = _chatUnlocked.asStateFlow()
 
+    /**
+     * Callback to notify InboxViewModel when a match becomes active (reply received).
+     * Called with (matchId, lastMessage).
+     */
+    var onMatchActivated: ((String, String) -> Unit)? = null
+
     fun updateMessageText(value: String) { _messageText.value = value }
     val isLockedForMe: Boolean get() = _match.value?.let { it.firstMsgLocked && it.firstMsgBy == "current-user-id" } ?: false
     val awaitingFirstMessage: Boolean get() = _match.value?.let { it.firstMsgBy == null } ?: true
@@ -50,37 +56,134 @@ class ChatViewModel : ViewModel() {
 
     fun loadMessages(match: Match) {
         _match.value = match
-        viewModelScope.launch { _isLoading.value = true; APIService.fetchMessages(match.id).onSuccess { _messages.value = it.sortedBy { m -> m.createdAt }; checkAndUnlockIfReplied() }.onFailure { _error.value = "Failed to load messages" }; _isLoading.value = false }
-    }
-
-    fun sendMessage() {
-        val text = _messageText.value.trim(); if (text.isEmpty() || isLockedForMe) return; val currentMatch = _match.value ?: return
         viewModelScope.launch {
-            _isSending.value = true; _messageText.value = ""
-            _messages.value = _messages.value + Message(matchId = currentMatch.id, senderId = "current-user-id", content = text, status = MessageStatus.SENT)
-            if (currentMatch.firstMsgBy == null) { _match.value = currentMatch.copy(firstMsgBy = "current-user-id", firstMsgLocked = true, firstMsgAt = System.currentTimeMillis()) }
-            APIService.sendMessage(currentMatch.id, text); _isSending.value = false; simulateReply(currentMatch.id)
+            _isLoading.value = true
+            APIService.fetchMessages(match.id)
+                .onSuccess {
+                    _messages.value = it.sortedBy { m -> m.createdAt }
+                    checkAndUnlockIfReplied()
+                }
+                .onFailure { _error.value = "Failed to load messages" }
+            _isLoading.value = false
         }
     }
 
-    fun sendIcebreaker(question: String) { _messageText.value = question; sendMessage() }
+    fun sendMessage() {
+        val text = _messageText.value.trim()
+        if (text.isEmpty() || isLockedForMe) return
+        val currentMatch = _match.value ?: return
+
+        viewModelScope.launch {
+            _isSending.value = true
+            _messageText.value = ""
+
+            _messages.value = _messages.value + Message(
+                matchId = currentMatch.id,
+                senderId = "current-user-id",
+                content = text,
+                status = MessageStatus.SENT
+            )
+
+            // Mark as first message if none sent yet
+            if (currentMatch.firstMsgBy == null) {
+                _match.value = currentMatch.copy(
+                    firstMsgBy = "current-user-id",
+                    firstMsgLocked = true,
+                    firstMsgAt = System.currentTimeMillis()
+                )
+            }
+
+            APIService.sendMessage(currentMatch.id, text)
+            _isSending.value = false
+
+            // Simulate a reply after delay
+            simulateReply(currentMatch.id)
+        }
+    }
+
+    fun sendIcebreaker(question: String) {
+        _messageText.value = question
+        sendMessage()
+    }
 
     private fun receiveMessage(message: Message) {
         _messages.value = _messages.value + message
-        val cm = _match.value; if (cm != null && cm.firstMsgLocked) { _match.value = cm.copy(firstMsgLocked = false); _chatUnlocked.value = true; viewModelScope.launch { delay(3000); _chatUnlocked.value = false } }
+        val cm = _match.value ?: return
+
+        // If we were waiting for a reply (firstMsgLocked), activate the match
+        if (cm.firstMsgLocked || cm.status == MatchStatus.PENDING_FIRST_MESSAGE) {
+            _match.value = cm.copy(
+                firstMsgLocked = false,
+                status = MatchStatus.ACTIVE,
+                expiresAt = null,
+                lastMessage = message.content
+            )
+            _chatUnlocked.value = true
+
+            // Notify InboxViewModel — move match to Chats permanently
+            onMatchActivated?.invoke(cm.id, message.content)
+
+            viewModelScope.launch {
+                delay(3000)
+                _chatUnlocked.value = false
+            }
+        } else {
+            // Normal message in an active chat — just update lastMessage
+            _match.value = cm.copy(lastMessage = message.content)
+        }
     }
 
     private fun checkAndUnlockIfReplied() {
-        val cm = _match.value ?: return; if (cm.firstMsgLocked && cm.firstMsgBy == "current-user-id") { if (_messages.value.any { it.senderId != "current-user-id" }) { _match.value = cm.copy(firstMsgLocked = false); _chatUnlocked.value = true; viewModelScope.launch { delay(3000); _chatUnlocked.value = false } } }
+        val cm = _match.value ?: return
+        if ((cm.firstMsgLocked || cm.status == MatchStatus.PENDING_FIRST_MESSAGE) &&
+            cm.firstMsgBy == "current-user-id" &&
+            _messages.value.any { it.senderId != "current-user-id" }
+        ) {
+            val lastReply = _messages.value.lastOrNull { it.senderId != "current-user-id" }
+            _match.value = cm.copy(
+                firstMsgLocked = false,
+                status = MatchStatus.ACTIVE,
+                expiresAt = null,
+                lastMessage = lastReply?.content
+            )
+            _chatUnlocked.value = true
+            onMatchActivated?.invoke(cm.id, lastReply?.content ?: "")
+            viewModelScope.launch {
+                delay(3000)
+                _chatUnlocked.value = false
+            }
+        }
     }
 
     private fun simulateReply(matchId: String) {
         viewModelScope.launch {
-            delay(3000); _isOtherTyping.value = true; delay(2000); _isOtherTyping.value = false
-            val replies = listOf("That's so sweet! Tell me more about yourself", "Haha I love that! What else are you into?", "Oh wow, we have so much in common!", "That's interesting! I'd love to hear more", "You seem really cool! What do you do for fun?")
-            receiveMessage(Message(id = UUID.randomUUID().toString(), matchId = matchId, senderId = _match.value?.otherUser?.id ?: "other", content = replies.random(), status = MessageStatus.DELIVERED))
+            delay(3000)
+            _isOtherTyping.value = true
+            delay(2000)
+            _isOtherTyping.value = false
+            val replies = listOf(
+                "That's so sweet! Tell me more about yourself",
+                "Haha I love that! What else are you into?",
+                "Oh wow, we have so much in common!",
+                "That's interesting! I'd love to hear more",
+                "You seem really cool! What do you do for fun?"
+            )
+            val replyText = replies.random()
+            receiveMessage(
+                Message(
+                    id = UUID.randomUUID().toString(),
+                    matchId = matchId,
+                    senderId = _match.value?.otherUser?.id ?: "other",
+                    content = replyText,
+                    status = MessageStatus.DELIVERED
+                )
+            )
         }
     }
 
-    fun markUnreadMessagesAsRead() { _messages.value = _messages.value.map { if (!it.isFromMe && it.status != MessageStatus.READ) it.copy(status = MessageStatus.READ) else it } }
+    fun markUnreadMessagesAsRead() {
+        _messages.value = _messages.value.map {
+            if (!it.isFromMe && it.status != MessageStatus.READ) it.copy(status = MessageStatus.READ) else it
+        }
+    }
 }

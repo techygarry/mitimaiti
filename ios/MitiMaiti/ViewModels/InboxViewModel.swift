@@ -94,4 +94,12 @@ class InboxViewModel: ObservableObject {
     func unmatch(matchId: String) {
         matches.removeAll { $0.id == matchId }
     }
+
+    /// Called when a reply is received after an ice breaker / first message.
+    /// Moves the match from the timer-avatar section to the permanent Chats list.
+    func activateMatch(id: String) {
+        guard let index = matches.firstIndex(where: { $0.id == id }) else { return }
+        matches[index].status = .active
+        matches[index].expiresAt = nil
+    }
 }

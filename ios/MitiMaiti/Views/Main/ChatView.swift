@@ -3,6 +3,7 @@ import SwiftUI
 struct ChatView: View {
     let match: Match
     @StateObject private var chatVM = ChatViewModel()
+    @EnvironmentObject private var inboxVM: InboxViewModel
     @Environment(\.adaptiveColors) private var colors
     private let localization = LocalizationManager.shared
     @FocusState private var isInputFocused: Bool
@@ -28,6 +29,9 @@ struct ChatView: View {
             }
         }
         .onAppear {
+            // Wire up InboxViewModel so that when a reply arrives the match
+            // is moved from the timer-avatar section to the Chats list.
+            chatVM.inboxViewModel = inboxVM
             chatVM.loadMessages(for: match)
             // Mark all unread messages from the other user as read
             chatVM.markUnreadMessagesAsRead()

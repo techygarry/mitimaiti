@@ -233,7 +233,7 @@ fun ProfileScreen(
                         color = colors.textPrimary
                     )
                     Text(
-                        "${profile.profileCompleteness}%",
+                        "${viewModel.computedCompleteness}%",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = AppColors.Rose
@@ -241,7 +241,7 @@ fun ProfileScreen(
                 }
                 Spacer(modifier = Modifier.height(10.dp))
                 LinearProgressIndicator(
-                    progress = { profile.profileCompleteness / 100f },
+                    progress = { viewModel.computedCompleteness / 100f },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(8.dp)

@@ -17,6 +17,7 @@ import Avatar from '@/components/ui/Avatar';
 import CountdownTimer from '@/components/ui/CountdownTimer';
 import { mockMatches, mockMessages, mockIcebreakers } from '@/lib/mockData';
 import { Message } from '@/types';
+import { useMatches } from '@/context/MatchesContext';
 import { format, isToday, isYesterday } from 'date-fns';
 import { useTranslation } from '@/lib/i18n';
 
@@ -169,6 +170,7 @@ export default function ChatPage() {
   const matchId = params.matchId as string;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { graduateMatch } = useMatches();
 
   const match = mockMatches.find((m) => m.id === matchId) || mockMatches[0];
   const [messages, setMessages] = useState<Message[]>(
@@ -202,13 +204,17 @@ export default function ChatPage() {
       setMessages((prev) => [...prev, newMessage]);
       setInput('');
 
-      // If this is the first message, lock the input
-      if (messages.length === 0 || isNewChat) {
+      // Determine whether this is the first time the current user sends a message
+      // in this match. This covers two cases:
+      //   • Empty chat — user sends the opening ice-breaker (isNewChat)
+      //   • Other side messaged first (first_msg_by = 'them') and user is now
+      //     replying for the first time — no prior 'me' message exists yet
+      const hasPriorOutgoing = messages.some((m) => m.sender_id === 'me');
+      const isFirstOutgoing = !hasPriorOutgoing;
+
+      // For the opening ice-breaker path, lock input until reply arrives
+      if (isNewChat) {
         setIsLocked(true);
-        // Simulate reply after delay
-        setTimeout(() => {
-          setIsLocked(false);
-        }, 5000);
       }
 
       // Simulate delivery after 1 second
@@ -241,9 +247,22 @@ export default function ChatPage() {
             m.sender_id === 'me' ? { ...m, read: true, status: 'read' } : m
           )
         );
+
+        // Unlock input after reply
+        setIsLocked(false);
+
+        // Graduate the match when:
+        //   • User sent the first ice-breaker and got a reply back, OR
+        //   • User replied to the other side's opening message for the first time
+        // In both cases the timer was still running — now the match should live
+        // permanently in the Chats section.
+        const timerStillActive = new Date(match.expires_at).getTime() > Date.now();
+        if (isFirstOutgoing && timerStillActive) {
+          graduateMatch(matchId);
+        }
       }, 2000 + Math.random() * 2000);
     },
-    [matchId, match.user.id, isLocked, messages.length, isNewChat]
+    [matchId, match.user.id, match.expires_at, isLocked, messages, isNewChat, graduateMatch]
   );
 
   const handleSend = useCallback(() => {

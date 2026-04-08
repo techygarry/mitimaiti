@@ -254,7 +254,7 @@ fun TimerAvatar(match: Match, onClick: () -> Unit) {
             .clickable(onClick = onClick)
     ) {
         Box(contentAlignment = Alignment.Center) {
-            // Gold circular progress ring (shared component)
+            // Gold circular progress ring — slowly reduces over 24h, turns red when expiring
             CountdownRing(
                 expiresAt = match.expiresAt ?: (System.currentTimeMillis() + 24 * 60 * 60 * 1000L),
                 size = 72.dp,
@@ -273,35 +273,7 @@ fun TimerAvatar(match: Match, onClick: () -> Unit) {
                 )
             }
 
-            // Lock icon overlay (bottom-right) if firstMsgLocked
-            if (match.firstMsgLocked) {
-                Box(
-                    modifier = Modifier
-                        .size(22.dp)
-                        .align(Alignment.BottomEnd)
-                        .clip(CircleShape)
-                        .background(AppColors.Rose),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Lock, null, tint = Color.White, modifier = Modifier.size(12.dp))
-                }
-            }
-
-            // Timer icon (top-right) for new match
-            if (!match.hasFirstMessage) {
-                Box(
-                    modifier = Modifier
-                        .size(22.dp)
-                        .align(Alignment.TopEnd)
-                        .clip(CircleShape)
-                        .background(AppColors.Gold),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Schedule, null, tint = Color.White, modifier = Modifier.size(12.dp))
-                }
-            }
-
-            // Unread count badge (top-left) - shared component
+            // Unread count badge
             CountBadge(count = match.unreadCount, modifier = Modifier.align(Alignment.TopStart))
         }
 
@@ -315,10 +287,6 @@ fun TimerAvatar(match: Match, onClick: () -> Unit) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-
-        if (match.showCountdown) {
-            CountdownBanner(expiresAt = match.expiresAt ?: 0L)
-        }
     }
 }
 
@@ -439,15 +407,6 @@ fun ChatRow(match: Match, onClick: () -> Unit) {
                         )
                     }
                 }
-                // Countdown if applicable
-                if (match.showCountdown && !isUnread) {
-                    val hours = TimeUnit.MILLISECONDS.toHours(match.timeRemaining)
-                    Text(
-                        "${hours}h left",
-                        fontSize = 11.sp,
-                        color = if (match.isExpiringSoon) AppColors.Error else colors.textMuted
-                    )
-                }
             }
         }
     }
@@ -464,10 +423,10 @@ private fun formatRelativeTime(timestamp: Long): String {
     val days = TimeUnit.MILLISECONDS.toDays(diff)
     return when {
         minutes < 1 -> "Just now"
-        minutes < 60 -> "${minutes}m"
-        hours < 24 -> "${hours}h"
+        minutes < 60 -> "about ${minutes} min"
+        hours < 24 -> "about ${hours} hours"
         days < 2 -> "Yesterday"
-        days < 7 -> "${days}d"
-        else -> "${days / 7}w"
+        days < 7 -> "about ${days} days"
+        else -> "about ${days / 7} weeks"
     }
 }

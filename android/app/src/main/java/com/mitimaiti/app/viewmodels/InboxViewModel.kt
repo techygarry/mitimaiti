@@ -24,10 +24,26 @@ class InboxViewModel : ViewModel() {
     val totalMatches: Int get() = _matches.value.size
     val unreadMessages: Int get() = _matches.value.sumOf { it.unreadCount }
 
+    private var hasLoadedOnce = false
+
     fun loadInbox() {
+        // Don't reload if already loaded — preserves activated matches
+        if (hasLoadedOnce && _matches.value.isNotEmpty()) return
         viewModelScope.launch {
             _isLoading.value = true
-            APIService.fetchInbox().onSuccess { (likes, matches) -> val prev = _likes.value.size; _likes.value = likes; _matches.value = matches; if (likes.size > prev && prev > 0) { AppNotificationManager.shared.addNotification(type = NotificationType.LIKE, title = "New likes!", body = "${likes.size - prev} people liked your profile") } }.onFailure { _error.value = "Failed to load inbox" }
+            APIService.fetchInbox().onSuccess { (likes, matches) ->
+                val prev = _likes.value.size
+                _likes.value = likes
+                _matches.value = matches
+                hasLoadedOnce = true
+                if (likes.size > prev && prev > 0) {
+                    AppNotificationManager.shared.addNotification(
+                        type = NotificationType.LIKE,
+                        title = "New likes!",
+                        body = "${likes.size - prev} people liked your profile"
+                    )
+                }
+            }.onFailure { _error.value = "Failed to load inbox" }
             _isLoading.value = false
         }
     }
@@ -40,4 +56,30 @@ class InboxViewModel : ViewModel() {
 
     fun passLike(likeId: String) { _likes.value = _likes.value.filter { it.id != likeId } }
     fun unmatch(matchId: String) { _matches.value = _matches.value.filter { it.id != matchId } }
+
+    /**
+     * Called when a reply is received after the ice breaker.
+     * Transitions match from PENDING → ACTIVE, removes expiry (chat saved permanently).
+     */
+    fun activateMatch(matchId: String, lastMessage: String = "") {
+        _matches.value = _matches.value.map { match ->
+            if (match.id == matchId) {
+                match.copy(
+                    status = MatchStatus.ACTIVE,
+                    expiresAt = null,
+                    firstMsgLocked = false,
+                    lastMessage = lastMessage.ifEmpty { match.lastMessage },
+                    unreadCount = match.unreadCount + 1
+                )
+            } else match
+        }
+        val match = _matches.value.firstOrNull { it.id == matchId }
+        if (match != null) {
+            AppNotificationManager.shared.addNotification(
+                type = NotificationType.MESSAGE,
+                title = match.otherUser.displayName,
+                body = lastMessage
+            )
+        }
+    }
 }

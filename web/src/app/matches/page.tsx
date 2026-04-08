@@ -2,12 +2,13 @@
 
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { MessageCircle, Lock, Timer } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
 import AppShell from '@/components/ui/AppShell';
 import { getFilteredMockMatches, getDisplayName } from '@/lib/mockData';
 import { formatDistanceToNow } from 'date-fns';
 import { Match } from '@/types';
 import { useTranslation } from '@/lib/i18n';
+import { useMatches } from '@/context/MatchesContext';
 
 // ── Circular timer avatar ────────────────────────────────────────────
 
@@ -97,20 +98,6 @@ function TimerAvatar({
           <img src={src} alt={name} className="w-full h-full object-cover" />
         </div>
 
-        {/* Lock icon */}
-        {isLocked && (
-          <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center border-2 border-white shadow-sm">
-            <Lock className="w-3 h-3 text-white" />
-          </div>
-        )}
-
-        {/* Timer icon for new matches */}
-        {!isExpired && !isLocked && unread === 0 && !false && (
-          <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-white flex items-center justify-center border-2 border-gray-200 shadow-sm">
-            <Timer className="w-3 h-3 text-amber-600" />
-          </div>
-        )}
-
         {/* Unread badge */}
         {unread > 0 && (
           <div className="absolute -top-0.5 -right-0.5 min-w-[20px] h-5 px-1 rounded-full bg-rose flex items-center justify-center border-2 border-white">
@@ -129,19 +116,29 @@ function TimerAvatar({
 export default function MatchesPage() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { graduatedMatchIds } = useMatches();
   const matches = getFilteredMockMatches();
 
-  // Split into: new matches (timer active, no back-and-forth yet) and active chats
-  const newMatches = matches.filter((m) => {
-    const isTimerActive = new Date(m.expires_at).getTime() > Date.now();
-    const hasConversation = m.last_message && !m.first_msg_locked && m.first_msg_by === 'them' && m.unread_count === 0;
-    return isTimerActive;
-  });
+  /**
+   * A match belongs in "Chats" (permanent list) when ANY of:
+   *   1. Its timer has expired (expires_at is in the past)
+   *   2. It has been graduated — i.e. both sides have exchanged a message
+   *      (ice-breaker sent + reply received), tracked via MatchesContext
+   *   3. Its mock status is already 'active' and it has a last_message
+   *      (covers pre-seeded active conversations in mockData)
+   *
+   * Everything else stays in "Your Matches" (timer avatar row) while
+   * the timer is still running.
+   */
+  const isGraduated = (m: Match): boolean => {
+    const timerExpired = new Date(m.expires_at).getTime() <= Date.now();
+    const graduatedByReply = graduatedMatchIds.has(m.id);
+    const preSeededActive = m.status === 'active' && !!m.last_message;
+    return timerExpired || graduatedByReply || preSeededActive;
+  };
 
-  const activeChats = matches.filter((m) => {
-    const isExpired = new Date(m.expires_at).getTime() <= Date.now();
-    return isExpired && m.last_message;
-  });
+  const newMatches = matches.filter((m) => !isGraduated(m));
+  const activeChats = matches.filter((m) => isGraduated(m) && !!m.last_message);
 
   return (
     <AppShell>

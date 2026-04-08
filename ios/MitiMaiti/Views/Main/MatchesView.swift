@@ -186,12 +186,12 @@ struct MatchRowView: View {
     private var relativeTime: String? {
         guard let lastMsg = match.lastMessage else { return nil }
         let interval = Date().timeIntervalSince(lastMsg.createdAt)
-        if interval < 60 { return "now" }
-        if interval < 3600 { return "\(Int(interval / 60))m" }
-        if interval < 86400 { return "\(Int(interval / 3600))h" }
+        if interval < 60 { return "Just now" }
+        if interval < 3600 { return "about \(Int(interval / 60)) min" }
+        if interval < 86400 { return "about \(Int(interval / 3600)) hours" }
         if interval < 172800 { return "Yesterday" }
-        if interval < 604800 { return "\(Int(interval / 86400))d" }
-        return "\(Int(interval / 604800))w"
+        if interval < 604800 { return "about \(Int(interval / 86400)) days" }
+        return "about \(Int(interval / 604800)) weeks"
     }
 
     private var matchTrailing: some View {
@@ -254,23 +254,6 @@ struct TimerAvatarCircle: View {
                     size: 54,
                     isOnline: match.otherUser.isOnline
                 )
-
-                // Bottom-center badge: lock if firstMsgLocked, timer if new match with no messages
-                if match.firstMsgLocked {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 18, height: 18)
-                        .background(Circle().fill(AppTheme.saffron))
-                        .offset(y: 28)
-                } else if !match.hasFirstMessage {
-                    Image(systemName: "timer")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 18, height: 18)
-                        .background(Circle().fill(AppTheme.scoreOrange))
-                        .offset(y: 28)
-                }
 
                 // Unread badge at top-right
                 if match.unreadCount > 0 {
