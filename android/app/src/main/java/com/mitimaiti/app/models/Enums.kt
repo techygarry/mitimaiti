@@ -1,21 +1,21 @@
 package com.mitimaiti.app.models
 
-enum class Gender(val displayName: String) {
-    MAN("Man"),
-    WOMAN("Woman"),
-    NON_BINARY("Non-binary")
+enum class Gender(val displayName: String, val emoji: String) {
+    MAN("Man", "\uD83D\uDC71\u200D\u2642\uFE0F"),
+    WOMAN("Woman", "\uD83D\uDC71\u200D\u2640\uFE0F"),
+    NON_BINARY("Non-binary", "\uD83E\uDDD1")
 }
 
-enum class Intent(val displayName: String, val color: Long) {
-    CASUAL("Casual", 0xFF4ECDC4),
-    OPEN("Open to anything", 0xFFFFBE0B),
-    MARRIAGE("Marriage", 0xFFB5336A)
+enum class Intent(val displayName: String, val color: Long, val emoji: String, val description: String) {
+    CASUAL("Something Casual", 0xFF4ECDC4, "\uD83D\uDD2E", "Keep it light and see where things go"),
+    OPEN("Open to Anything", 0xFFFFBE0B, "\u2728", "Let fate decide, open to all possibilities"),
+    MARRIAGE("Marriage", 0xFFB5336A, "\uD83D\uDC8D", "Looking for a life partner")
 }
 
-enum class ShowMe(val displayName: String) {
-    MEN("Men"),
-    WOMEN("Women"),
-    EVERYONE("Everyone")
+enum class ShowMe(val displayName: String, val emoji: String) {
+    MEN("Men", "\uD83D\uDC71\u200D\u2642\uFE0F"),
+    WOMEN("Women", "\uD83D\uDC71\u200D\u2640\uFE0F"),
+    EVERYONE("Everyone", "\uD83C\uDF08")
 }
 
 enum class SindhiFluency(val displayName: String) {

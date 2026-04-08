@@ -1,9 +1,11 @@
 package com.mitimaiti.app.viewmodels
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mitimaiti.app.models.*
 import com.mitimaiti.app.services.APIService
+import com.mitimaiti.app.services.PhotoRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -63,6 +65,14 @@ class ProfileViewModel : ViewModel() {
 
     // Prompts editing
     val editPrompts = MutableStateFlow<List<UserPrompt>>(emptyList())
+
+    // Photos from PhotoRepository (shared with onboarding)
+    val userPhotos: StateFlow<List<Uri>> = PhotoRepository.photos
+    val primaryPhotoUri: Uri? get() = PhotoRepository.primaryPhotoUri
+
+    fun addPhoto(uri: Uri) { PhotoRepository.addPhoto(uri) }
+    fun removePhoto(index: Int) { PhotoRepository.removePhoto(index) }
+    fun setPrimaryPhoto(index: Int) { PhotoRepository.setPrimaryPhoto(index) }
 
     val profileStats = ProfileStats(views = 142, likes = 38, matches = 12)
 

@@ -31,12 +31,21 @@ export default function ReadyPage() {
   const [name, setName] = useState('');
   const [age, setAge] = useState('');
   const [city, setCity] = useState('');
+  const [mainPhoto, setMainPhoto] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setName(sessionStorage.getItem('onboarding_name') || 'You');
-      setAge(sessionStorage.getItem('onboarding_age') || '25');
-      setCity(sessionStorage.getItem('onboarding_city') || 'Mumbai, India');
+      setName(sessionStorage.getItem('onboarding_name') || localStorage.getItem('onboarding_name') || 'You');
+      setAge(sessionStorage.getItem('onboarding_age') || localStorage.getItem('onboarding_age') || '25');
+      setCity(sessionStorage.getItem('onboarding_city') || localStorage.getItem('onboarding_city') || 'Mumbai, India');
+      try {
+        const raw = localStorage.getItem('onboarding_photos');
+        if (raw) {
+          const photos: string[] = JSON.parse(raw);
+          const first = photos.find((p) => p !== '');
+          setMainPhoto(first ?? null);
+        }
+      } catch {}
     }
   }, []);
 
@@ -89,10 +98,14 @@ export default function ReadyPage() {
           >
             {/* Avatar area */}
             <div className="h-48 gradient-rose flex items-center justify-center relative">
-              <div className="w-24 h-24 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border-4 border-white/30">
-                <span className="text-4xl font-bold text-white">
-                  {name.charAt(0).toUpperCase()}
-                </span>
+              <div className="w-24 h-24 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border-4 border-white/30 overflow-hidden">
+                {mainPhoto ? (
+                  <img src={mainPhoto} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-4xl font-bold text-white">
+                    {name.charAt(0).toUpperCase()}
+                  </span>
+                )}
               </div>
               <Sparkles className="absolute top-4 right-4 w-5 h-5 text-gold animate-pulse-soft" />
               <Sparkles className="absolute bottom-6 left-4 w-4 h-4 text-white/50 animate-pulse-soft" />

@@ -12,6 +12,27 @@ const months = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
+const monthAbbrevs = [
+  'jan', 'feb', 'mar', 'apr', 'may', 'jun',
+  'jul', 'aug', 'sep', 'oct', 'nov', 'dec',
+];
+
+/** Returns the 1-based month number string if the input is valid, otherwise ''. */
+function parseMonthInput(raw: string): string {
+  const trimmed = raw.trim().toLowerCase();
+  // Numeric: 1–12
+  const num = parseInt(trimmed, 10);
+  if (!isNaN(num) && num >= 1 && num <= 12 && String(num) === trimmed) {
+    return String(num);
+  }
+  // 3-letter abbreviation
+  const abbrevIdx = monthAbbrevs.indexOf(trimmed.slice(0, 3));
+  if (abbrevIdx !== -1 && (trimmed.length === 3 || trimmed === monthAbbrevs[abbrevIdx])) {
+    return String(abbrevIdx + 1);
+  }
+  return '';
+}
+
 const currentYear = new Date().getFullYear();
 const years = Array.from({ length: 80 }, (_, i) => currentYear - 18 - i);
 const days = Array.from({ length: 31 }, (_, i) => i + 1);
@@ -20,7 +41,8 @@ export default function BirthdayPage() {
   const router = useRouter();
   const { t } = useTranslation();
   const [day, setDay] = useState('');
-  const [month, setMonth] = useState('');
+  const [month, setMonth] = useState('');        // stored as numeric string "1"–"12"
+  const [monthDisplay, setMonthDisplay] = useState(''); // text shown in the input
   const [year, setYear] = useState('');
 
   const age = useMemo(() => {
@@ -42,8 +64,8 @@ export default function BirthdayPage() {
     router.push('/onboarding/gender');
   };
 
-  const selectClass =
-    'flex-1 h-14 px-3 bg-gray-50 rounded-xl border border-gray-200 text-charcoal font-medium focus:border-rose focus:ring-2 focus:ring-rose-light outline-none transition-all appearance-none cursor-pointer';
+  const inputClass =
+    'flex-1 min-w-0 h-14 px-3 bg-gray-50 rounded-xl border border-gray-200 text-charcoal font-medium focus:border-rose focus:ring-2 focus:ring-rose-light outline-none transition-all';
 
   return (
     <OnboardingShell
@@ -56,44 +78,64 @@ export default function BirthdayPage() {
       <div className="space-y-4 mt-4">
         {/* Date selectors */}
         <div className="flex gap-3">
-          <select
+          <input
+            type="text"
+            inputMode="numeric"
             value={day}
-            onChange={(e) => setDay(e.target.value)}
-            className={selectClass}
-          >
-            <option value="">{t('onboarding.day')}</option>
-            {days.map((d) => (
-              <option key={d} value={String(d)}>
-                {d}
-              </option>
-            ))}
-          </select>
+            onChange={(e) => {
+              const val = e.target.value.replace(/\D/g, '').slice(0, 2);
+              const num = parseInt(val, 10);
+              if (val === '' || (num >= 1 && num <= 31)) {
+                setDay(val);
+              }
+            }}
+            placeholder={t('onboarding.day')}
+            className={inputClass}
+          />
 
-          <select
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-            className={selectClass}
-          >
-            <option value="">{t('onboarding.month')}</option>
-            {months.map((m, i) => (
-              <option key={m} value={String(i + 1)}>
-                {m}
-              </option>
-            ))}
-          </select>
+          <input
+            type="text"
+            value={monthDisplay}
+            onChange={(e) => {
+              const raw = e.target.value;
+              setMonthDisplay(raw);
+              // Only set month value for 2-digit numbers or abbreviations, not single digits (so user can type 11, 12)
+              const trimmed = raw.trim().toLowerCase();
+              const num = parseInt(trimmed, 10);
+              if (!isNaN(num) && num >= 1 && num <= 12 && trimmed.length === 2) {
+                setMonth(String(num));
+              } else {
+                const parsed = parseMonthInput(raw);
+                if (parsed && isNaN(parseInt(trimmed, 10))) {
+                  setMonth(parsed);
+                } else if (trimmed.length === 0) {
+                  setMonth('');
+                }
+              }
+            }}
+            onBlur={() => {
+              // Convert to abbreviation on blur
+              const parsed = parseMonthInput(monthDisplay);
+              if (parsed) {
+                setMonth(parsed);
+                setMonthDisplay(monthAbbrevs[parseInt(parsed, 10) - 1].replace(/^\w/, (c) => c.toUpperCase()));
+              }
+            }}
+            placeholder={t('onboarding.month')}
+            className={inputClass}
+          />
 
-          <select
+          <input
+            type="text"
+            inputMode="numeric"
             value={year}
-            onChange={(e) => setYear(e.target.value)}
-            className={selectClass}
-          >
-            <option value="">{t('onboarding.year')}</option>
-            {years.map((y) => (
-              <option key={y} value={String(y)}>
-                {y}
-              </option>
-            ))}
-          </select>
+            onChange={(e) => {
+              const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+              setYear(val);
+            }}
+            placeholder={t('onboarding.year')}
+            className={inputClass}
+          />
         </div>
 
         {/* Age display */}

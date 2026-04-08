@@ -93,6 +93,9 @@ class MainActivity : ComponentActivity() {
                                 onComplete = {
                                     authViewModel.completeOnboarding()
                                     navController.navigate(Screen.Main.route) { popUpTo(Screen.Welcome.route) { inclusive = true } }
+                                },
+                                onNavigateToEditProfile = {
+                                    navController.navigate(Screen.EditProfile.route)
                                 }
                             )
                         }

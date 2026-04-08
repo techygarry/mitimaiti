@@ -145,7 +145,7 @@ enum OnboardingStep: Int, CaseIterable {
 
     var title: String {
         switch self {
-        case .name: return "What's your name?"
+        case .name: return "What's your full name?"
         case .birthday: return "When's your birthday?"
         case .gender: return "I am a..."
         case .photos: return "Add your best photos"
@@ -158,7 +158,7 @@ enum OnboardingStep: Int, CaseIterable {
 
     var subtitle: String {
         switch self {
-        case .name: return "This is how you'll appear on MitiMaiti"
+        case .name: return "This is how it appears on your profile."
         case .birthday: return "Your age will be shown, not your birthday"
         case .gender: return "Choose how you identify"
         case .photos: return "Profiles with 3+ photos get 4x more matches"

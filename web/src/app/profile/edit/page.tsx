@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
@@ -11,6 +11,7 @@ import {
   Camera,
   Check,
   ChevronDown,
+  Crown,
 } from 'lucide-react';
 import AppShell from '@/components/ui/AppShell';
 import Tabs from '@/components/ui/Tabs';
@@ -431,12 +432,96 @@ function PersonalityTab() {
   );
 }
 
+const PHOTO_COUNT = 6;
+
 export default function EditProfilePage() {
   const router = useRouter();
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('basics');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [activeSlot, setActiveSlot] = useState<number | null>(null);
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>(
+    Array(PHOTO_COUNT).fill('')
+  );
   const isNonSindhi = typeof window !== 'undefined' && localStorage.getItem('onboarding_non_sindhi') === 'true';
+
+  // Load persisted photos from localStorage on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = localStorage.getItem('onboarding_photos');
+      if (raw) {
+        const previews: string[] = JSON.parse(raw);
+        const padded = Array(PHOTO_COUNT)
+          .fill('')
+          .map((_, i) => previews[i] || '');
+        setPhotoPreviews(padded);
+      }
+    } catch {
+      // malformed data — ignore
+    }
+  }, []);
+
+  const savePhotos = useCallback((previews: string[]) => {
+    localStorage.setItem('onboarding_photos', JSON.stringify(previews));
+  }, []);
+
+  const handleSlotClick = useCallback((index: number) => {
+    setActiveSlot(index);
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || activeSlot === null) return;
+      if (!file.type.startsWith('image/')) return;
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const dataUrl = ev.target?.result as string;
+        setPhotoPreviews((prev) => {
+          const next = [...prev];
+          next[activeSlot] = dataUrl;
+          savePhotos(next);
+          return next;
+        });
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+    },
+    [activeSlot, savePhotos]
+  );
+
+  const handleRemovePhoto = useCallback(
+    (index: number, e: React.MouseEvent) => {
+      e.stopPropagation();
+      setPhotoPreviews((prev) => {
+        const next = [...prev];
+        next[index] = '';
+        savePhotos(next);
+        return next;
+      });
+    },
+    [savePhotos]
+  );
+
+  const handleSetAsMain = useCallback(
+    (index: number, e: React.MouseEvent) => {
+      e.stopPropagation();
+      setPhotoPreviews((prev) => {
+        const next = [...prev];
+        // Move the selected photo to index 0, shift others down
+        const chosen = next[index];
+        next.splice(index, 1);
+        next.unshift(chosen);
+        savePhotos(next);
+        showToast.success('Set as main photo');
+        return next;
+      });
+    },
+    [savePhotos]
+  );
 
   return (
     <AppShell>
@@ -453,27 +538,70 @@ export default function EditProfilePage() {
             {/* Photos */}
             <div className="bg-white rounded-2xl shadow-card p-4">
               <h2 className="font-semibold text-charcoal mb-4">{t('profileEdit.photos')}</h2>
-              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileChange}
+              />
               <div className="grid grid-cols-3 gap-3">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => fileInputRef.current?.click()}
-                    className="aspect-[3/4] rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 flex flex-col items-center justify-center hover:border-rose hover:bg-rose/5 transition-all touch-target"
-                    aria-label={i === 0 ? 'Upload main photo' : `Upload photo ${i + 1}`}
-                  >
-                    {i === 0 ? (
-                      <>
-                        <Camera className="w-7 h-7 text-textLight/40 mb-1" />
-                        <div className="flex items-center gap-0.5">
-                          <Star className="w-3.5 h-3.5 text-gold" />
-                          <span className="text-xs text-textLight">{t('profileEdit.main')}</span>
-                        </div>
-                      </>
+                {photoPreviews.map((preview, i) => (
+                  <div key={i} className="relative aspect-[3/4]">
+                    {preview ? (
+                      <div className="relative w-full h-full rounded-xl overflow-hidden shadow-card">
+                        <img
+                          src={preview}
+                          alt={`Photo ${i + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                        {/* Remove button */}
+                        <button
+                          onClick={(e) => handleRemovePhoto(i, e)}
+                          className="absolute top-1.5 right-1.5 w-7 h-7 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-black/70 transition-colors"
+                          aria-label={`Remove photo ${i + 1}`}
+                        >
+                          <X className="w-4 h-4 text-white" />
+                        </button>
+                        {/* Main badge */}
+                        {i === 0 && (
+                          <div className="absolute bottom-1.5 left-1.5 flex items-center gap-1 bg-gold px-2 py-0.5 rounded-full">
+                            <Star className="w-3 h-3 text-white fill-white" />
+                            <span className="text-[10px] font-bold text-white">MAIN</span>
+                          </div>
+                        )}
+                        {/* Set as main button for non-primary photos */}
+                        {i !== 0 && (
+                          <button
+                            onClick={(e) => handleSetAsMain(i, e)}
+                            className="absolute bottom-1.5 left-1.5 w-7 h-7 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-amber-500/80 transition-colors"
+                            aria-label={`Set photo ${i + 1} as main`}
+                            title="Set as main photo"
+                          >
+                            <Crown className="w-3.5 h-3.5 text-white" />
+                          </button>
+                        )}
+                      </div>
                     ) : (
-                      <Plus className="w-7 h-7 text-textLight/40" />
+                      <button
+                        onClick={() => handleSlotClick(i)}
+                        className="w-full h-full rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 flex flex-col items-center justify-center hover:border-rose hover:bg-rose/5 transition-all touch-target"
+                        aria-label={i === 0 ? 'Upload main photo' : `Upload photo ${i + 1}`}
+                      >
+                        {i === 0 ? (
+                          <>
+                            <Camera className="w-7 h-7 text-textLight/40 mb-1" />
+                            <div className="flex items-center gap-0.5">
+                              <Star className="w-3.5 h-3.5 text-gold" />
+                              <span className="text-xs text-textLight">{t('profileEdit.main')}</span>
+                            </div>
+                          </>
+                        ) : (
+                          <Plus className="w-7 h-7 text-textLight/40" />
+                        )}
+                      </button>
                     )}
-                  </button>
+                  </div>
                 ))}
               </div>
               <p className="text-xs text-textLight mt-3 text-center">

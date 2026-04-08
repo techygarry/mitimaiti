@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Settings,
   Edit3,
@@ -13,12 +13,158 @@ import {
   Camera,
   ChevronRight,
   MessageCircle,
+  Upload,
+  Images,
+  X,
+  Check,
 } from 'lucide-react';
 import AppShell from '@/components/ui/AppShell';
 import ProgressBar from '@/components/ui/ProgressBar';
 import Card from '@/components/ui/Card';
 import { useProfileCompleteness } from '@/lib/useProfileCompleteness';
 import { useTranslation } from '@/lib/i18n';
+
+// ---------------------------------------------------------------------------
+// PhotoPickerModal
+// ---------------------------------------------------------------------------
+function PhotoPickerModal({
+  open,
+  onClose,
+  onPhotoSelected,
+  uploadedPhotos,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onPhotoSelected: (dataUrl: string) => void;
+  uploadedPhotos: string[];
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      onPhotoSelected(dataUrl);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  // Filtered list: exclude the current main (index 0) so user picks a different one
+  const otherPhotos = uploadedPhotos.filter((p, i) => p !== '' && i !== 0);
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            key="backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+            onClick={onClose}
+          />
+
+          {/* Sheet */}
+          <motion.div
+            key="sheet"
+            initial={{ opacity: 0, y: 48, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 48, scale: 0.97 }}
+            transition={{ type: 'spring', stiffness: 340, damping: 28 }}
+            className="fixed bottom-0 left-0 right-0 z-50 mx-auto max-w-md rounded-t-3xl bg-white shadow-2xl px-5 pt-5 pb-8"
+          >
+            {/* Handle */}
+            <div className="w-10 h-1 rounded-full bg-gray-200 mx-auto mb-5" />
+
+            {/* Title row */}
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-bold text-charcoal">Change Profile Photo</h2>
+              <button
+                onClick={onClose}
+                className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5 text-textLight" />
+              </button>
+            </div>
+
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+
+            {/* Choose from device */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl bg-rose/8 hover:bg-rose/12 transition-colors mb-3 group"
+            >
+              <div className="w-10 h-10 rounded-full bg-rose/15 flex items-center justify-center flex-shrink-0 group-hover:bg-rose/20 transition-colors">
+                <Upload className="w-5 h-5 text-rose" />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-semibold text-charcoal">Choose from device</p>
+                <p className="text-xs text-textLight mt-0.5">Upload a new photo from your gallery</p>
+              </div>
+            </button>
+
+            {/* Choose from uploaded photos */}
+            {otherPhotos.length > 0 ? (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <Images className="w-4 h-4 text-textLight" />
+                  <p className="text-sm font-medium text-textLight">Choose from uploaded photos</p>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {uploadedPhotos.map((photo, idx) => {
+                    if (!photo || idx === 0) return null;
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => onPhotoSelected(photo)}
+                        className="relative aspect-square rounded-xl overflow-hidden border-2 border-transparent hover:border-rose transition-all group"
+                        aria-label={`Set photo ${idx + 1} as main`}
+                      >
+                        <img
+                          src={photo}
+                          alt={`Uploaded photo ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-rose/0 group-hover:bg-rose/10 transition-colors flex items-center justify-center">
+                          <div className="w-7 h-7 rounded-full bg-rose opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center shadow-md">
+                            <Check className="w-4 h-4 text-white" />
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-gray-50">
+                <Images className="w-5 h-5 text-textLight/50 flex-shrink-0" />
+                <p className="text-sm text-textLight">No other uploaded photos yet.</p>
+              </div>
+            )}
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ProfilePage
+// ---------------------------------------------------------------------------
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -27,6 +173,26 @@ export default function ProfilePage() {
   const [age, setAge] = useState('25');
   const [city, setCity] = useState('Mumbai, India');
   const [isNonSindhi, setIsNonSindhi] = useState(false);
+  const [mainPhoto, setMainPhoto] = useState<string | null>(null);
+  const [allPhotos, setAllPhotos] = useState<string[]>([]);
+  const [photoModalOpen, setPhotoModalOpen] = useState(false);
+
+  const loadPhotos = () => {
+    try {
+      const raw = localStorage.getItem('onboarding_photos');
+      if (raw) {
+        const previews: string[] = JSON.parse(raw);
+        setAllPhotos(previews);
+        const first = previews.find((p) => p !== '');
+        setMainPhoto(first ?? null);
+      } else {
+        setAllPhotos([]);
+        setMainPhoto(null);
+      }
+    } catch {
+      // malformed data — ignore
+    }
+  };
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -34,8 +200,28 @@ export default function ProfilePage() {
       setAge(localStorage.getItem('onboarding_age') || sessionStorage.getItem('onboarding_age') || '25');
       setCity(localStorage.getItem('onboarding_city') || sessionStorage.getItem('onboarding_city') || 'Mumbai, India');
       setIsNonSindhi(localStorage.getItem('onboarding_non_sindhi') === 'true');
+      loadPhotos();
     }
   }, []);
+
+  const handlePhotoSelected = (dataUrl: string) => {
+    // Build new array with chosen photo at index 0
+    const current: string[] = allPhotos.length > 0
+      ? [...allPhotos]
+      : Array(6).fill('');
+
+    // Remove the chosen photo from its current position (if it was already there)
+    const filtered = current.filter((p) => p !== dataUrl);
+
+    // Ensure we have 6 slots
+    while (filtered.length < 6) filtered.push('');
+    const next = [dataUrl, ...filtered.slice(0, 5)];
+
+    localStorage.setItem('onboarding_photos', JSON.stringify(next));
+    setAllPhotos(next);
+    setMainPhoto(dataUrl);
+    setPhotoModalOpen(false);
+  };
 
   const completeness = useProfileCompleteness();
 
@@ -74,15 +260,39 @@ export default function ProfilePage() {
 
             <div className="flex flex-col items-center -mt-12 px-6 pb-4">
               <div className="relative mb-3">
-                <div className="w-24 h-24 rounded-full bg-white shadow-card-hover flex items-center justify-center overflow-hidden border-4 border-white">
-                  <div className="w-full h-full gradient-rose flex items-center justify-center">
-                    <span className="text-3xl font-bold text-white">
-                      {name.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                </div>
-
+                {/* Clickable avatar */}
                 <button
+                  onClick={() => setPhotoModalOpen(true)}
+                  className="w-24 h-24 rounded-full bg-white shadow-card-hover flex items-center justify-center overflow-hidden border-4 border-white focus:outline-none focus:ring-2 focus:ring-rose focus:ring-offset-2 group"
+                  aria-label="Change profile photo"
+                >
+                  {mainPhoto ? (
+                    <>
+                      <img
+                        src={mainPhoto}
+                        alt={name}
+                        className="w-full h-full object-cover group-hover:brightness-90 transition-all"
+                      />
+                      {/* Hover overlay */}
+                      <div className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                        <Camera className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="w-full h-full gradient-rose flex items-center justify-center relative">
+                      <span className="text-3xl font-bold text-white group-hover:opacity-70 transition-opacity">
+                        {name.charAt(0).toUpperCase()}
+                      </span>
+                      <div className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                        <Camera className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+                      </div>
+                    </div>
+                  )}
+                </button>
+
+                {/* Camera badge */}
+                <button
+                  onClick={() => setPhotoModalOpen(true)}
                   className="absolute bottom-0 right-0 w-9 h-9 bg-rose rounded-full flex items-center justify-center shadow-md border-2 border-white hover:bg-rose-dark transition-colors touch-target"
                   aria-label="Change profile photo"
                 >
@@ -177,6 +387,14 @@ export default function ProfilePage() {
 
         </div>
       </div>
+
+      {/* Photo picker modal */}
+      <PhotoPickerModal
+        open={photoModalOpen}
+        onClose={() => setPhotoModalOpen(false)}
+        onPhotoSelected={handlePhotoSelected}
+        uploadedPhotos={allPhotos}
+      />
     </AppShell>
   );
 }

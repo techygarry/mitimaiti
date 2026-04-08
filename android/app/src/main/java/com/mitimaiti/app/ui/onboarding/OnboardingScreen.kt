@@ -1,11 +1,22 @@
 @file:Suppress("DEPRECATION")
 package com.mitimaiti.app.ui.onboarding
 
+import android.Manifest
+import android.annotation.SuppressLint
+import android.content.Context
+import android.location.Geocoder
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -16,14 +27,20 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import coil.compose.AsyncImage
 import com.mitimaiti.app.models.Gender
 import com.mitimaiti.app.models.Intent
 import com.mitimaiti.app.models.ShowMe
@@ -34,7 +51,7 @@ import com.mitimaiti.app.viewmodels.OnboardingStep
 import com.mitimaiti.app.viewmodels.OnboardingViewModel
 
 @Composable
-fun OnboardingScreen(onComplete: () -> Unit) {
+fun OnboardingScreen(onComplete: () -> Unit, onNavigateToEditProfile: () -> Unit = {}) {
     val viewModel: OnboardingViewModel = viewModel()
     val colors = LocalAdaptiveColors.current
     val currentStep by viewModel.currentStep.collectAsState()
@@ -50,9 +67,34 @@ fun OnboardingScreen(onComplete: () -> Unit) {
     val selectedIntent by viewModel.selectedIntent.collectAsState()
     val selectedShowMe by viewModel.selectedShowMe.collectAsState()
     val selectedCity by viewModel.selectedCity.collectAsState()
-    val progress by remember { derivedStateOf { viewModel.progress } }
-    val canProceed by remember { derivedStateOf { viewModel.canProceed } }
-    val age by remember { derivedStateOf { viewModel.age } }
+    val isNonSindhi by viewModel.isNonSindhi.collectAsState()
+    val progress by remember(stepIndex, totalSteps) {
+        derivedStateOf { (stepIndex + 1).toFloat() / totalSteps }
+    }
+    val canProceed by remember(currentStep, firstName, birthDay, birthMonth, birthYear, selectedGender, selectedPhotos, selectedIntent, selectedShowMe, selectedCity) {
+        derivedStateOf {
+            when (currentStep) {
+                OnboardingStep.NAME -> firstName.isNotBlank()
+                OnboardingStep.BIRTHDAY -> viewModel.isAgeValid
+                OnboardingStep.GENDER -> selectedGender != null
+                OnboardingStep.PHOTOS -> selectedPhotos.isNotEmpty()
+                OnboardingStep.INTENT -> selectedIntent != null
+                OnboardingStep.SHOW_ME -> selectedShowMe != null
+                OnboardingStep.LOCATION -> selectedCity.isNotBlank()
+                OnboardingStep.READY -> true
+            }
+        }
+    }
+    val age by remember(birthDay, birthMonth, birthYear) {
+        derivedStateOf { viewModel.age }
+    }
+
+    // Photo picker launcher
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        uri?.let { viewModel.addPhoto(it) }
+    }
 
     // Track direction for slide animation
     var lastStep by remember { mutableIntStateOf(0) }
@@ -135,7 +177,9 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                     when (step) {
                         OnboardingStep.NAME -> NameStep(
                             name = firstName,
-                            onNameChange = { viewModel.firstName.value = it }
+                            onNameChange = { viewModel.firstName.value = it },
+                            isNonSindhi = isNonSindhi,
+                            onNonSindhiChange = { viewModel.isNonSindhi.value = it }
                         )
                         OnboardingStep.BIRTHDAY -> BirthdayStep(
                             day = birthDay,
@@ -151,11 +195,13 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                             onSelect = { viewModel.selectedGender.value = it }
                         )
                         OnboardingStep.PHOTOS -> PhotosStep(
-                            count = selectedPhotos.size,
+                            photos = selectedPhotos,
                             onAddPhoto = {
-                                // Simulate adding a photo with a dummy URI
-                                viewModel.addPhoto(android.net.Uri.parse("content://photo/${selectedPhotos.size}"))
-                            }
+                                photoPickerLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            },
+                            onRemovePhoto = { viewModel.removePhoto(it) }
                         )
                         OnboardingStep.INTENT -> IntentStep(
                             selected = selectedIntent,
@@ -169,7 +215,15 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                             location = selectedCity,
                             onLocationChange = { viewModel.selectedCity.value = it }
                         )
-                        OnboardingStep.READY -> ReadyStep(name = firstName)
+                        OnboardingStep.READY -> ReadyStep(
+                            name = firstName,
+                            age = age,
+                            city = selectedCity,
+                            onCompleteSindhi = {
+                                onComplete()
+                                onNavigateToEditProfile()
+                            }
+                        )
                     }
                 }
             }
@@ -188,7 +242,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                 )
             ) {
                 Text(
-                    if (currentStep == OnboardingStep.READY) "Start Discovering" else "Continue",
+                    if (currentStep == OnboardingStep.READY) "\u2728 Go to Discover" else "Continue",
                     fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White
@@ -201,11 +255,16 @@ fun OnboardingScreen(onComplete: () -> Unit) {
 }
 
 @Composable
-private fun NameStep(name: String, onNameChange: (String) -> Unit) {
+private fun NameStep(
+    name: String,
+    onNameChange: (String) -> Unit,
+    isNonSindhi: Boolean,
+    onNonSindhiChange: (Boolean) -> Unit
+) {
     val colors = LocalAdaptiveColors.current
     Column {
         Text(
-            "What's your\nfirst name?",
+            "What's your full name?",
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
             color = colors.textPrimary,
@@ -213,16 +272,16 @@ private fun NameStep(name: String, onNameChange: (String) -> Unit) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "This is how you'll appear on MitiMaiti",
+            "This is how it appears on your profile.",
             fontSize = 16.sp,
             color = colors.textSecondary
         )
         Spacer(modifier = Modifier.height(32.dp))
         OutlinedTextField(
             value = name,
-            onValueChange = onNameChange,
+            onValueChange = { if (it.length <= 50) onNameChange(it) },
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Your first name", color = colors.textMuted) },
+            placeholder = { Text("Enter your full name", color = colors.textMuted) },
             shape = RoundedCornerShape(AppTheme.radiusMd),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = AppColors.Rose,
@@ -232,6 +291,64 @@ private fun NameStep(name: String, onNameChange: (String) -> Unit) {
             ),
             singleLine = true
         )
+        Spacer(modifier = Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                "Your family name can be hidden in Settings",
+                fontSize = 12.sp,
+                color = colors.textMuted
+            )
+            Text(
+                "${name.length}/50",
+                fontSize = 12.sp,
+                color = colors.textMuted
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Not Sindhi toggle
+        Surface(
+            shape = RoundedCornerShape(AppTheme.radiusMd),
+            color = AppColors.Rose.copy(alpha = 0.05f),
+            border = BorderStroke(1.dp, AppColors.Rose.copy(alpha = 0.1f))
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Not Sindhi? No worries!",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textPrimary
+                    )
+                    Text(
+                        "Open to vibing with the Sindhi community",
+                        fontSize = 12.sp,
+                        color = colors.textSecondary
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Switch(
+                    checked = isNonSindhi,
+                    onCheckedChange = onNonSindhiChange,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = AppColors.Rose,
+                        uncheckedThumbColor = Color.White,
+                        uncheckedTrackColor = colors.border
+                    )
+                )
+            }
+        }
     }
 }
 
@@ -250,7 +367,7 @@ private fun BirthdayStep(
 
     Column {
         Text(
-            "When's your\nbirthday?",
+            "When's your birthday?",
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
             color = colors.textPrimary,
@@ -258,7 +375,7 @@ private fun BirthdayStep(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "Your age will be shown on your profile",
+            "Your age shows on your profile. Birthday won't be shared.",
             fontSize = 16.sp,
             color = colors.textSecondary
         )
@@ -269,7 +386,7 @@ private fun BirthdayStep(
                 value = day,
                 onValueChange = { if (it.length <= 2 && it.all { c -> c.isDigit() }) onDayChange(it) },
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("DD", color = colors.textMuted) },
+                placeholder = { Text("Day", color = colors.textMuted) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 shape = RoundedCornerShape(AppTheme.radiusMd),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -280,26 +397,73 @@ private fun BirthdayStep(
                 ),
                 singleLine = true
             )
-            OutlinedTextField(
-                value = month,
-                onValueChange = { if (it.length <= 2 && it.all { c -> c.isDigit() }) onMonthChange(it) },
-                modifier = Modifier.weight(1f),
-                placeholder = { Text("MM", color = colors.textMuted) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                shape = RoundedCornerShape(AppTheme.radiusMd),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = AppColors.Rose,
-                    unfocusedBorderColor = colors.border,
-                    focusedTextColor = colors.textPrimary,
-                    unfocusedTextColor = colors.textPrimary
-                ),
-                singleLine = true
-            )
+            // Month field — type number (1-12) or abbreviation (Jan, Feb, etc.)
+            Box(modifier = Modifier.weight(1f)) {
+                val monthMap = mapOf(
+                    "jan" to "1", "feb" to "2", "mar" to "3", "apr" to "4",
+                    "may" to "5", "jun" to "6", "jul" to "7", "aug" to "8",
+                    "sep" to "9", "oct" to "10", "nov" to "11", "dec" to "12"
+                )
+                val monthNames = listOf(
+                    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+                )
+                var textFieldValue by remember { mutableStateOf(month) }
+                val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+                var isFocused by remember { mutableStateOf(false) }
+
+                OutlinedTextField(
+                    value = textFieldValue,
+                    onValueChange = { input ->
+                        textFieldValue = input
+                        // Only auto-commit for 2-digit numbers or abbreviations
+                        val trimmed = input.trim()
+                        val asNum = trimmed.filter { c -> c.isDigit() }
+                        if (asNum.length == 2) {
+                            val num = asNum.toIntOrNull()
+                            if (num != null && num in 1..12) {
+                                onMonthChange(asNum)
+                                textFieldValue = monthNames[num - 1]
+                            }
+                        } else if (asNum.isEmpty()) {
+                            // Check if month abbreviation
+                            val match = monthMap[trimmed.lowercase()]
+                            if (match != null) {
+                                onMonthChange(match)
+                                textFieldValue = monthNames[match.toInt() - 1]
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { state ->
+                            if (isFocused && !state.isFocused) {
+                                // On blur: convert single digit to month name
+                                val trimmed = textFieldValue.trim()
+                                val num = trimmed.toIntOrNull()
+                                if (num != null && num in 1..12) {
+                                    onMonthChange("$num")
+                                    textFieldValue = monthNames[num - 1]
+                                }
+                            }
+                            isFocused = state.isFocused
+                        },
+                    placeholder = { Text("Month", color = colors.textMuted) },
+                    shape = RoundedCornerShape(AppTheme.radiusMd),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = AppColors.Rose,
+                        unfocusedBorderColor = colors.border,
+                        focusedTextColor = colors.textPrimary,
+                        unfocusedTextColor = colors.textPrimary
+                    ),
+                    singleLine = true
+                )
+            }
             OutlinedTextField(
                 value = year,
                 onValueChange = { if (it.length <= 4 && it.all { c -> c.isDigit() }) onYearChange(it) },
-                modifier = Modifier.weight(1.5f),
-                placeholder = { Text("YYYY", color = colors.textMuted) },
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("Year", color = colors.textMuted) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 shape = RoundedCornerShape(AppTheme.radiusMd),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -339,17 +503,11 @@ private fun GenderStep(selected: Gender?, onSelect: (Gender) -> Unit) {
     val colors = LocalAdaptiveColors.current
     Column {
         Text(
-            "What's your\ngender?",
+            "How do you identify?",
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
             color = colors.textPrimary,
             lineHeight = 36.sp
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            "Select how you identify",
-            fontSize = 16.sp,
-            color = colors.textSecondary
         )
         Spacer(modifier = Modifier.height(32.dp))
 
@@ -357,30 +515,36 @@ private fun GenderStep(selected: Gender?, onSelect: (Gender) -> Unit) {
             val isSelected = gender == selected
             Surface(
                 onClick = { onSelect(gender) },
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                shape = RoundedCornerShape(AppTheme.radiusMd),
-                color = if (isSelected) AppColors.Rose.copy(alpha = 0.1f) else colors.surface,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                shape = RoundedCornerShape(AppTheme.radiusLg),
+                color = if (isSelected) AppColors.Rose.copy(alpha = 0.05f) else colors.surface,
                 border = if (isSelected) BorderStroke(2.dp, AppColors.Rose)
                 else BorderStroke(1.dp, colors.border)
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 18.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Text(
+                        gender.emoji,
+                        fontSize = 24.sp
+                    )
+                    Spacer(modifier = Modifier.width(14.dp))
                     Text(
                         gender.displayName,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Medium,
-                        color = if (isSelected) AppColors.Rose else colors.textPrimary
+                        color = colors.textPrimary,
+                        modifier = Modifier.weight(1f)
                     )
-                    if (isSelected) {
-                        Icon(
-                            Icons.Default.CheckCircle, null,
-                            tint = AppColors.Rose,
-                            modifier = Modifier.size(24.dp)
+                    RadioButton(
+                        selected = isSelected,
+                        onClick = { onSelect(gender) },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = AppColors.Rose,
+                            unselectedColor = colors.border
                         )
-                    }
+                    )
                 }
             }
         }
@@ -388,7 +552,7 @@ private fun GenderStep(selected: Gender?, onSelect: (Gender) -> Unit) {
 }
 
 @Composable
-private fun PhotosStep(count: Int, onAddPhoto: () -> Unit) {
+private fun PhotosStep(photos: List<Uri>, onAddPhoto: () -> Unit, onRemovePhoto: (Int) -> Unit) {
     val colors = LocalAdaptiveColors.current
     Column {
         Text(
@@ -415,30 +579,62 @@ private fun PhotosStep(count: Int, onAddPhoto: () -> Unit) {
                 ) {
                     for (col in 0..2) {
                         val index = row * 3 + col
-                        val hasFilled = index < count
-                        Surface(
-                            onClick = { if (!hasFilled) onAddPhoto() },
-                            modifier = Modifier.weight(1f).aspectRatio(0.8f),
-                            shape = RoundedCornerShape(AppTheme.radiusMd),
-                            color = if (hasFilled) AppColors.Rose.copy(alpha = 0.1f) else colors.surfaceMedium,
-                            border = if (hasFilled) null
-                            else BorderStroke(2.dp, colors.border.copy(alpha = 0.5f))
+                        val hasPhoto = index < photos.size
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .aspectRatio(0.8f)
+                                .clip(RoundedCornerShape(AppTheme.radiusMd))
+                                .background(if (hasPhoto) Color.Transparent else colors.surfaceMedium)
+                                .then(
+                                    if (!hasPhoto && photos.size < 6)
+                                        Modifier.clickable { onAddPhoto() }
+                                    else Modifier
+                                ),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                if (hasFilled) {
+                            if (hasPhoto) {
+                                AsyncImage(
+                                    model = photos[index],
+                                    contentDescription = "Photo ${index + 1}",
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(RoundedCornerShape(AppTheme.radiusMd)),
+                                    contentScale = ContentScale.Crop
+                                )
+                                // Remove button
+                                IconButton(
+                                    onClick = { onRemovePhoto(index) },
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .size(28.dp)
+                                        .background(
+                                            Color.Black.copy(alpha = 0.5f),
+                                            CircleShape
+                                        )
+                                ) {
                                     Icon(
-                                        Icons.Default.Check,
-                                        "Photo added",
-                                        tint = AppColors.Rose,
-                                        modifier = Modifier.size(32.dp)
+                                        Icons.Default.Close,
+                                        "Remove photo",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
                                     )
-                                } else {
-                                    Icon(
-                                        Icons.Default.CameraAlt,
-                                        "Add photo",
-                                        tint = colors.textMuted,
-                                        modifier = Modifier.size(32.dp)
-                                    )
+                                }
+                            } else {
+                                Surface(
+                                    modifier = Modifier.fillMaxSize(),
+                                    shape = RoundedCornerShape(AppTheme.radiusMd),
+                                    color = colors.surfaceMedium,
+                                    border = BorderStroke(2.dp, colors.border.copy(alpha = 0.5f))
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            Icons.Default.CameraAlt,
+                                            "Add photo",
+                                            tint = colors.textMuted,
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -449,7 +645,7 @@ private fun PhotosStep(count: Int, onAddPhoto: () -> Unit) {
 
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            "$count/6 photos added",
+            "${photos.size}/6 photos added",
             fontSize = 14.sp,
             color = colors.textMuted,
             textAlign = TextAlign.Center,
@@ -463,49 +659,54 @@ private fun IntentStep(selected: Intent?, onSelect: (Intent) -> Unit) {
     val colors = LocalAdaptiveColors.current
     Column {
         Text(
-            "What are you\nlooking for?",
+            "What are you looking for?",
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
             color = colors.textPrimary,
             lineHeight = 36.sp
         )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            "This helps us find better matches for you",
-            fontSize = 16.sp,
-            color = colors.textSecondary
-        )
         Spacer(modifier = Modifier.height(32.dp))
 
         Intent.entries.forEach { intent ->
             val isSelected = intent == selected
-            val intentColor = Color(intent.color)
             Surface(
                 onClick = { onSelect(intent) },
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                shape = RoundedCornerShape(AppTheme.radiusMd),
-                color = if (isSelected) intentColor.copy(alpha = 0.1f) else colors.surface,
-                border = if (isSelected) BorderStroke(2.dp, intentColor)
+                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                shape = RoundedCornerShape(AppTheme.radiusLg),
+                color = if (isSelected) Color(intent.color).copy(alpha = 0.05f) else colors.surface,
+                border = if (isSelected) BorderStroke(2.dp, Color(intent.color))
                 else BorderStroke(1.dp, colors.border)
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 18.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        intent.displayName,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = if (isSelected) intentColor else colors.textPrimary
+                        intent.emoji,
+                        fontSize = 24.sp
                     )
-                    if (isSelected) {
-                        Icon(
-                            Icons.Default.CheckCircle, null,
-                            tint = intentColor,
-                            modifier = Modifier.size(24.dp)
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            intent.displayName,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = colors.textPrimary
+                        )
+                        Text(
+                            intent.description,
+                            fontSize = 13.sp,
+                            color = colors.textSecondary
                         )
                     }
+                    RadioButton(
+                        selected = isSelected,
+                        onClick = { onSelect(intent) },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = Color(intent.color),
+                            unselectedColor = colors.border
+                        )
+                    )
                 }
             }
         }
@@ -524,7 +725,7 @@ private fun ShowMeStep(selected: ShowMe?, onSelect: (ShowMe) -> Unit) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "Who would you like to see?",
+            "You can always change this later.",
             fontSize = 16.sp,
             color = colors.textSecondary
         )
@@ -534,42 +735,80 @@ private fun ShowMeStep(selected: ShowMe?, onSelect: (ShowMe) -> Unit) {
             val isSelected = option == selected
             Surface(
                 onClick = { onSelect(option) },
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                shape = RoundedCornerShape(AppTheme.radiusMd),
-                color = if (isSelected) AppColors.Rose.copy(alpha = 0.1f) else colors.surface,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                shape = RoundedCornerShape(AppTheme.radiusLg),
+                color = if (isSelected) AppColors.Rose.copy(alpha = 0.05f) else colors.surface,
                 border = if (isSelected) BorderStroke(2.dp, AppColors.Rose)
                 else BorderStroke(1.dp, colors.border)
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 18.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Text(
+                        option.emoji,
+                        fontSize = 24.sp
+                    )
+                    Spacer(modifier = Modifier.width(14.dp))
                     Text(
                         option.displayName,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Medium,
-                        color = if (isSelected) AppColors.Rose else colors.textPrimary
+                        color = colors.textPrimary,
+                        modifier = Modifier.weight(1f)
                     )
-                    if (isSelected) {
-                        Icon(
-                            Icons.Default.CheckCircle, null,
-                            tint = AppColors.Rose,
-                            modifier = Modifier.size(24.dp)
+                    RadioButton(
+                        selected = isSelected,
+                        onClick = { onSelect(option) },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = AppColors.Rose,
+                            unselectedColor = colors.border
                         )
-                    }
+                    )
                 }
             }
         }
     }
 }
 
+@SuppressLint("MissingPermission")
 @Composable
 private fun LocationStep(location: String, onLocationChange: (String) -> Unit) {
     val colors = LocalAdaptiveColors.current
+    val context = LocalContext.current
+    var isLocating by remember { mutableStateOf(false) }
+    var detectedCity by remember { mutableStateOf("") }
+    var detectedCountry by remember { mutableStateOf("") }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (granted) {
+            isLocating = true
+            val fusedClient = LocationServices.getFusedLocationProviderClient(context)
+            fusedClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                .addOnSuccessListener { loc ->
+                    isLocating = false
+                    if (loc != null) {
+                        val result = getCityAndCountryFromLocation(context, loc.latitude, loc.longitude)
+                        val city = result?.first ?: "Unknown"
+                        val country = result?.second ?: ""
+                        onLocationChange(city)
+                        detectedCity = city
+                        detectedCountry = country
+                    }
+                }
+                .addOnFailureListener {
+                    isLocating = false
+                }
+        }
+    }
+
     Column {
         Text(
-            "Where are\nyou based?",
+            "Where are you?",
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
             color = colors.textPrimary,
@@ -577,18 +816,83 @@ private fun LocationStep(location: String, onLocationChange: (String) -> Unit) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "We'll show you people nearby",
+            "MitiMaiti uses your city to show nearby Sindhis.",
             fontSize = 16.sp,
             color = colors.textSecondary
         )
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Use current location button
+        Surface(
+            onClick = {
+                locationPermissionLauncher.launch(
+                    arrayOf(
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                    )
+                )
+            },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(AppTheme.radiusLg),
+            color = AppColors.Rose.copy(alpha = 0.05f),
+            border = BorderStroke(1.dp, AppColors.Rose.copy(alpha = 0.15f)),
+            enabled = !isLocating
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(AppColors.Rose.copy(alpha = 0.1f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isLocating) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = AppColors.Rose
+                        )
+                    } else {
+                        Icon(
+                            Icons.Default.NearMe, null,
+                            tint = AppColors.Rose,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        if (isLocating) "Detecting location..." else "Use my current location",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = AppColors.Rose
+                    )
+                    Text(
+                        "Auto-detect your city",
+                        fontSize = 13.sp,
+                        color = colors.textSecondary
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Search field
         OutlinedTextField(
             value = location,
-            onValueChange = onLocationChange,
+            onValueChange = {
+                onLocationChange(it)
+                detectedCity = ""
+                detectedCountry = ""
+            },
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("City name", color = colors.textMuted) },
-            leadingIcon = { Icon(Icons.Default.LocationOn, null, tint = AppColors.Rose) },
-            shape = RoundedCornerShape(AppTheme.radiusMd),
+            placeholder = { Text("Search city...", color = colors.textMuted) },
+            leadingIcon = { Icon(Icons.Default.Search, null, tint = colors.textMuted) },
+            shape = RoundedCornerShape(AppTheme.radiusLg),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = AppColors.Rose,
                 unfocusedBorderColor = colors.border,
@@ -597,164 +901,274 @@ private fun LocationStep(location: String, onLocationChange: (String) -> Unit) {
             ),
             singleLine = true
         )
-        Spacer(modifier = Modifier.height(12.dp))
-        TextButton(onClick = { onLocationChange("Mumbai") }) {
-            Icon(
-                Icons.Default.MyLocation, null,
-                tint = AppColors.Rose,
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("Use current location", color = AppColors.Rose, fontSize = 15.sp)
+
+        // Detected location display
+        if (detectedCity.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(AppTheme.radiusLg),
+                color = AppColors.Rose.copy(alpha = 0.05f),
+                border = BorderStroke(1.dp, AppColors.Rose.copy(alpha = 0.2f))
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.LocationOn, null,
+                        tint = AppColors.Rose,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        "$detectedCity, $detectedCountry",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = colors.textPrimary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        "Change",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = AppColors.Rose,
+                        modifier = Modifier.clickable {
+                            onLocationChange("")
+                            detectedCity = ""
+                            detectedCountry = ""
+                        }
+                    )
+                }
+            }
         }
     }
 }
 
+@Suppress("DEPRECATION")
+private fun getCityAndCountryFromLocation(context: Context, lat: Double, lng: Double): Pair<String, String>? {
+    return try {
+        val geocoder = Geocoder(context, java.util.Locale.getDefault())
+        val addresses = geocoder.getFromLocation(lat, lng, 1)
+        val addr = addresses?.firstOrNull() ?: return null
+        val city = addr.locality ?: addr.subAdminArea ?: "Unknown"
+        val country = addr.countryName ?: ""
+        Pair(city, country)
+    } catch (e: Exception) {
+        null
+    }
+}
+
 @Composable
-private fun ReadyStep(name: String) {
+private fun ReadyStep(name: String, age: Int?, city: String, onCompleteSindhi: () -> Unit) {
     val colors = LocalAdaptiveColors.current
+    val profileCompleteness = 35 // Base completeness after onboarding
 
-    // Confetti particles
-    val confettiColors = listOf(AppColors.Rose, AppColors.Gold, AppColors.Saffron, AppColors.Success, AppColors.Info)
-    val infiniteTransition = rememberInfiniteTransition(label = "confetti")
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(8.dp))
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        // Confetti layer
-        repeat(20) { i ->
-            val xOffset by infiniteTransition.animateFloat(
-                initialValue = (-200..400).random().toFloat(),
-                targetValue = (-200..400).random().toFloat(),
-                animationSpec = infiniteRepeatable(
-                    animation = tween((3000..6000).random(), easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "confettiX$i"
-            )
-            val yOffset by infiniteTransition.animateFloat(
-                initialValue = -50f,
-                targetValue = 800f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween((4000..8000).random(), easing = LinearEasing),
-                    repeatMode = RepeatMode.Restart,
-                    initialStartOffset = StartOffset((0..3000).random())
-                ),
-                label = "confettiY$i"
-            )
-            Box(
-                modifier = Modifier
-                    .offset(x = xOffset.dp, y = yOffset.dp)
-                    .size(if (i % 3 == 0) 8.dp else 6.dp)
-                    .background(
-                        confettiColors[i % confettiColors.size].copy(alpha = 0.6f),
-                        if (i % 2 == 0) CircleShape else RoundedCornerShape(2.dp)
-                    )
-            )
-        }
+        // Party popper emoji
+        Text(
+            "\uD83C\uDF89",
+            fontSize = 40.sp,
+            textAlign = TextAlign.Center
+        )
 
-        // Main content
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            "You're In!",
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold,
+            color = colors.textPrimary,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            "Welcome to the MitiMaiti community, $name!",
+            fontSize = 14.sp,
+            color = colors.textSecondary,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Profile preview card
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(AppTheme.radiusCard),
+            shadowElevation = 8.dp,
+            color = colors.surface
         ) {
-            // Welcome text
-            Text(
-                "Welcome to the Sindhi community,",
-                fontSize = 16.sp,
-                color = colors.textSecondary,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                name,
-                fontSize = 36.sp,
-                fontWeight = FontWeight.Bold,
-                color = colors.textPrimary,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Profile preview card
-            Surface(
-                modifier = Modifier
-                    .padding(horizontal = 32.dp)
-                    .fillMaxWidth(),
-                shape = RoundedCornerShape(AppTheme.radiusCard),
-                color = colors.cardDark,
-                shadowElevation = 12.dp
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+            Column {
+                // Rose gradient header with avatar
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(110.dp)
+                        .background(
+                            Brush.linearGradient(listOf(AppColors.Rose, AppColors.RoseDark))
+                        ),
+                    contentAlignment = Alignment.Center
                 ) {
-                    // Avatar
+                    // Sparkle decorations
+                    Icon(
+                        Icons.Default.AutoAwesome, null,
+                        tint = Color.White.copy(alpha = 0.3f),
+                        modifier = Modifier
+                            .size(16.dp)
+                            .align(Alignment.TopEnd)
+                            .offset(x = (-24).dp, y = 16.dp)
+                    )
+                    Icon(
+                        Icons.Default.AutoAwesome, null,
+                        tint = Color.White.copy(alpha = 0.2f),
+                        modifier = Modifier
+                            .size(12.dp)
+                            .align(Alignment.BottomStart)
+                            .offset(x = 20.dp, y = (-16).dp)
+                    )
+
+                    // Avatar circle
                     Box(
                         modifier = Modifier
-                            .size(80.dp)
-                            .background(
-                                Brush.linearGradient(listOf(AppColors.Rose.copy(alpha = 0.7f), AppColors.RoseDark.copy(alpha = 0.5f))),
-                                CircleShape
-                            ),
+                            .size(64.dp)
+                            .background(Color.White.copy(alpha = 0.2f), CircleShape)
+                            .clip(CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            name.take(1).uppercase(),
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
+                        val primaryPhoto = com.mitimaiti.app.services.PhotoRepository.primaryPhotoUri
+                        if (primaryPhoto != null) {
+                            AsyncImage(
+                                model = primaryPhoto,
+                                contentDescription = "Profile photo",
+                                modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Text(
+                                name.take(1).uppercase(),
+                                fontSize = 28.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(name, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = colors.textPrimary)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text("Profile created", fontSize = 14.sp, color = AppColors.Success)
                 }
-            }
 
-            Spacer(modifier = Modifier.height(24.dp))
+                // Info section
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                    Text(
+                        "$name${if (age != null) ", $age" else ""}",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.textPrimary
+                    )
+                    if (city.isNotEmpty()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.LocationOn, null,
+                                tint = colors.textMuted,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                city,
+                                fontSize = 14.sp,
+                                color = colors.textMuted
+                            )
+                        }
+                    }
 
-            // "Complete your Sindhi Identity" card
-            Surface(
-                modifier = Modifier
-                    .padding(horizontal = 32.dp)
-                    .fillMaxWidth(),
-                shape = RoundedCornerShape(AppTheme.radiusMd),
-                color = AppColors.Gold.copy(alpha = 0.1f)
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.AutoAwesome, null, tint = AppColors.Gold, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Profile completeness
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
-                            "Complete your Sindhi Identity",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = AppColors.Gold
-                        )
-                        Text(
-                            "Add fluency, gotra & festivals for 3x more matches",
-                            fontSize = 12.sp,
+                            "Profile completeness",
+                            fontSize = 13.sp,
                             color = colors.textSecondary
                         )
+                        Text(
+                            "$profileCompleteness%",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = AppColors.Rose
+                        )
                     }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    LinearProgressIndicator(
+                        progress = { profileCompleteness / 100f },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp)),
+                        color = AppColors.Rose,
+                        trackColor = colors.border,
+                        drawStopIndicator = {}
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        "Fill out more to get better matches!",
+                        fontSize = 12.sp,
+                        color = colors.textMuted,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
+        }
 
-            Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-            Text(
-                "Start discovering meaningful connections!",
-                fontSize = 15.sp,
-                color = colors.textSecondary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 32.dp)
-            )
+        // Complete Sindhi Identity card
+        Surface(
+            onClick = onCompleteSindhi,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(AppTheme.radiusMd),
+            color = AppColors.Gold.copy(alpha = 0.08f),
+            border = BorderStroke(1.dp, AppColors.Gold.copy(alpha = 0.15f))
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.AutoAwesome, null,
+                    tint = AppColors.Gold,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Complete your Sindhi Identity",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textPrimary
+                    )
+                    Text(
+                        "Add fluency, gotra, festivals for better cultural matching",
+                        fontSize = 12.sp,
+                        color = colors.textSecondary
+                    )
+                }
+                Icon(
+                    Icons.Default.ChevronRight, null,
+                    tint = colors.textMuted,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }

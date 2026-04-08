@@ -62,7 +62,7 @@ object APIService {
             delay(1500)
             return if (code == "123456") {
                 setTokens("mock-access-token", "mock-refresh-token")
-                Result.success(Pair(MockData.currentUser, false))
+                Result.success(Pair(MockData.currentUser, true))
             } else Result.failure(APIError.InvalidOTP)
         }
         return try {

@@ -65,7 +65,9 @@ export default function PhotosPage() {
   );
 
   const handleContinue = () => {
-    // For demo, just proceed
+    // Persist photo data URLs to localStorage so profile pages can load them
+    const previews = photos.map((p) => p.preview || '');
+    localStorage.setItem('onboarding_photos', JSON.stringify(previews));
     router.push('/onboarding/intent');
   };
 

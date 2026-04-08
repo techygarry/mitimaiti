@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 struct ProfileView: View {
     @EnvironmentObject var profileVM: ProfileViewModel
@@ -8,6 +9,12 @@ struct ProfileView: View {
     @State private var showSettings = false
     @State private var showFamily = false
     @State private var appeared = false
+
+    // MARK: - Avatar photo-change state
+    @State private var showAvatarActionSheet = false
+    @State private var showAvatarPhotoPicker = false
+    @State private var showUploadedPhotosPicker = false
+    @State private var avatarPickerItem: PhotosPickerItem? = nil
 
     var body: some View {
         NavigationStack {
@@ -59,6 +66,33 @@ struct ProfileView: View {
                 profileVM.loadProfile()
                 withAnimation(.easeOut(duration: 0.4)) {
                     appeared = true
+                }
+            }
+            // Avatar: action-sheet choice
+            .confirmationDialog("Change Profile Photo", isPresented: $showAvatarActionSheet, titleVisibility: .visible) {
+                Button("Choose from Gallery") { showAvatarPhotoPicker = true }
+                if !imageStore.photos.isEmpty {
+                    Button("Choose from Uploaded Photos") { showUploadedPhotosPicker = true }
+                }
+                Button("Cancel", role: .cancel) {}
+            }
+            // Avatar: gallery picker
+            .photosPicker(isPresented: $showAvatarPhotoPicker, selection: $avatarPickerItem, matching: .images)
+            .onChange(of: avatarPickerItem) { item in
+                guard let item else { return }
+                Task {
+                    if let data = try? await item.loadTransferable(type: Data.self),
+                       let uiImage = UIImage(data: data) {
+                        imageStore.save(uiImage, at: 0)
+                    }
+                    avatarPickerItem = nil
+                }
+            }
+            // Avatar: pick from already-uploaded photos
+            .sheet(isPresented: $showUploadedPhotosPicker) {
+                UploadedPhotosPickerSheet(imageStore: imageStore) { selectedIndex in
+                    imageStore.setPrimary(at: selectedIndex)
+                    showUploadedPhotosPicker = false
                 }
             }
         }
@@ -141,10 +175,16 @@ struct ProfileView: View {
     @ObservedObject private var imageStore = UserImageStore.shared
 
     private func photoCarouselItem(photo: UserPhoto, isMain: Bool) -> some View {
-        ZStack(alignment: .topLeading) {
-            if isMain, let profileImg = imageStore.profileImage {
-                // Use locally stored profile image for main photo
-                Image(uiImage: profileImg)
+        // Resolve: local store first (by sortOrder index), then remote URL
+        let storeImage: UIImage? = {
+            let idx = photo.sortOrder
+            guard idx < imageStore.photos.count else { return nil }
+            return imageStore.photos[idx]
+        }()
+
+        return ZStack(alignment: .topLeading) {
+            if let localImg = storeImage {
+                Image(uiImage: localImg)
                     .resizable()
                     .scaledToFill()
             } else if photo.url.hasPrefix("http"), let imageURL = URL(string: photo.url) {
@@ -256,7 +296,7 @@ struct ProfileView: View {
                 useProfileImage: true
             )
 
-            Button { showEditProfile = true } label: {
+            Button { showAvatarActionSheet = true } label: {
                 Image(systemName: "camera.fill")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.white)
@@ -769,5 +809,85 @@ private struct SectionFadeIn: ViewModifier {
 extension View {
     fileprivate func sectionFadeIn(appeared: Bool, delay: Double) -> some View {
         modifier(SectionFadeIn(appeared: appeared, delay: delay))
+    }
+}
+
+// MARK: - Uploaded Photos Picker Sheet
+
+struct UploadedPhotosPickerSheet: View {
+    @ObservedObject var imageStore: UserImageStore
+    let onSelect: (Int) -> Void
+
+    @Environment(\.adaptiveColors) private var colors
+    @Environment(\.dismiss) private var dismiss
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8)
+    ]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                if imageStore.photos.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "photo.on.rectangle.angled")
+                            .font(.system(size: 44))
+                            .foregroundColor(colors.textMuted)
+                        Text("No uploaded photos yet")
+                            .font(.system(size: 15))
+                            .foregroundColor(colors.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 80)
+                } else {
+                    LazyVGrid(columns: columns, spacing: 8) {
+                        ForEach(Array(imageStore.photos.enumerated()), id: \.offset) { index, photo in
+                            Button {
+                                onSelect(index)
+                            } label: {
+                                ZStack(alignment: .topLeading) {
+                                    Image(uiImage: photo)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .aspectRatio(3 / 4, contentMode: .fit)
+                                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusMD))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: AppTheme.radiusMD)
+                                                .stroke(
+                                                    index == 0 ? AppTheme.gold : Color.clear,
+                                                    lineWidth: 2
+                                                )
+                                        )
+
+                                    if index == 0 {
+                                        Text("MAIN")
+                                            .font(.system(size: 9, weight: .bold))
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 3)
+                                            .background(AppTheme.goldGradient)
+                                            .clipShape(Capsule())
+                                            .padding(6)
+                                    }
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(AppTheme.spacingMD)
+                }
+            }
+            .appBackground()
+            .navigationTitle("Choose Photo")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(colors.textSecondary)
+                }
+            }
+        }
     }
 }

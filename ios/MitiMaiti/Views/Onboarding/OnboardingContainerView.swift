@@ -183,7 +183,7 @@ private struct NameStepContent: View {
         VStack(spacing: 20) {
             // Underline-style input matching web
             VStack(alignment: .leading, spacing: 0) {
-                TextField("Enter your first name", text: $vm.firstName)
+                TextField("Enter your full name", text: $vm.firstName)
                     .font(.system(size: 28, weight: .semibold))
                     .foregroundColor(colors.textPrimary)
                     .focused($isFocused)
@@ -196,7 +196,7 @@ private struct NameStepContent: View {
                     .animation(.easeInOut(duration: 0.2), value: isFocused)
 
                 HStack {
-                    Text("Only your first name will be visible")
+                    Text("Your family name can be hidden in Settings")
                         .font(.system(size: 12))
                         .foregroundColor(colors.textMuted)
                     Spacer()
@@ -245,23 +245,26 @@ private struct BirthdayStepContent: View {
     @Environment(\.adaptiveColors) private var colors
     @State private var dayText = ""
     @State private var monthText = ""
+    @State private var monthInputText = ""
     @State private var yearText = ""
+
+    private enum BirthdayField { case month }
     @FocusState private var focusedField: BirthdayField?
 
-    enum BirthdayField { case day, month, year }
+    private let days = Array(1...31)
 
-    private let months = [
-        "January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December"
-    ]
+    private var years: [Int] {
+        let currentYear = Calendar.current.component(.year, from: Date())
+        return Array(stride(from: currentYear - 18, through: currentYear - 98, by: -1))
+    }
 
     var body: some View {
         VStack(spacing: 16) {
             // 3-field input row matching web
             HStack(spacing: 10) {
-                birthdayField(label: "Day", text: $dayText, field: .day, keyboardType: .numberPad)
+                dayPickerField
                 monthPickerField
-                birthdayField(label: "Year", text: $yearText, field: .year, keyboardType: .numberPad)
+                yearPickerField
             }
 
             // Age validation
@@ -269,53 +272,129 @@ private struct BirthdayStepContent: View {
                 ageIndicator
             }
         }
-        .onAppear {
-            focusedField = .day
-        }
         .onChange(of: dayText) { _, _ in updateVM() }
         .onChange(of: monthText) { _, _ in updateVM() }
         .onChange(of: yearText) { _, _ in updateVM() }
+        .onChange(of: focusedField) { _, newField in
+            // Month field just lost focus — commit any pending single-digit input
+            if newField != .month {
+                parseMonth(monthInputText, commitIfSingleDigit: true)
+            }
+        }
     }
 
-    private func birthdayField(label: String, text: Binding<String>, field: BirthdayField, keyboardType: UIKeyboardType) -> some View {
-        TextField(label, text: text)
-            .font(.system(size: 17, weight: .medium))
-            .foregroundColor(colors.textPrimary)
-            .keyboardType(keyboardType)
-            .focused($focusedField, equals: field)
-            .tint(AppTheme.rose)
+    private var dayPickerField: some View {
+        Menu {
+            ForEach(days, id: \.self) { day in
+                Button("\(day)") {
+                    dayText = "\(day)"
+                    vm.birthDay = day
+                }
+            }
+        } label: {
+            HStack {
+                Text(dayText.isEmpty ? "Day" : dayText)
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundColor(dayText.isEmpty ? colors.textMuted : colors.textPrimary)
+                Spacer()
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10))
+                    .foregroundColor(colors.textMuted)
+            }
             .padding(.horizontal, 14)
             .frame(height: 52)
             .background(colors.surfaceMedium)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(
-                        focusedField == field ? AppTheme.rose : colors.border,
-                        lineWidth: focusedField == field ? 1.5 : 1
-                    )
+                    .stroke(colors.border, lineWidth: 1)
             )
+        }
     }
 
     private var monthPickerField: some View {
+        TextField("Month", text: $monthInputText)
+            .font(.system(size: 17, weight: .medium))
+            .foregroundColor(monthText.isEmpty ? colors.textMuted : colors.textPrimary)
+            .multilineTextAlignment(.leading)
+            .focused($focusedField, equals: .month)
+            .onChange(of: monthInputText) { _, newValue in
+                parseMonth(newValue, commitIfSingleDigit: false)
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 52)
+            .background(colors.surfaceMedium)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(colors.border, lineWidth: 1)
+            )
+    }
+
+    private let monthAbbreviations = [
+        "jan", "feb", "mar", "apr", "may", "jun",
+        "jul", "aug", "sep", "oct", "nov", "dec"
+    ]
+
+    private func parseMonth(_ input: String, commitIfSingleDigit: Bool) {
+        let trimmed = input.trimmingCharacters(in: .whitespaces).lowercased()
+        if trimmed.isEmpty {
+            monthText = ""
+            return
+        }
+        // If the field already shows a valid capitalized abbreviation (e.g. after we set it),
+        // confirm the match and return to avoid an onChange loop.
+        if trimmed.count == 3, let idx = monthAbbreviations.firstIndex(of: trimmed) {
+            let abbrev = monthAbbreviations[idx].capitalized
+            if monthText == abbrev { return }  // already set, nothing to do
+            monthText = abbrev
+            vm.birthMonth = idx + 1
+            return
+        }
+        // Try numeric
+        if let num = Int(trimmed), num >= 1, num <= 12 {
+            // Two-digit months (10, 11, 12) always commit immediately.
+            // Single-digit months (1–9) only commit when the field loses focus.
+            let isTwoDigit = trimmed.count == 2
+            if isTwoDigit || commitIfSingleDigit {
+                let abbrev = monthAbbreviations[num - 1].capitalized
+                monthText = abbrev
+                monthInputText = abbrev
+                vm.birthMonth = num
+            } else {
+                // Still a valid-in-progress number — store the month value but keep raw input
+                vm.birthMonth = num
+                monthText = monthAbbreviations[num - 1].capitalized  // used by age indicator
+            }
+            return
+        }
+        // Try abbreviation prefix match (first 3 chars of longer input)
+        let prefix = String(trimmed.prefix(3))
+        if trimmed.count >= 3, let idx = monthAbbreviations.firstIndex(of: prefix) {
+            let abbrev = monthAbbreviations[idx].capitalized
+            monthText = abbrev
+            monthInputText = abbrev
+            vm.birthMonth = idx + 1
+            return
+        }
+        // No valid match yet — keep monthText empty so age indicator stays hidden
+        monthText = ""
+    }
+
+    private var yearPickerField: some View {
         Menu {
-            ForEach(Array(months.enumerated()), id: \.offset) { index, month in
-                Button("\(index + 1) - \(month)") {
-                    monthText = "\(index + 1)"
-                    vm.birthMonth = index + 1
+            ForEach(years, id: \.self) { year in
+                Button("\(year)") {
+                    yearText = "\(year)"
+                    vm.birthYear = year
                 }
             }
         } label: {
             HStack {
-                TextField("Month", text: $monthText)
+                Text(yearText.isEmpty ? "Year" : yearText)
                     .font(.system(size: 17, weight: .medium))
-                    .foregroundColor(colors.textPrimary)
-                    .keyboardType(.numberPad)
-                    .onChange(of: monthText) { _, newValue in
-                        if let num = Int(newValue), num >= 1, num <= 12 {
-                            vm.birthMonth = num
-                        }
-                    }
+                    .foregroundColor(yearText.isEmpty ? colors.textMuted : colors.textPrimary)
+                Spacer()
                 Image(systemName: "chevron.down")
                     .font(.system(size: 10))
                     .foregroundColor(colors.textMuted)

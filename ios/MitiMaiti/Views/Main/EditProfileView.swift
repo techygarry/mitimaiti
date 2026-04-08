@@ -73,6 +73,7 @@ struct EditProfileView: View {
     // MARK: - Photos state
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var showPhotoPicker: Bool = false
+    @ObservedObject private var imageStore = UserImageStore.shared
 
     // MARK: - Save toast
     @State private var showSaveToast: Bool = false
@@ -751,17 +752,15 @@ struct EditProfileView: View {
                 for item in newItems {
                     if let data = try? await item.loadTransferable(type: Data.self),
                        let uiImage = UIImage(data: data) {
+                        let sortOrder = profileVM.user.photos.count
                         let newPhoto = UserPhoto(
                             url: "local_photo_\(UUID().uuidString)",
                             isPrimary: profileVM.user.photos.isEmpty,
-                            sortOrder: profileVM.user.photos.count
+                            sortOrder: sortOrder
                         )
                         profileVM.user.photos.append(newPhoto)
-
-                        // Save the first photo as the profile image
-                        if profileVM.user.photos.count == 1 || newPhoto.isPrimary {
-                            UserImageStore.shared.save(uiImage)
-                        }
+                        // Persist to store using the photo's sortOrder as the index
+                        UserImageStore.shared.save(uiImage, at: sortOrder)
                     }
                 }
                 selectedPhotoItems = []
@@ -792,24 +791,41 @@ struct EditProfileView: View {
     }
 
     private func photoSlot(photo: UserPhoto, index: Int) -> some View {
-        ZStack(alignment: .topTrailing) {
+        // Resolve the stored image for this slot using sortOrder as the index key
+        let storedImage: UIImage? = {
+            let idx = photo.sortOrder
+            guard idx < imageStore.photos.count else { return nil }
+            return imageStore.photos[idx]
+        }()
+
+        return ZStack(alignment: .topTrailing) {
             RoundedRectangle(cornerRadius: AppTheme.radiusMD)
                 .fill(colors.surfaceMedium)
                 .aspectRatio(3 / 4, contentMode: .fit)
                 .overlay(
-                    VStack(spacing: 4) {
-                        Image(systemName: "photo.fill")
-                            .font(.system(size: 24))
-                            .foregroundColor(colors.textMuted)
+                    Group {
+                        if let img = storedImage {
+                            Image(uiImage: img)
+                                .resizable()
+                                .scaledToFill()
+                                .clipped()
+                        } else {
+                            VStack(spacing: 4) {
+                                Image(systemName: "photo.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(colors.textMuted)
+                            }
+                        }
                     }
                 )
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusMD))
                 .overlay(
                     RoundedRectangle(cornerRadius: AppTheme.radiusMD)
                         .stroke(
-                            photo.isPrimary
-                                ? AppTheme.rose.opacity(0.5)
+                            index == 0
+                                ? AppTheme.gold
                                 : colors.border,
-                            lineWidth: photo.isPrimary ? 1.5 : 0.5
+                            lineWidth: index == 0 ? 2 : 0.5
                         )
                 )
                 .overlay(alignment: .bottom) {
@@ -819,14 +835,41 @@ struct EditProfileView: View {
                             .foregroundColor(.white)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 3)
-                            .background(AppTheme.gold)
+                            .background(AppTheme.goldGradient)
                             .clipShape(Capsule())
                             .padding(.bottom, 6)
+                    } else if storedImage != nil {
+                        // "Set as Main" tap target — only on non-primary occupied slots
+                        Button {
+                            setAsPrimary(photoIndex: index)
+                        } label: {
+                            Text("Set as Main")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(AppTheme.gold)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(
+                                    Capsule()
+                                        .fill(Color.black.opacity(0.55))
+                                        .overlay(
+                                            Capsule()
+                                                .stroke(AppTheme.gold.opacity(0.6), lineWidth: 0.5)
+                                        )
+                                )
+                        }
+                        .padding(.bottom, 6)
                     }
                 }
 
             Button {
+                // Remove from store using the sortOrder index before mutating the array
+                UserImageStore.shared.remove(at: photo.sortOrder)
                 profileVM.user.photos.removeAll { $0.id == photo.id }
+                // Re-number sortOrders and isPrimary so they stay contiguous
+                for i in profileVM.user.photos.indices {
+                    profileVM.user.photos[i].sortOrder = i
+                    profileVM.user.photos[i].isPrimary = (i == 0)
+                }
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 20))
@@ -839,6 +882,24 @@ struct EditProfileView: View {
             }
             .offset(x: 6, y: -6)
         }
+    }
+
+    /// Promote the photo at `photoIndex` to position 0 (primary).
+    private func setAsPrimary(photoIndex: Int) {
+        guard photoIndex > 0, photoIndex < profileVM.user.photos.count else { return }
+        // Move in the image store (handles disk persistence)
+        UserImageStore.shared.setPrimary(at: photoIndex)
+        // Mirror the reorder in the user's photo model array
+        var photos = profileVM.user.photos
+        let promoted = photos.remove(at: photoIndex)
+        photos.insert(promoted, at: 0)
+        // Re-assign sortOrders and isPrimary flags
+        for i in photos.indices {
+            photos[i].sortOrder = i
+            photos[i].isPrimary = (i == 0)
+        }
+        profileVM.user.photos = photos
+        flashSaveToast()
     }
 
     private var addPhotoSlot: some View {

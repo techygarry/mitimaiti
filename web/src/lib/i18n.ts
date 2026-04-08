@@ -381,10 +381,10 @@ export const translations = {
     'auth.newCodeSent': 'New code sent!',
 
     // Onboarding name
-    'onboarding.whatsFirstName': "What's your first name?",
+    'onboarding.whatsFirstName': "What's your full name?",
     'onboarding.nameAppearance': 'This is how it appears on your profile.',
-    'onboarding.enterFirstName': 'Enter your first name',
-    'onboarding.onlyFirstNameVisible': 'Only your first name will be visible',
+    'onboarding.enterFirstName': 'Enter your full name',
+    'onboarding.onlyFirstNameVisible': 'Your family name can be hidden in Settings',
     'onboarding.notSindhi': 'Not Sindhi? No worries!',
     'onboarding.openToVibing': 'Open to vibing with the Sindhi community',
 

@@ -70,12 +70,11 @@ class OnboardingViewModel: ObservableObject {
 
     func addImage(_ image: UIImage) {
         guard selectedImages.count < 6 else { return }
+        let newIndex = selectedImages.count
         selectedImages.append(image)
         selectedPhotos.append("photo_\(selectedPhotos.count + 1)")
-        // Save the first photo as the profile picture
-        if selectedImages.count == 1 {
-            UserImageStore.shared.save(image)
-        }
+        // Persist every photo; index 0 is the primary/avatar
+        UserImageStore.shared.save(image, at: newIndex)
     }
 
     func removePhoto(at index: Int) {
@@ -84,5 +83,7 @@ class OnboardingViewModel: ObservableObject {
         if index < selectedImages.count {
             selectedImages.remove(at: index)
         }
+        // Keep the store in sync with the current selection
+        UserImageStore.shared.setAll(selectedImages)
     }
 }

@@ -1,7 +1,11 @@
 @file:Suppress("DEPRECATION")
 package com.mitimaiti.app.ui.main
 
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -133,6 +137,17 @@ fun EditProfileScreen(
     val movieGenres by viewModel.editMovieGenres.collectAsState()
     val travelStyle by viewModel.editTravelStyle.collectAsState()
     val prompts by viewModel.editPrompts.collectAsState()
+
+    // Photos from shared repository
+    val userPhotos by viewModel.userPhotos.collectAsState()
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        uri?.let { viewModel.addPhoto(it) }
+    }
+
+    // Primary photo picker sheet
+    var showPrimaryPhotoPicker by remember { mutableStateOf(false) }
 
     // Section expanded states
     var photosExpanded by remember { mutableStateOf(true) }
@@ -368,7 +383,6 @@ fun EditProfileScreen(
                 expanded = photosExpanded,
                 onToggle = { photosExpanded = !photosExpanded }
             ) {
-                val photos = user?.photos ?: emptyList()
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     for (row in 0..1) {
                         Row(
@@ -377,7 +391,8 @@ fun EditProfileScreen(
                         ) {
                             for (col in 0..2) {
                                 val index = row * 3 + col
-                                val photo = photos.getOrNull(index)
+                                val photoUri = userPhotos.getOrNull(index)
+                                val isMain = index == 0 && photoUri != null
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
@@ -385,7 +400,7 @@ fun EditProfileScreen(
                                         .clip(RoundedCornerShape(AppTheme.radiusMd))
                                         .background(colors.surfaceMedium)
                                         .then(
-                                            if (photo != null && photo.isPrimary)
+                                            if (isMain)
                                                 Modifier.border(
                                                     2.dp,
                                                     AppColors.Gold,
@@ -397,19 +412,46 @@ fun EditProfileScreen(
                                                 RoundedCornerShape(AppTheme.radiusMd)
                                             )
                                         )
-                                        .clickable { /* tap to add/change photo */ },
+                                        .clickable {
+                                            when {
+                                                isMain -> showPrimaryPhotoPicker = true
+                                                photoUri == null && userPhotos.size < 6 -> {
+                                                    photoPickerLauncher.launch(
+                                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                                    )
+                                                }
+                                            }
+                                        },
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    if (photo != null) {
+                                    if (photoUri != null) {
                                         AsyncImage(
-                                            model = photo.url,
+                                            model = photoUri,
                                             contentDescription = "Photo ${index + 1}",
                                             modifier = Modifier
                                                 .fillMaxSize()
                                                 .clip(RoundedCornerShape(AppTheme.radiusMd)),
                                             contentScale = ContentScale.Crop
                                         )
-                                        if (photo.isPrimary) {
+                                        // Remove button
+                                        IconButton(
+                                            onClick = { viewModel.removePhoto(index) },
+                                            modifier = Modifier
+                                                .align(Alignment.TopEnd)
+                                                .size(24.dp)
+                                                .background(
+                                                    Color.Black.copy(alpha = 0.5f),
+                                                    RoundedCornerShape(12.dp)
+                                                )
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Close,
+                                                "Remove",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                        if (isMain) {
                                             Surface(
                                                 shape = RoundedCornerShape(
                                                     bottomStart = 0.dp,
@@ -453,6 +495,14 @@ fun EditProfileScreen(
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "Add up to 6 photos. First photo is your main profile photo.",
+                    fontSize = 12.sp,
+                    color = colors.textMuted,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -840,6 +890,21 @@ fun EditProfileScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
         }
+    }
+
+    // Primary photo picker sheet for MAIN photo slot
+    if (showPrimaryPhotoPicker) {
+        PrimaryPhotoPickerSheet(
+            existingPhotos = userPhotos,
+            onDismiss = { showPrimaryPhotoPicker = false },
+            onNewPhotoFromGallery = { uri ->
+                viewModel.addPhoto(uri)
+                // Move the newly added photo to primary position
+                val newIndex = com.mitimaiti.app.services.PhotoRepository.photos.value.indexOf(uri)
+                if (newIndex > 0) viewModel.setPrimaryPhoto(newIndex)
+            },
+            onSetPrimary = { index -> viewModel.setPrimaryPhoto(index) }
+        )
     }
 }
 

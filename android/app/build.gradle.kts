@@ -74,6 +74,9 @@ dependencies {
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.1.4")
 
+    // Location
+    implementation("com.google.android.gms:play-services-location:21.3.0")
+
     // Debug
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

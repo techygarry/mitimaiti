@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import com.mitimaiti.app.models.Gender
 import com.mitimaiti.app.models.Intent
 import com.mitimaiti.app.models.ShowMe
+import com.mitimaiti.app.services.PhotoRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,7 +17,8 @@ class OnboardingViewModel : ViewModel() {
     val currentStep: StateFlow<OnboardingStep> = _currentStep.asStateFlow()
     val firstName = MutableStateFlow(""); val isNonSindhi = MutableStateFlow(false)
     val birthDay = MutableStateFlow(""); val birthMonth = MutableStateFlow(""); val birthYear = MutableStateFlow("")
-    val selectedGender = MutableStateFlow<Gender?>(null); val selectedPhotos = MutableStateFlow<List<Uri>>(emptyList())
+    val selectedGender = MutableStateFlow<Gender?>(null)
+    val selectedPhotos: StateFlow<List<Uri>> = PhotoRepository.photos
     val selectedIntent = MutableStateFlow<Intent?>(null); val selectedShowMe = MutableStateFlow<ShowMe?>(null)
     val selectedCity = MutableStateFlow("")
 
@@ -35,6 +37,6 @@ class OnboardingViewModel : ViewModel() {
 
     fun nextStep() { val s = OnboardingStep.entries; val i = s.indexOf(_currentStep.value); if (i < s.size - 1) _currentStep.value = s[i + 1] }
     fun previousStep() { val s = OnboardingStep.entries; val i = s.indexOf(_currentStep.value); if (i > 0) _currentStep.value = s[i - 1] }
-    fun addPhoto(uri: Uri) { if (selectedPhotos.value.size < 6) selectedPhotos.value = selectedPhotos.value + uri }
-    fun removePhoto(index: Int) { val p = selectedPhotos.value.toMutableList(); if (index in p.indices) { p.removeAt(index); selectedPhotos.value = p } }
+    fun addPhoto(uri: Uri) { PhotoRepository.addPhoto(uri) }
+    fun removePhoto(index: Int) { PhotoRepository.removePhoto(index) }
 }
