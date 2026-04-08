@@ -132,7 +132,7 @@ struct ChatView: View {
 
     @ViewBuilder
     private var icebreakerView: some View {
-        if chatVM.awaitingFirstMessage && !chatVM.hasMessages {
+        if match.status == .pendingFirstMessage && !chatVM.hasMessages {
             ChatIcebreakerSection(chatVM: chatVM)
         }
     }

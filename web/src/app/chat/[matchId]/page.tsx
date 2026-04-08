@@ -367,9 +367,35 @@ export default function ChatPage() {
   const matchAvatarSrc = match.photos[0]?.url;
   const matchName = match.user.first_name;
 
-  const [messages, setMessages] = useState<Message[]>(
-    mockMessages.filter((m) => m.match_id === matchId || m.match_id === 'm1')
-  );
+  const localStorageKey = `chat_messages_${matchId}`;
+
+  const [messages, setMessages] = useState<Message[]>(() => {
+    try {
+      const stored = localStorage.getItem(localStorageKey);
+      if (stored) {
+        return JSON.parse(stored) as Message[];
+      }
+    } catch {
+      // ignore parse errors
+    }
+    return mockMessages.filter((m) => m.match_id === matchId || m.match_id === 'm1');
+  });
+
+  // Track whether this chat had existing messages when the page first loaded.
+  // Used to suppress ice breakers for returning users.
+  const [hadStoredMessages] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem(localStorageKey);
+      if (stored) {
+        const parsed = JSON.parse(stored) as Message[];
+        return parsed.length > 0;
+      }
+    } catch {
+      // ignore
+    }
+    return false;
+  });
+
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isLocked, setIsLocked] = useState(match.first_msg_locked);
@@ -380,7 +406,17 @@ export default function ChatPage() {
     getRandomIceBreakers(3)
   );
 
-  const isNewChat = messages.length === 0;
+  // Persist messages to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem(localStorageKey, JSON.stringify(messages));
+    } catch {
+      // storage quota exceeded or unavailable — fail silently
+    }
+  }, [messages, localStorageKey]);
+
+  // Ice breakers are only shown for genuinely new chats (no stored history)
+  const isNewChat = messages.length === 0 && !hadStoredMessages;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

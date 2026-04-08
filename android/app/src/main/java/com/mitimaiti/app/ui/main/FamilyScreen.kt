@@ -22,16 +22,20 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.view.HapticFeedbackConstants
@@ -80,7 +84,7 @@ fun FamilyScreen(viewModel: FamilyViewModel = viewModel()) {
                     .background(colors.backgroundGradient)
                     .statusBarsPadding()
             ) {
-                // Header
+                // ── Header ──────────────────────────────────────────────────
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -88,47 +92,60 @@ fun FamilyScreen(viewModel: FamilyViewModel = viewModel()) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            "Family Mode",
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = colors.textPrimary
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            "Let your family help you find the right match",
-                            fontSize = 14.sp,
-                            color = colors.textSecondary
-                        )
-                    }
-                    TextButton(
+                    Text(
+                        "Family Mode",
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.textPrimary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Button(
                         onClick = { viewModel.toggleRevokeAllModal() },
-                        colors = ButtonDefaults.textButtonColors(contentColor = AppColors.Error)
+                        shape = RoundedCornerShape(AppTheme.radiusFull),
+                        colors = ButtonDefaults.buttonColors(containerColor = AppColors.Error),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
                     ) {
-                        Text("Revoke All", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        Icon(
+                            Icons.Default.Warning, null,
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            "Revoke All",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White
+                        )
                     }
                 }
 
-                // Invite card
-                GlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                // ── Invite card ─────────────────────────────────────────────
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    shape = RoundedCornerShape(AppTheme.radiusMd),
+                    color = colors.surface,
+                    shadowElevation = 2.dp
+                ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 Icons.Default.GroupAdd, null,
                                 tint = AppColors.Rose,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(28.dp)
                             )
                             Spacer(modifier = Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    "Invite Family Members",
+                                    "Invite family to help",
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = colors.textPrimary
                                 )
                                 Text(
-                                    "Up to 3 members can join your family circle",
+                                    "They can view profiles and suggest matches",
                                     fontSize = 13.sp,
                                     color = colors.textSecondary
                                 )
@@ -141,106 +158,74 @@ fun FamilyScreen(viewModel: FamilyViewModel = viewModel()) {
                         ) {
                             Button(
                                 onClick = { viewModel.generateInvite() },
-                                modifier = Modifier.weight(1f).height(44.dp),
-                                shape = RoundedCornerShape(AppTheme.radiusMd),
+                                modifier = Modifier.height(40.dp),
+                                shape = RoundedCornerShape(AppTheme.radiusFull),
                                 colors = ButtonDefaults.buttonColors(containerColor = AppColors.Rose)
                             ) {
-                                Icon(Icons.Default.Link, null, modifier = Modifier.size(16.dp))
+                                Icon(
+                                    Icons.Default.GroupAdd, null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = Color.White
+                                )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Copy Link", fontSize = 14.sp, color = Color.White)
+                                Text("Invite", fontSize = 14.sp, color = Color.White)
                             }
                             OutlinedButton(
                                 onClick = { viewModel.generateInvite() },
-                                modifier = Modifier.weight(1f).height(44.dp),
-                                shape = RoundedCornerShape(AppTheme.radiusMd)
+                                modifier = Modifier.height(40.dp),
+                                shape = RoundedCornerShape(AppTheme.radiusFull)
                             ) {
                                 Icon(
                                     Icons.Default.Share, null,
-                                    tint = AppColors.Rose,
+                                    tint = colors.textPrimary,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Share", fontSize = 14.sp, color = AppColors.Rose)
+                                Text("Share Code", fontSize = 14.sp, color = colors.textPrimary)
                             }
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "${members.size}/3 members joined",
-                            fontSize = 12.sp,
-                            color = colors.textMuted,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Default.Lock, null, tint = colors.textMuted, modifier = Modifier.size(12.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                "Messages are never visible to family members",
-                                fontSize = 11.sp,
-                                color = colors.textMuted
-                            )
                         }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Tab bar with spring-animated indicator
-                val indicatorOffset by animateDpAsState(
-                    targetValue = if (selectedTab == 0) 0.dp else 1.dp,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessLow
-                    ),
-                    label = "tabIndicatorOffset"
-                )
-                val indicatorWidth by animateDpAsState(
-                    targetValue = if (selectedTab == 0) 100.dp else 140.dp,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessLow
-                    ),
-                    label = "tabIndicatorWidth"
-                )
-
-                TabRow(
-                    selectedTabIndex = selectedTab,
-                    containerColor = Color.Transparent,
-                    contentColor = AppColors.Rose,
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                // ── Tab bar (pill style) ─────────────────────────────────────
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .clip(RoundedCornerShape(AppTheme.radiusFull))
+                        .background(colors.surfaceMedium),
+                    horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    Tab(
-                        selected = selectedTab == 0,
-                        onClick = { viewModel.selectTab(0) },
-                        text = {
+                    listOf(
+                        0 to "Members (${members.size})",
+                        1 to "Suggestions (${suggestions.size})"
+                    ).forEach { (index, title) ->
+                        val isSelected = selectedTab == index
+                        Surface(
+                            onClick = { viewModel.selectTab(index) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(4.dp),
+                            shape = RoundedCornerShape(AppTheme.radiusFull),
+                            color = if (isSelected) AppColors.Rose else Color.Transparent
+                        ) {
                             Text(
-                                "Members (${members.size})",
-                                fontWeight = if (selectedTab == 0) FontWeight.SemiBold else FontWeight.Normal
+                                title,
+                                modifier = Modifier.padding(vertical = 10.dp),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isSelected) Color.White else colors.textMuted,
+                                textAlign = TextAlign.Center
                             )
-                        },
-                        selectedContentColor = AppColors.Rose,
-                        unselectedContentColor = colors.textMuted
-                    )
-                    Tab(
-                        selected = selectedTab == 1,
-                        onClick = { viewModel.selectTab(1) },
-                        text = {
-                            Text(
-                                "Suggestions (${suggestions.size})",
-                                fontWeight = if (selectedTab == 1) FontWeight.SemiBold else FontWeight.Normal
-                            )
-                        },
-                        selectedContentColor = AppColors.Rose,
-                        unselectedContentColor = colors.textMuted
-                    )
+                        }
+                    }
                 }
 
-                // Content
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // ── Content ──────────────────────────────────────────────────
                 when (selectedTab) {
                     0 -> FamilyMembersList(
                         members = members,
@@ -255,7 +240,7 @@ fun FamilyScreen(viewModel: FamilyViewModel = viewModel()) {
             }
         }
 
-        // Invite modal
+        // ── Invite modal ─────────────────────────────────────────────────────
         if (showInviteModal) {
             InviteCodeDialog(
                 invite = currentInvite,
@@ -263,7 +248,7 @@ fun FamilyScreen(viewModel: FamilyViewModel = viewModel()) {
             )
         }
 
-        // Revoke All confirmation dialog
+        // ── Revoke All confirmation dialog ────────────────────────────────────
         if (showRevokeAllModal) {
             AlertDialog(
                 onDismissRequest = { viewModel.toggleRevokeAllModal() },
@@ -297,7 +282,7 @@ fun FamilyScreen(viewModel: FamilyViewModel = viewModel()) {
             )
         }
 
-        // Toast overlay
+        // ── Toast overlay ─────────────────────────────────────────────────────
         AnimatedVisibility(
             visible = toastMessage != null,
             enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
@@ -328,6 +313,10 @@ fun FamilyScreen(viewModel: FamilyViewModel = viewModel()) {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Members tab
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
 private fun FamilyMembersList(
     members: List<FamilyMember>,
@@ -341,16 +330,23 @@ private fun FamilyMembersList(
     ) {
         items(members, key = { it.id }) { member ->
             val permCount = countPermissions(member.permissions)
-            GlassCard(modifier = Modifier.fillMaxWidth()) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(AppTheme.radiusMd),
+                color = colors.surface,
+                shadowElevation = 2.dp
+            ) {
                 Surface(
                     onClick = { onMemberClick(member) },
                     color = Color.Transparent
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Avatar with initials and rose background
+                        // Pink circle avatar with initial letter
                         Box(
                             modifier = Modifier
                                 .size(48.dp)
@@ -369,42 +365,39 @@ private fun FamilyMembersList(
                         Spacer(modifier = Modifier.width(12.dp))
 
                         Column(modifier = Modifier.weight(1f)) {
+                            // Name + status badge on same row
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    member.name,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.textPrimary
+                                )
+                                StatusBadge(
+                                    text = when (member.status) {
+                                        FamilyMemberStatus.ACTIVE  -> "Active"
+                                        FamilyMemberStatus.PENDING -> "Pending"
+                                        FamilyMemberStatus.REVOKED -> "Revoked"
+                                    },
+                                    variant = when (member.status) {
+                                        FamilyMemberStatus.ACTIVE  -> BadgeVariant.SUCCESS
+                                        FamilyMemberStatus.PENDING -> BadgeVariant.WARNING
+                                        FamilyMemberStatus.REVOKED -> BadgeVariant.DANGER
+                                    }
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            // Relationship · X/8 permissions
                             Text(
-                                member.name,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = colors.textPrimary
-                            )
-                            Text(
-                                member.relationship,
+                                "${member.relationship} · $permCount/8 permissions",
                                 fontSize = 13.sp,
                                 color = colors.textSecondary
                             )
                         }
 
-                        // Permission count
-                        Text(
-                            "$permCount/8",
-                            fontSize = 12.sp,
-                            color = colors.textMuted,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-
-                        // Status badge (shared component)
-                        StatusBadge(
-                            text = when (member.status) {
-                                FamilyMemberStatus.ACTIVE -> "Active"
-                                FamilyMemberStatus.PENDING -> "Pending"
-                                FamilyMemberStatus.REVOKED -> "Revoked"
-                            },
-                            variant = when (member.status) {
-                                FamilyMemberStatus.ACTIVE -> BadgeVariant.SUCCESS
-                                FamilyMemberStatus.PENDING -> BadgeVariant.WARNING
-                                FamilyMemberStatus.REVOKED -> BadgeVariant.DANGER
-                            }
-                        )
-
-                        Spacer(modifier = Modifier.width(4.dp))
                         Icon(
                             Icons.Default.ChevronRight, null,
                             tint = colors.textMuted,
@@ -414,17 +407,29 @@ private fun FamilyMembersList(
                 }
             }
         }
+
+        // Privacy notice footer
+        item {
+            Spacer(modifier = Modifier.height(4.dp))
+            PrivacyNotice(
+                message = "Your Privacy — Family can only see what you allow. Messages stay private."
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Suggestions tab
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
-private fun FamilySuggestionCards(
+fun FamilySuggestionCards(
     suggestions: List<FamilySuggestion>,
     onLike: (String) -> Unit,
     onPass: (String) -> Unit
 ) {
     val colors = LocalAdaptiveColors.current
-
     val view = LocalView.current
 
     if (suggestions.isEmpty()) {
@@ -438,15 +443,11 @@ private fun FamilySuggestionCards(
         return
     }
 
-    // Single card view with swipe (like discover)
     var currentIndex by remember { mutableIntStateOf(0) }
     val currentSuggestion = suggestions.getOrNull(currentIndex)
 
     if (currentSuggestion == null) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(
                     Icons.Default.CheckCircle, null,
@@ -454,11 +455,7 @@ private fun FamilySuggestionCards(
                     modifier = Modifier.size(48.dp)
                 )
                 Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    "All caught up!",
-                    fontSize = 16.sp,
-                    color = colors.textMuted
-                )
+                Text("All caught up!", fontSize = 16.sp, color = colors.textMuted)
             }
         }
         return
@@ -466,19 +463,44 @@ private fun FamilySuggestionCards(
 
     var offsetX by remember { mutableFloatStateOf(0f) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Box(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            contentAlignment = Alignment.Center
-        ) {
-            GlassCard(
+        item {
+            // "Suggested by X" pill badge
+            Surface(
+                shape = RoundedCornerShape(AppTheme.radiusFull),
+                color = AppColors.Rose.copy(alpha = 0.12f)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Person, null,
+                        tint = AppColors.Rose,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        "Suggested by ${currentSuggestion.suggestedBy.name}",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = AppColors.Rose
+                    )
+                }
+            }
+        }
+
+        item {
+            // Full photo card with name/age/city overlay at bottom
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .aspectRatio(3f / 4f)
+                    .clip(RoundedCornerShape(AppTheme.radiusLg))
                     .offset { IntOffset(offsetX.roundToInt(), 0) }
                     .graphicsLayer {
                         rotationZ = offsetX / 40f
@@ -488,192 +510,225 @@ private fun FamilySuggestionCards(
                         detectHorizontalDragGestures(
                             onDragEnd = {
                                 if (offsetX > 150f) {
+                                    view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
                                     onLike(currentSuggestion.id)
                                     currentIndex++
                                 } else if (offsetX < -150f) {
+                                    view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
                                     onPass(currentSuggestion.id)
                                     currentIndex++
                                 }
                                 offsetX = 0f
                             },
-                            onHorizontalDrag = { _, dragAmount ->
-                                offsetX += dragAmount
-                            }
+                            onHorizontalDrag = { _, dragAmount -> offsetX += dragAmount }
                         )
                     }
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    // Photo and info
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        AsyncImage(
-                            model = currentSuggestion.suggestedUser.primaryPhoto?.urlThumb ?: "",
-                            contentDescription = null,
-                            modifier = Modifier.size(72.dp).clip(RoundedCornerShape(AppTheme.radiusMd)),
-                            contentScale = ContentScale.Crop
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                "${currentSuggestion.suggestedUser.displayName}, ${currentSuggestion.suggestedUser.age ?: ""}",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.textPrimary
+                // Photo
+                AsyncImage(
+                    model = currentSuggestion.suggestedUser.primaryPhoto?.urlThumb ?: "",
+                    contentDescription = currentSuggestion.suggestedUser.displayName,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                // Gradient + name overlay at bottom
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))
                             )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                currentSuggestion.suggestedUser.city,
-                                fontSize = 14.sp,
-                                color = colors.textSecondary
-                            )
-                        }
-                    }
-
-                    // Note in gold-tinted quote card
-                    currentSuggestion.note?.let { note ->
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Surface(
-                            shape = RoundedCornerShape(AppTheme.radiusMd),
-                            color = AppColors.Gold.copy(alpha = 0.1f)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.Top
-                            ) {
-                                Icon(
-                                    Icons.Default.FormatQuote, null,
-                                    tint = AppColors.Gold,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    note,
-                                    fontSize = 14.sp,
-                                    color = colors.textSecondary,
-                                    fontStyle = FontStyle.Italic,
-                                    lineHeight = 20.sp
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Suggested by
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Person, null,
-                            tint = colors.textMuted,
-                            modifier = Modifier.size(14.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        .padding(horizontal = 16.dp, vertical = 16.dp)
+                ) {
+                    Column {
                         Text(
-                            "Suggested by ${currentSuggestion.suggestedBy.name} (${currentSuggestion.suggestedBy.relationship})",
-                            fontSize = 13.sp,
-                            color = colors.textMuted
+                            buildString {
+                                append(currentSuggestion.suggestedUser.displayName)
+                                currentSuggestion.suggestedUser.age?.let { append(", $it") }
+                            },
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Text(
+                            currentSuggestion.suggestedUser.city,
+                            fontSize = 14.sp,
+                            color = Color.White.copy(alpha = 0.85f)
                         )
                     }
+                }
+            }
+        }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+        // Note from family member
+        currentSuggestion.note?.let { note ->
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        "NOTE FROM ${currentSuggestion.suggestedBy.name.uppercase()}",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = AppColors.Rose,
+                        letterSpacing = 0.8.sp
+                    )
+                    Text(
+                        "\"$note\"",
+                        fontSize = 14.sp,
+                        color = colors.textSecondary,
+                        fontStyle = FontStyle.Italic,
+                        lineHeight = 20.sp
+                    )
+                }
+            }
+        }
 
-                    // Like / Pass buttons
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                                onPass(currentSuggestion.id)
-                                currentIndex++
-                                offsetX = 0f
-                            },
-                            modifier = Modifier.weight(1f).height(48.dp),
-                            shape = RoundedCornerShape(AppTheme.radiusMd)
+        item {
+            // Pass (X circle) and Like (heart circle) buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Pass button — outlined circle X
+                OutlinedButton(
+                    onClick = {
+                        view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                        onPass(currentSuggestion.id)
+                        currentIndex++
+                        offsetX = 0f
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(52.dp),
+                    shape = RoundedCornerShape(AppTheme.radiusFull),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.5.dp, colors.textMuted.copy(alpha = 0.4f)
+                    )
+                ) {
+                    Icon(
+                        Icons.Default.Cancel, null,
+                        tint = colors.textSecondary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Pass",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textSecondary
+                    )
+                }
+                // Like button — rose circle heart
+                Button(
+                    onClick = {
+                        view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                        onLike(currentSuggestion.id)
+                        currentIndex++
+                        offsetX = 0f
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(52.dp),
+                    shape = RoundedCornerShape(AppTheme.radiusFull),
+                    colors = ButtonDefaults.buttonColors(containerColor = AppColors.Rose)
+                ) {
+                    Icon(
+                        Icons.Default.Favorite, null,
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Like",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White
+                    )
+                }
+            }
+        }
+
+        // "Up next" horizontal thumbnails with "via X" overlay
+        val upNextSuggestions = suggestions.drop(currentIndex + 1).take(3)
+        if (upNextSuggestions.isNotEmpty()) {
+            item {
+                Text(
+                    "Up next",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.textMuted
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    items(upNextSuggestions, key = { it.id }) { suggestion ->
+                        Box(
+                            modifier = Modifier
+                                .width(90.dp)
+                                .height(114.dp)
+                                .clip(RoundedCornerShape(AppTheme.radiusMd))
                         ) {
-                            Icon(
-                                Icons.Default.Close, null,
-                                tint = colors.textSecondary,
-                                modifier = Modifier.size(20.dp)
+                            AsyncImage(
+                                model = suggestion.suggestedUser.primaryPhoto?.urlThumb ?: "",
+                                contentDescription = suggestion.suggestedUser.displayName,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Pass", fontSize = 15.sp, color = colors.textSecondary)
-                        }
-                        Button(
-                            onClick = {
-                                view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                                onLike(currentSuggestion.id)
-                                currentIndex++
-                                offsetX = 0f
-                            },
-                            modifier = Modifier.weight(1f).height(48.dp),
-                            shape = RoundedCornerShape(AppTheme.radiusMd),
-                            colors = ButtonDefaults.buttonColors(containerColor = AppColors.Rose)
-                        ) {
-                            Icon(
-                                Icons.Default.Favorite, null,
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Like", fontSize = 15.sp, color = Color.White)
+                            // Name + "via X" overlay at bottom
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .align(Alignment.BottomCenter)
+                                    .background(
+                                        Brush.verticalGradient(
+                                            colors = listOf(
+                                                Color.Transparent,
+                                                Color.Black.copy(alpha = 0.65f)
+                                            )
+                                        )
+                                    )
+                                    .padding(horizontal = 6.dp, vertical = 5.dp)
+                            ) {
+                                Column {
+                                    Text(
+                                        suggestion.suggestedUser.displayName.split(" ").first(),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        "via ${suggestion.suggestedBy.name}",
+                                        fontSize = 10.sp,
+                                        color = Color.White.copy(alpha = 0.8f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
         }
 
-        // ── Up Next thumbnails ──
-        val upNextSuggestions = suggestions.drop(currentIndex + 1).take(3)
-        if (upNextSuggestions.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                "Up Next",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = colors.textMuted,
-                modifier = Modifier.fillMaxWidth()
+        // Privacy notice
+        item {
+            Spacer(modifier = Modifier.height(4.dp))
+            PrivacyNotice(
+                message = "Your Privacy — Family can only see what you allow. Messages stay private."
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(upNextSuggestions, key = { it.id }) { suggestion ->
-                    Box(
-                        modifier = Modifier
-                            .width(80.dp)
-                            .height(100.dp)
-                            .clip(RoundedCornerShape(AppTheme.radiusMd))
-                    ) {
-                        AsyncImage(
-                            model = suggestion.suggestedUser.primaryPhoto?.urlThumb ?: "",
-                            contentDescription = suggestion.suggestedUser.displayName,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                        // Name overlay at bottom
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .align(Alignment.BottomCenter)
-                                .background(Color.Black.copy(alpha = 0.5f))
-                                .padding(horizontal = 4.dp, vertical = 3.dp)
-                        ) {
-                            Text(
-                                suggestion.suggestedUser.displayName.split(" ").first(),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color.White,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Permission detail view
+// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun PermissionDetailView(
@@ -690,154 +745,175 @@ private fun PermissionDetailView(
             .fillMaxSize()
             .background(colors.backgroundGradient)
             .statusBarsPadding()
-            .padding(horizontal = 20.dp)
     ) {
-        // Back button + header
+        // ── Header row: back + title/subtitle + status badge ─────────────────
         Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
                 Icon(Icons.Default.ArrowBack, "Back", tint = colors.textPrimary)
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    member.name,
-                    fontSize = 20.sp,
+                    "${member.name} — Permissions",
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = colors.textPrimary
                 )
                 Text(
-                    member.relationship,
-                    fontSize = 14.sp,
+                    "$permCount of 8 enabled",
+                    fontSize = 13.sp,
                     color = colors.textSecondary
                 )
             }
+            // Status badge aligned to right
+            StatusBadge(
+                text = when (member.status) {
+                    FamilyMemberStatus.ACTIVE  -> "Active"
+                    FamilyMemberStatus.PENDING -> "Pending"
+                    FamilyMemberStatus.REVOKED -> "Revoked"
+                },
+                variant = when (member.status) {
+                    FamilyMemberStatus.ACTIVE  -> BadgeVariant.SUCCESS
+                    FamilyMemberStatus.PENDING -> BadgeVariant.WARNING
+                    FamilyMemberStatus.REVOKED -> BadgeVariant.DANGER
+                }
+            )
+            Spacer(modifier = Modifier.width(12.dp))
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            "Permissions ($permCount/8)",
-            fontSize = 16.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = colors.textPrimary,
-            modifier = Modifier.padding(vertical = 8.dp)
-        )
-
-        // 8 permission toggles
+        // ── 8 permission toggles ─────────────────────────────────────────────
         LazyColumn(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
             item {
                 PermissionToggleRow(
-                    "View Profile",
-                    "Can see your profile overview",
-                    perms.canViewProfile
+                    icon = Icons.Default.Person,
+                    title = "View Profile",
+                    description = "Can see your profile overview",
+                    enabled = perms.canViewProfile
                 ) { viewModel.updatePermission(member.id, "canViewProfile", it) }
+                HorizontalDivider(color = colors.surfaceMedium)
             }
             item {
                 PermissionToggleRow(
-                    "View Photos",
-                    "Can see your uploaded photos",
-                    perms.canViewPhotos
+                    icon = Icons.Default.Photo,
+                    title = "View Photos",
+                    description = "Can see your uploaded photos",
+                    enabled = perms.canViewPhotos
                 ) { viewModel.updatePermission(member.id, "canViewPhotos", it) }
+                HorizontalDivider(color = colors.surfaceMedium)
             }
             item {
                 PermissionToggleRow(
-                    "View Basics",
-                    "Can see your basic info like age, city",
-                    perms.canViewBasics
+                    icon = Icons.Default.Info,
+                    title = "View Basics",
+                    description = "Can see your basic info like age, city",
+                    enabled = perms.canViewBasics
                 ) { viewModel.updatePermission(member.id, "canViewBasics", it) }
+                HorizontalDivider(color = colors.surfaceMedium)
             }
             item {
                 PermissionToggleRow(
-                    "View Sindhi Details",
-                    "Can see your community details",
-                    perms.canViewSindhi
+                    icon = Icons.Default.Star,
+                    title = "View Sindhi Details",
+                    description = "Can see your community details",
+                    enabled = perms.canViewSindhi
                 ) { viewModel.updatePermission(member.id, "canViewSindhi", it) }
+                HorizontalDivider(color = colors.surfaceMedium)
             }
             item {
                 PermissionToggleRow(
-                    "View Matches",
-                    "Can see your current matches",
-                    perms.canViewMatches
+                    icon = Icons.Default.Favorite,
+                    title = "View Matches",
+                    description = "Can see your current matches",
+                    enabled = perms.canViewMatches
                 ) { viewModel.updatePermission(member.id, "canViewMatches", it) }
+                HorizontalDivider(color = colors.surfaceMedium)
             }
             item {
                 PermissionToggleRow(
-                    "Suggest Profiles",
-                    "Can suggest potential matches for you",
-                    perms.canSuggest
+                    icon = Icons.Default.GroupAdd,
+                    title = "Suggest Profiles",
+                    description = "Can suggest potential matches for you",
+                    enabled = perms.canSuggest
                 ) { viewModel.updatePermission(member.id, "canSuggest", it) }
+                HorizontalDivider(color = colors.surfaceMedium)
             }
             item {
                 PermissionToggleRow(
-                    "View Cultural Score",
-                    "Can see cultural compatibility scores",
-                    perms.canViewCulturalScore
+                    icon = Icons.Default.BarChart,
+                    title = "View Cultural Score",
+                    description = "Can see cultural compatibility scores",
+                    enabled = perms.canViewCulturalScore
                 ) { viewModel.updatePermission(member.id, "canViewCulturalScore", it) }
+                HorizontalDivider(color = colors.surfaceMedium)
             }
             item {
                 PermissionToggleRow(
-                    "View Kundli",
-                    "Can see kundli compatibility details",
-                    perms.canViewKundli
+                    icon = Icons.Default.AutoAwesome,
+                    title = "View Kundli",
+                    description = "Can see kundli compatibility details",
+                    enabled = perms.canViewKundli
                 ) { viewModel.updatePermission(member.id, "canViewKundli", it) }
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Enable All / Disable All
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        // ── Enable All / Disable All buttons ─────────────────────────────────
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            OutlinedButton(
-                onClick = { viewModel.disableAllPermissions(member.id) },
-                modifier = Modifier.weight(1f).height(44.dp),
-                shape = RoundedCornerShape(AppTheme.radiusMd)
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("Disable All", fontSize = 14.sp, color = colors.textSecondary)
+                OutlinedButton(
+                    onClick = { viewModel.enableAllPermissions(member.id) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp),
+                    shape = RoundedCornerShape(AppTheme.radiusMd)
+                ) {
+                    Text("Enable All", fontSize = 14.sp, color = colors.textPrimary)
+                }
+                Button(
+                    onClick = { viewModel.disableAllPermissions(member.id) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp),
+                    shape = RoundedCornerShape(AppTheme.radiusMd),
+                    colors = ButtonDefaults.buttonColors(containerColor = AppColors.Error)
+                ) {
+                    Text("Disable All", fontSize = 14.sp, color = Color.White)
+                }
             }
-            Button(
-                onClick = { viewModel.enableAllPermissions(member.id) },
-                modifier = Modifier.weight(1f).height(44.dp),
-                shape = RoundedCornerShape(AppTheme.radiusMd),
-                colors = ButtonDefaults.buttonColors(containerColor = AppColors.Rose)
-            ) {
-                Text("Enable All", fontSize = 14.sp, color = Color.White)
-            }
-        }
 
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Revoke Access button (red)
-        Button(
-            onClick = { viewModel.revokeMember(member.id) },
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            shape = RoundedCornerShape(AppTheme.radiusLg),
-            colors = ButtonDefaults.buttonColors(containerColor = AppColors.Error)
-        ) {
-            Icon(Icons.Default.Block, null, tint = Color.White, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                "Revoke Access",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White
+            // Privacy notice
+            PrivacyNotice(
+                message = "${member.name} can only see what you allow. Your messages always remain private."
             )
+            Spacer(modifier = Modifier.height(24.dp))
         }
-
-        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Permission toggle row (with icon)
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
 private fun PermissionToggleRow(
+    icon: ImageVector,
     title: String,
     description: String,
     enabled: Boolean,
@@ -846,10 +922,26 @@ private fun PermissionToggleRow(
     val colors = LocalAdaptiveColors.current
     val view = LocalView.current
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // Icon on left
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(AppTheme.radiusSm))
+                .background(colors.surfaceMedium),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                icon, null,
+                tint = AppColors.Rose,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 title,
@@ -877,73 +969,147 @@ private fun PermissionToggleRow(
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Invite code dialog
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
 private fun InviteCodeDialog(
     invite: FamilyInvite?,
     onDismiss: () -> Unit
 ) {
     val colors = LocalAdaptiveColors.current
+    val clipboard = LocalClipboardManager.current
+    val code = invite?.code ?: "MM-7X4K"
+
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = colors.surface,
         title = {
-            Text(
-                "Family Invite Code",
-                fontWeight = FontWeight.Bold,
-                color = colors.textPrimary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Invite Family",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = colors.textPrimary
+                )
+                IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.Close, "Close", tint = colors.textMuted)
+                }
+            }
         },
         text = {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Spacer(modifier = Modifier.height(8.dp))
-                // Large code in monospace gold text
+                Text(
+                    "Share this code with your family member to join your family circle.",
+                    fontSize = 14.sp,
+                    color = colors.textSecondary,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                // Large monospace code on gray background
                 Surface(
                     shape = RoundedCornerShape(AppTheme.radiusMd),
-                    color = AppColors.Gold.copy(alpha = 0.1f),
+                    color = colors.surfaceMedium,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        invite?.code ?: "MM-000000",
-                        fontSize = 28.sp,
+                        code,
+                        fontSize = 32.sp,
                         fontWeight = FontWeight.Bold,
-                        color = AppColors.Gold,
+                        color = colors.textPrimary,
                         textAlign = TextAlign.Center,
                         fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                         modifier = Modifier.padding(vertical = 20.dp, horizontal = 16.dp)
                     )
                 }
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    "Expires in 48 hours",
-                    fontSize = 13.sp,
-                    color = colors.textMuted
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    "Share this code with your family member to invite them to your circle",
-                    fontSize = 13.sp,
-                    color = colors.textSecondary,
-                    textAlign = TextAlign.Center
-                )
+                Spacer(modifier = Modifier.height(16.dp))
+                // Copy Code + Share buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            clipboard.setText(AnnotatedString(code))
+                            onDismiss()
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp),
+                        shape = RoundedCornerShape(AppTheme.radiusFull)
+                    ) {
+                        Icon(
+                            Icons.Default.ContentCopy, null,
+                            modifier = Modifier.size(16.dp),
+                            tint = colors.textPrimary
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Copy Code", fontSize = 14.sp, color = colors.textPrimary)
+                    }
+                    Button(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp),
+                        shape = RoundedCornerShape(AppTheme.radiusFull),
+                        colors = ButtonDefaults.buttonColors(containerColor = AppColors.Rose)
+                    ) {
+                        Icon(
+                            Icons.Default.Share, null,
+                            modifier = Modifier.size(16.dp),
+                            tint = Color.White
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Share", fontSize = 14.sp, color = Color.White)
+                    }
+                }
             }
         },
-        confirmButton = {
-            Button(
-                onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(AppTheme.radiusLg),
-                colors = ButtonDefaults.buttonColors(containerColor = AppColors.Rose)
-            ) {
-                Text("Done", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-            }
-        }
+        confirmButton = {}
     )
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared privacy notice
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun PrivacyNotice(message: String) {
+    val colors = LocalAdaptiveColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(AppTheme.radiusMd))
+            .background(colors.surfaceMedium)
+            .padding(12.dp),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(
+            Icons.Default.Shield, null,
+            tint = AppColors.Rose,
+            modifier = Modifier.size(16.dp)
+        )
+        Text(
+            message,
+            fontSize = 12.sp,
+            color = colors.textSecondary,
+            lineHeight = 17.sp
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
 private fun countPermissions(perms: FamilyPermissions): Int {
     var count = 0

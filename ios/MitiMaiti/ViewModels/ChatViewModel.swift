@@ -87,12 +87,22 @@ class ChatViewModel: ObservableObject {
 
     func loadMessages(for match: Match) {
         self.match = match
+
+        // Serve from cache immediately — avoids blank screen on re-navigation
+        let cached = MessageRepository.shared.getMessages(matchId: match.id)
+        if !cached.isEmpty {
+            messages = cached
+            checkAndUnlockIfReplied()
+            return
+        }
+
         isLoading = true
 
         Task {
             do {
                 let msgs = try await api.fetchMessages(matchId: match.id)
                 messages = msgs.sorted { $0.createdAt < $1.createdAt }
+                MessageRepository.shared.setMessages(matchId: match.id, msgs: messages)
                 isLoading = false
 
                 // Check if the other user has already replied (unlock state)
@@ -135,6 +145,7 @@ class ChatViewModel: ObservableObject {
                 if let idx = messages.firstIndex(where: { $0.id == tempMsg.id }) {
                     messages[idx] = sent
                 }
+                MessageRepository.shared.setMessages(matchId: matchId, msgs: messages)
                 isSending = false
 
                 if isFirstMessage {
@@ -179,6 +190,7 @@ class ChatViewModel: ObservableObject {
                 if let idx = messages.firstIndex(where: { $0.id == msg.id }) {
                     messages[idx] = sent
                 }
+                MessageRepository.shared.setMessages(matchId: matchId, msgs: messages)
 
                 if isFirstMessage {
                     match?.firstMsgBy = currentUserId
@@ -198,6 +210,9 @@ class ChatViewModel: ObservableObject {
     /// Called when a message arrives from the other user (via socket or simulation)
     func receiveMessage(_ message: Message) {
         messages.append(message)
+        if let matchId = match?.id {
+            MessageRepository.shared.addMessage(matchId: matchId, message: message)
+        }
 
         // Trigger a message notification
         if let match {

@@ -238,8 +238,8 @@ fun ChatScreen(
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                     contentPadding = PaddingValues(vertical = 8.dp)
                 ) {
-                    // Ice breaker section (only when no messages sent yet)
-                    if (messages.isEmpty() && !isLoading && viewModel.awaitingFirstMessage) {
+                    // Ice breaker section (only for new matches with no messages)
+                    if (messages.isEmpty() && !isLoading && viewModel.awaitingFirstMessage && match.status == MatchStatus.PENDING_FIRST_MESSAGE) {
                         item {
                             IceBreakerSection(
                                 prompts = currentPrompts,

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mitimaiti.app.models.*
 import com.mitimaiti.app.services.APIService
+import com.mitimaiti.app.services.MessageRepository
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -56,11 +57,22 @@ class ChatViewModel : ViewModel() {
 
     fun loadMessages(match: Match) {
         _match.value = match
+        // Check MessageRepository first (persists across navigation)
+        val cached = MessageRepository.getMessages(match.id)
+        if (cached.isNotEmpty()) {
+            _messages.value = cached.sortedBy { it.createdAt }
+            _isLoading.value = false
+            checkAndUnlockIfReplied()
+            return
+        }
+        // Fetch from API/mock
         viewModelScope.launch {
             _isLoading.value = true
             APIService.fetchMessages(match.id)
                 .onSuccess {
                     _messages.value = it.sortedBy { m -> m.createdAt }
+                    // Save to repository
+                    MessageRepository.setMessages(match.id, _messages.value)
                     checkAndUnlockIfReplied()
                 }
                 .onFailure { _error.value = "Failed to load messages" }
@@ -77,12 +89,14 @@ class ChatViewModel : ViewModel() {
             _isSending.value = true
             _messageText.value = ""
 
-            _messages.value = _messages.value + Message(
+            val newMsg = Message(
                 matchId = currentMatch.id,
                 senderId = "current-user-id",
                 content = text,
                 status = MessageStatus.SENT
             )
+            _messages.value = _messages.value + newMsg
+            MessageRepository.addMessage(currentMatch.id, newMsg)
 
             // Mark as first message if none sent yet
             if (currentMatch.firstMsgBy == null) {
@@ -108,6 +122,7 @@ class ChatViewModel : ViewModel() {
 
     private fun receiveMessage(message: Message) {
         _messages.value = _messages.value + message
+        MessageRepository.addMessage(message.matchId, message)
         val cm = _match.value ?: return
 
         // If we were waiting for a reply (firstMsgLocked), activate the match
