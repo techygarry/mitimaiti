@@ -9,6 +9,8 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import compression from 'compression';
 import http from 'http';
+import path from 'path';
+import fs from 'fs';
 
 import { globalErrorHandler } from './utils/errors';
 import { rateLimit } from './middleware/rateLimit';
@@ -115,6 +117,12 @@ app.use('/v1/family', familyRoutes);
 app.use('/v1/safety', safetyRoutes);
 app.use('/v1/admin', adminRoutes);
 app.use('/v1/inbox', actionRoutes);
+
+// OpenAPI spec — served as raw YAML for tooling (swagger-ui, postman, etc.)
+const openapiPath = path.join(__dirname, '..', 'openapi.yaml');
+app.get('/v1/openapi.yaml', (_req, res) => {
+  res.type('application/yaml').send(fs.readFileSync(openapiPath, 'utf8'));
+});
 
 // 404
 app.use((_req, res) => {

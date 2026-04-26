@@ -1,0 +1,1090 @@
+openapi: 3.1.0
+info:
+  title: MitiMaiti Backend API
+  description: |
+    REST API for the MitiMaiti matrimony/dating app.
+
+    All routes are mounted under `/v1`. Responses are wrapped in the `Envelope` shape:
+    `{ success: boolean, data?: object, message?: string, error?: string, code?: string }`.
+
+    Authenticated endpoints expect a Bearer token in the `Authorization` header.
+    Tokens come from `POST /v1/auth/verify` and can be refreshed via `POST /v1/auth/refresh`.
+
+    Chat endpoints and their schemas are under active redesign — see `backend/src/routes/chat.ts`
+    for the source of truth.
+  version: "1.0.0"
+servers:
+  - url: http://localhost:4000/v1
+    description: Local development
+  - url: https://api.mitimaiti.com/v1
+    description: Production
+
+tags:
+  - name: Auth
+  - name: Profile
+  - name: Discovery
+  - name: Actions
+  - name: Inbox
+  - name: Chat
+  - name: Family
+  - name: Safety
+  - name: Admin
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ─────────────────────────────── Auth ───────────────────────────────
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Send OTP to phone
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone:
+                  type: string
+                  pattern: '^\+[1-9]\d{6,14}$'
+                  example: "+919876543210"
+      responses:
+        '200':
+          description: OTP sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessOnly'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /auth/verify:
+    post:
+      tags: [Auth]
+      summary: Verify OTP and obtain a session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, token]
+              properties:
+                phone: { type: string, example: "+919876543210" }
+                token: { type: string, minLength: 6, maxLength: 6, example: "123456" }
+      responses:
+        '200':
+          description: Existing user authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSession'
+        '201':
+          description: New user provisioned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSession'
+        '401':
+          description: Invalid or expired OTP
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access + refresh tokens
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: New session
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data:
+                        $ref: '#/components/schemas/Session'
+
+  /auth/delete:
+    post:
+      tags: [Auth]
+      summary: Logout (blacklist JWT) or schedule account deletion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [logout, delete] }
+                reason: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  # ─────────────────────────────── Profile (/me) ───────────────────────────────
+  /me:
+    get:
+      tags: [Profile]
+      summary: Get full multi-table profile for the authenticated user
+      responses:
+        '200':
+          description: Profile bundle
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileBundle'
+    patch:
+      tags: [Profile]
+      summary: Section-based profile update
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                basics: { $ref: '#/components/schemas/BasicsPatch' }
+                sindhi: { $ref: '#/components/schemas/SindhiPatch' }
+                chatti: { $ref: '#/components/schemas/ChattiPatch' }
+                personality: { $ref: '#/components/schemas/PersonalityPatch' }
+                settings: { $ref: '#/components/schemas/SettingsPatch' }
+                user: { $ref: '#/components/schemas/UserCorePatch' }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /me/media:
+    post:
+      tags: [Profile]
+      summary: Upload a profile photo or video (multipart/form-data, field name `file`)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Media uploaded
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data:
+                        type: object
+                        properties:
+                          media: { $ref: '#/components/schemas/Photo' }
+                          profileCompleteness: { type: integer }
+
+  /me/media/{id}:
+    delete:
+      tags: [Profile]
+      summary: Delete a photo or video by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /me/verify:
+    post:
+      tags: [Profile]
+      summary: Request selfie verification
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /me/export:
+    get:
+      tags: [Profile]
+      summary: Export all user data (rate-limited 2/hour)
+      responses:
+        '200':
+          description: Full data dump
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+
+  /me/fcm-token:
+    post:
+      tags: [Profile]
+      summary: Register or update the user's FCM device token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string, minLength: 10, maxLength: 4096 }
+                platform: { type: string, enum: [ios, android, web] }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  # ─────────────────────────────── Discovery (/feed) ───────────────────────────────
+  /feed:
+    get:
+      tags: [Discovery]
+      summary: Get the discovery feed
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20, maximum: 50 }
+      responses:
+        '200':
+          description: Feed cards
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data:
+                        type: object
+                        properties:
+                          cards:
+                            type: array
+                            items: { $ref: '#/components/schemas/FeedCard' }
+                          nextCursor: { type: string, nullable: true }
+
+  /feed/passport:
+    post:
+      tags: [Discovery]
+      summary: Set passport (virtual) location
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                city: { type: string }
+                state: { type: string }
+                country: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  # ─────────────────────────────── Actions (/action) ───────────────────────────────
+  /action:
+    post:
+      tags: [Actions]
+      summary: Like or pass on a target user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [targetUserId, type]
+              properties:
+                targetUserId: { type: string, format: uuid }
+                type: { type: string, enum: [like, pass] }
+      responses:
+        '200':
+          description: Action recorded; may include match info
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data:
+                        type: object
+                        properties:
+                          isMatch: { type: boolean }
+                          match: { $ref: '#/components/schemas/Match' }
+
+  /action/rewind:
+    post:
+      tags: [Actions]
+      summary: Rewind the last action
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /action/prompt:
+    post:
+      tags: [Actions]
+      summary: Submit answer to today's daily prompt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [answer]
+              properties:
+                answer: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  # ─────────────────────────────── Inbox ───────────────────────────────
+  /inbox:
+    get:
+      tags: [Inbox]
+      summary: Returns both incoming likes and active matches in a single call
+      responses:
+        '200':
+          description: Inbox bundle
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data:
+                        type: object
+                        properties:
+                          likes:
+                            type: array
+                            items: { $ref: '#/components/schemas/LikedYouCard' }
+                          matches:
+                            type: array
+                            items: { $ref: '#/components/schemas/Match' }
+
+  # ─────────────────────────────── Chat (under active redesign) ───────────────────────────────
+  /chat/{matchId}:
+    get:
+      tags: [Chat]
+      summary: List messages for a match (schema in flux — see backend/src/routes/chat.ts)
+      parameters:
+        - name: matchId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: cursor
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /chat/{matchId}/messages:
+    post:
+      tags: [Chat]
+      summary: Send a text message (schema in flux)
+      parameters:
+        - name: matchId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content: { type: string }
+                msgType: { type: string, enum: [text, photo, voice, gif, icebreaker] }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /chat/{matchId}/media:
+    post:
+      tags: [Chat]
+      summary: Upload media to a chat (multipart/form-data, field name `media`)
+      parameters:
+        - name: matchId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [media]
+              properties:
+                media:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /chat/{matchId}/extend:
+    post:
+      tags: [Chat]
+      summary: Extend the 24h match window
+      parameters:
+        - name: matchId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  # ─────────────────────────────── Family ───────────────────────────────
+  /family/invite:
+    post:
+      tags: [Family]
+      summary: Generate an invite code (MM-XXXXXX, 48h expiry)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                roleTag: { type: string, maxLength: 50 }
+      responses:
+        '201':
+          description: Invite created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data:
+                        type: object
+                        properties:
+                          invite: { $ref: '#/components/schemas/FamilyInvite' }
+                          deepLink: { type: string }
+
+  /family/join:
+    post:
+      tags: [Family]
+      summary: Join a family using an invite code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, roleTag]
+              properties:
+                code: { type: string, pattern: '^MM-[A-Z0-9]{6}$' }
+                roleTag: { type: string, maxLength: 50 }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /family:
+    get:
+      tags: [Family]
+      summary: List family members for the authenticated user
+      responses:
+        '200':
+          description: Members
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data:
+                        type: object
+                        properties:
+                          members:
+                            type: array
+                            items: { $ref: '#/components/schemas/FamilyMember' }
+
+  /family/{id}:
+    patch:
+      tags: [Family]
+      summary: Update a family member's permissions or revoke access
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                permissions: { $ref: '#/components/schemas/FamilyPermissions' }
+                isRevoked: { type: boolean }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /family/suggest:
+    post:
+      tags: [Family]
+      summary: Suggest a candidate to a family member (5/day limit)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [candidateUserId]
+              properties:
+                candidateUserId: { type: string, format: uuid }
+                note: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /family/feed:
+    get:
+      tags: [Family]
+      summary: Family-suggested candidates feed
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /family/suggestions:
+    get:
+      tags: [Family]
+      summary: Suggestions made by your family for you
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  # ─────────────────────────────── Safety ───────────────────────────────
+  /safety/report:
+    post:
+      tags: [Safety]
+      summary: Report a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reportedId, reason]
+              properties:
+                reportedId: { type: string, format: uuid }
+                reason: { type: string, enum: [fake, harassment, spam, photos, underage, safety] }
+                details: { type: string, maxLength: 1000 }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /safety/block:
+    post:
+      tags: [Safety]
+      summary: Block a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [blockedId]
+              properties:
+                blockedId: { type: string, format: uuid }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /safety/health:
+    get:
+      tags: [Safety]
+      summary: Account health (strikes, suspension, deletion status)
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /safety/appeal:
+    post:
+      tags: [Safety]
+      summary: Appeal a moderation strike
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [strikeId, text]
+              properties:
+                strikeId: { type: string, format: uuid }
+                text: { type: string, minLength: 10, maxLength: 1000 }
+      responses:
+        '201':
+          $ref: '#/components/responses/Success'
+
+  # ─────────────────────────────── Admin ───────────────────────────────
+  /admin/queue:
+    get:
+      tags: [Admin]
+      summary: Moderation queue (priority-sorted)
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: priority
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer }
+        - name: limit
+          in: query
+          schema: { type: integer }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /admin/queue/{id}:
+    get:
+      tags: [Admin]
+      summary: Single report with context
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /admin/action:
+    post:
+      tags: [Admin]
+      summary: Apply moderation action (dismiss/warn/suspend/ban)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reportId, action, note]
+              properties:
+                reportId: { type: string, format: uuid }
+                action: { type: string, enum: [dismiss, warn, suspend, ban] }
+                note: { type: string, minLength: 1, maxLength: 1000 }
+                instantBan: { type: boolean, default: false }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /admin/user/{id}:
+    get:
+      tags: [Admin]
+      summary: Full admin view of a user (profile + safety + activity)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /admin/user/search:
+    get:
+      tags: [Admin]
+      summary: Search users by phone or display name (substring, case-insensitive)
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20, maximum: 100 }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /admin/appeals:
+    get:
+      tags: [Admin]
+      summary: List moderation appeals (paginated)
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [pending, approved, denied] }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /admin/appeals/review:
+    post:
+      tags: [Admin]
+      summary: Approve or deny an appeal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [appealId, action, reason]
+              properties:
+                appealId: { type: string, format: uuid }
+                action: { type: string, enum: [approve, deny] }
+                reason: { type: string, minLength: 1, maxLength: 1000 }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /admin/daily-prompt:
+    get:
+      tags: [Admin]
+      summary: List daily prompts (paginated)
+      parameters:
+        - name: upcoming
+          in: query
+          schema: { type: boolean }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+    post:
+      tags: [Admin]
+      summary: Override today's prompt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question: { type: string, minLength: 5, maxLength: 200 }
+                category: { type: string, maxLength: 50 }
+                date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+      responses:
+        '201':
+          $ref: '#/components/responses/Success'
+
+  /admin/daily-prompt/{id}:
+    patch:
+      tags: [Admin]
+      summary: Partially update a prompt
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                question: { type: string }
+                category: { type: string }
+                is_active: { type: boolean }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+    delete:
+      tags: [Admin]
+      summary: Delete a prompt
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /admin/stats:
+    get:
+      tags: [Admin]
+      summary: Dashboard stats — pending queue size, avg review time, weekly bans, MAU, daily signups
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    Success:
+      description: Successful response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Envelope'
+    RateLimited:
+      description: Too many requests
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Envelope'
+
+  schemas:
+    Envelope:
+      type: object
+      properties:
+        success: { type: boolean }
+        data: { type: object, nullable: true }
+        message: { type: string }
+        error: { type: string }
+        code: { type: string }
+      required: [success]
+
+    SuccessOnly:
+      type: object
+      properties:
+        success: { type: boolean, enum: [true] }
+        message: { type: string }
+
+    Session:
+      type: object
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        expiresAt: { type: integer, description: "Unix epoch seconds", nullable: true }
+
+    AuthSession:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - properties:
+            data:
+              type: object
+              properties:
+                user:
+                  type: object
+                  properties:
+                    id: { type: string, format: uuid }
+                    authId: { type: string, format: uuid }
+                    phone: { type: string }
+                    isVerified: { type: boolean }
+                    profileCompleteness: { type: integer }
+                    isNew: { type: boolean }
+                session: { $ref: '#/components/schemas/Session' }
+
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        phone: { type: string }
+        isVerified: { type: boolean }
+        profileCompleteness: { type: integer }
+        isOnline: { type: boolean }
+        lastActive: { type: string, format: date-time }
+        intent: { type: string, enum: [casual, open, marriage] }
+        education: { type: string, nullable: true }
+        occupation: { type: string, nullable: true }
+        company: { type: string, nullable: true }
+        religion: { type: string, nullable: true }
+
+    Photo:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        urlThumb: { type: string }
+        urlMedium: { type: string }
+        urlOriginal: { type: string }
+        isPrimary: { type: boolean }
+        isVideo: { type: boolean }
+        sortOrder: { type: integer }
+
+    BasicsPatch:
+      type: object
+      properties:
+        display_name: { type: string, minLength: 2, maxLength: 50 }
+        date_of_birth: { type: string, format: date }
+        gender: { type: string, enum: [man, woman, non-binary] }
+        bio: { type: string, maxLength: 500 }
+        height_cm: { type: integer, minimum: 120, maximum: 240 }
+        city: { type: string, maxLength: 100 }
+        state: { type: string, maxLength: 100 }
+        country: { type: string, maxLength: 100 }
+
+    SindhiPatch:
+      type: object
+      properties:
+        mother_tongue: { type: string, maxLength: 50 }
+        sindhi_dialect: { type: string, maxLength: 50 }
+        sindhi_fluency:
+          type: string
+          enum: [native, fluent, conversational, basic, learning, none]
+        community_sub_group: { type: string, maxLength: 100 }
+        gotra: { type: string, maxLength: 100 }
+
+    ChattiPatch:
+      type: object
+      properties:
+        family_values: { type: string, enum: [traditional, moderate, liberal] }
+        joint_family_preference: { type: boolean }
+        festivals_celebrated:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 50 }
+        food_preference:
+          type: string
+          enum: [vegetarian, non_vegetarian, vegan, jain, eggetarian]
+        cuisine_preferences:
+          type: array
+          maxItems: 15
+          items: { type: string, maxLength: 50 }
+        cultural_activities:
+          type: array
+          maxItems: 15
+          items: { type: string, maxLength: 50 }
+        traditional_attire: { type: string, maxLength: 100 }
+
+    PersonalityPatch:
+      type: object
+      properties:
+        interests:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 50 }
+        music_preferences:
+          type: array
+          maxItems: 15
+          items: { type: string, maxLength: 50 }
+        movie_genres:
+          type: array
+          maxItems: 15
+          items: { type: string, maxLength: 50 }
+        travel_style: { type: string, maxLength: 100 }
+        pet_preference: { type: string, maxLength: 100 }
+
+    SettingsPatch:
+      type: object
+      properties:
+        discovery_enabled: { type: boolean }
+        show_online_status: { type: boolean }
+        show_distance: { type: boolean }
+        push_notifications: { type: boolean }
+        email_notifications: { type: boolean }
+        age_min: { type: integer, minimum: 18, maximum: 99 }
+        age_max: { type: integer, minimum: 18, maximum: 99 }
+        distance_km: { type: integer, minimum: 1, maximum: 500 }
+        gender_preference: { type: string, enum: [men, women, everyone] }
+
+    UserCorePatch:
+      type: object
+      properties:
+        intent: { type: string, enum: [casual, open, marriage] }
+        education: { type: string, maxLength: 100 }
+        occupation: { type: string, maxLength: 100 }
+        company: { type: string, maxLength: 100 }
+        religion: { type: string, maxLength: 100 }
+
+    ProfileBundle:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - properties:
+            data:
+              type: object
+              properties:
+                user: { $ref: '#/components/schemas/User' }
+                basics: { type: object, nullable: true }
+                sindhi: { type: object, nullable: true }
+                chatti: { type: object, nullable: true }
+                personality: { type: object, nullable: true }
+                photos:
+                  type: array
+                  items: { $ref: '#/components/schemas/Photo' }
+                settings: { type: object, nullable: true }
+
+    FeedCard:
+      type: object
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        photos:
+          type: array
+          items: { $ref: '#/components/schemas/Photo' }
+        culturalScore: { type: integer, nullable: true }
+        kundliScore: { type: integer, nullable: true }
+        distanceKm: { type: number, nullable: true }
+        isVerified: { type: boolean }
+
+    Match:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        otherUser: { $ref: '#/components/schemas/User' }
+        status: { type: string, enum: [pending_first_message, active, expired, unmatched, dissolved] }
+        matchedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        firstMsgBy: { type: string, format: uuid, nullable: true }
+        firstMsgLocked: { type: boolean }
+
+    LikedYouCard:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        user: { $ref: '#/components/schemas/User' }
+        likedAt: { type: string, format: date-time }
+        likedPrompt: { type: string, nullable: true }
+        comment: { type: string, nullable: true }
+
+    FamilyPermissions:
+      type: object
+      properties:
+        canViewProfile: { type: boolean }
+        canViewPhotos: { type: boolean }
+        canViewBasics: { type: boolean }
+        canViewSindhi: { type: boolean }
+        canViewMatches: { type: boolean }
+        canSuggest: { type: boolean }
+        canViewCulturalScore: { type: boolean }
+        canViewKundli: { type: boolean }
+
+    FamilyMember:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        ownerId: { type: string, format: uuid }
+        familyUserId: { type: string, format: uuid }
+        roleTag: { type: string }
+        permissions: { $ref: '#/components/schemas/FamilyPermissions' }
+        status: { type: string, enum: [pending, active, revoked] }
+        isRevoked: { type: boolean }
+        joinedAt: { type: string, format: date-time, nullable: true }
+
+    FamilyInvite:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, pattern: '^MM-[A-Z0-9]{6}$' }
+        roleTag: { type: string, nullable: true }
+        expiresAt: { type: string, format: date-time }
