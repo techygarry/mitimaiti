@@ -80,6 +80,26 @@ class ChatViewModel : ViewModel() {
         }
     }
 
+    fun sendChatPhoto(bytes: ByteArray) {
+        val currentMatch = _match.value ?: return
+        if (isLockedForMe) return
+        viewModelScope.launch {
+            _isSending.value = true
+            APIService.sendChatMedia(currentMatch.id, bytes).onSuccess { msg ->
+                _messages.value = _messages.value + msg
+                MessageRepository.addMessage(currentMatch.id, msg)
+                if (currentMatch.firstMsgBy == null) {
+                    _match.value = currentMatch.copy(
+                        firstMsgBy = "current-user-id",
+                        firstMsgLocked = true,
+                        firstMsgAt = System.currentTimeMillis()
+                    )
+                }
+            }.onFailure { _error.value = "Photo upload failed" }
+            _isSending.value = false
+        }
+    }
+
     fun sendMessage() {
         val text = _messageText.value.trim()
         if (text.isEmpty() || isLockedForMe) return

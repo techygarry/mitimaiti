@@ -4,6 +4,10 @@ struct FamilyView: View {
     @StateObject private var familyVM = FamilyViewModel()
     private let localization = LocalizationManager.shared
     @Environment(\.adaptiveColors) private var colors
+    @State private var showJoinSheet = false
+    @State private var joinCode = ""
+    @State private var joinRole = "parent"
+    @State private var joining = false
 
     var body: some View {
         NavigationStack {
@@ -12,6 +16,7 @@ struct FamilyView: View {
                     VStack(spacing: AppTheme.spacingLG) {
                         headerSection
                         inviteCard
+                        joinFamilyCard
                         tabBar
                         contentArea
                         Spacer().frame(height: 100)
@@ -31,6 +36,9 @@ struct FamilyView: View {
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $familyVM.showInviteModal) {
                 FamilyInviteSheet(familyVM: familyVM)
+            }
+            .sheet(isPresented: $showJoinSheet) {
+                joinFamilySheet
             }
             .alert("Revoke all family access?", isPresented: $familyVM.showRevokeAllModal) {
                 Button("Cancel", role: .cancel) { }
@@ -165,6 +173,97 @@ struct FamilyView: View {
             .padding(.horizontal, AppTheme.spacingMD)
             .padding(.bottom, AppTheme.spacingMD)
         }
+    }
+
+    // MARK: - Join Family Card
+
+    private var joinFamilyCard: some View {
+        ContentCard {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(Color.blue.opacity(0.12))
+                        .frame(width: 48, height: 48)
+                    Image(systemName: "qrcode.viewfinder")
+                        .font(.system(size: 22))
+                        .foregroundColor(.blue)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Have a code?")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(colors.textPrimary)
+                    Text("Join a family by entering their invite code")
+                        .font(.system(size: 12))
+                        .foregroundColor(colors.textSecondary)
+                        .lineLimit(2)
+                }
+                Spacer()
+                Button("Enter") { showJoinSheet = true }
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 8)
+                    .background(Capsule().fill(Color.blue))
+            }
+            .padding(AppTheme.spacingMD)
+        }
+    }
+
+    private var joinFamilySheet: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Enter the invite code shared with you")
+                    .font(.system(size: 14))
+                    .foregroundColor(colors.textSecondary)
+                TextField("MM-XXXXXX", text: $joinCode)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .padding(12)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(colors.surfaceDark))
+                Picker("Role", selection: $joinRole) {
+                    Text("Parent").tag("parent")
+                    Text("Sibling").tag("sibling")
+                    Text("Friend").tag("friend")
+                }
+                .pickerStyle(.segmented)
+                Button {
+                    Task {
+                        joining = true
+                        do {
+                            try await APIService.shared.joinFamily(code: joinCode, roleTag: joinRole)
+                            familyVM.toastMessage = "Joined family"
+                            showJoinSheet = false
+                            joinCode = ""
+                            familyVM.loadFamily()
+                        } catch {
+                            familyVM.toastMessage = "Join failed: \(error.localizedDescription)"
+                        }
+                        joining = false
+                    }
+                } label: {
+                    HStack {
+                        if joining { ProgressView().tint(.white) }
+                        Text(joining ? "Joining..." : "Join Family")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Capsule().fill(joinCode.isEmpty ? Color.gray : Color.blue))
+                }
+                .disabled(joinCode.isEmpty || joining)
+                Spacer()
+            }
+            .padding(20)
+            .navigationTitle("Join a Family")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Cancel") { showJoinSheet = false }
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 
     // MARK: - Tab Bar

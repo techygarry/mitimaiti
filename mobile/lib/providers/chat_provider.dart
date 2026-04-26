@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../config/api_config.dart';
 import '../models/match.dart';
+import '../services/api_service.dart';
 
 class ChatState {
   final String matchId;
@@ -67,9 +69,11 @@ class ChatState {
 
 class ChatNotifier extends StateNotifier<ChatState> {
   static const String _currentUserId = 'mock-user-id';
+  final ApiService? _apiService;
 
-  ChatNotifier(String matchId)
-      : super(ChatState(matchId: matchId));
+  ChatNotifier(String matchId, {ApiService? apiService})
+      : _apiService = apiService,
+        super(ChatState(matchId: matchId));
 
   Future<void> loadMessages() async {
     state = state.copyWith(isLoading: true);
@@ -135,7 +139,25 @@ class ChatNotifier extends StateNotifier<ChatState> {
   }
 
   Future<void> sendPhoto(String photoPath) async {
-    await sendMessage(photoPath, type: MessageType.photo);
+    if (ApiConfig.useMockData) {
+      await sendMessage(photoPath, type: MessageType.photo);
+      return;
+    }
+    try {
+      final api = _apiService;
+      if (api == null) return;
+      final response = await api.uploadFile<Map<String, dynamic>>(
+        '/v1/chat/${state.matchId}/media',
+        photoPath,
+        fieldName: 'media',
+      );
+      final msg = (response.data?['data'] as Map<String, dynamic>?)?['message'] as Map<String, dynamic>?;
+      if (msg != null) {
+        onNewMessage(Message.fromJson(msg));
+      }
+    } catch (_) {
+      // swallow; UI shows nothing — could add toast at call site
+    }
   }
 
   Future<void> sendVoiceNote(String audioPath, int durationSeconds) async {
@@ -216,7 +238,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
 final chatProvider =
     StateNotifierProvider.family<ChatNotifier, ChatState, String>((ref, matchId) {
-  return ChatNotifier(matchId);
+  return ChatNotifier(matchId, apiService: ref.read(apiServiceProvider));
 });
 
 // Icebreaker suggestions

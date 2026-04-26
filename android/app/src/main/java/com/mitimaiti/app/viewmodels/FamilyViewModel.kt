@@ -41,6 +41,16 @@ class FamilyViewModel : ViewModel() {
     fun loadFamily() { viewModelScope.launch { _isLoading.value = true; APIService.fetchFamily().onSuccess { (m, s) -> _members.value = m; _suggestions.value = s }.onFailure { _error.value = "Failed to load family data" }; _isLoading.value = false } }
     fun generateInvite() { viewModelScope.launch { APIService.generateInvite().onSuccess { _currentInvite.value = it; _showInviteModal.value = true } } }
 
+    fun joinFamily(code: String, roleTag: String, onDone: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            APIService.joinFamily(code, roleTag).onSuccess {
+                showToast("Joined family"); loadFamily(); onDone(true)
+            }.onFailure {
+                showToast("Invalid or expired code"); onDone(false)
+            }
+        }
+    }
+
     fun updatePermission(memberId: String, permissionName: String, value: Boolean) {
         _members.value = _members.value.map { m -> if (m.id == memberId) { val p = m.permissions; m.copy(permissions = when (permissionName) {
             "canViewProfile" -> p.copy(canViewProfile = value); "canViewPhotos" -> p.copy(canViewPhotos = value); "canViewBasics" -> p.copy(canViewBasics = value)

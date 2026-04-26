@@ -1,8 +1,22 @@
 class ApiConfig {
   ApiConfig._();
 
-  static const String baseUrl = 'https://api.mitimaiti.com';
-  static const String wsUrl = 'wss://api.mitimaiti.com';
+  // Override at build time:
+  //   flutter run --dart-define=API_BASE_URL=http://localhost:4000 \
+  //               --dart-define=WS_URL=http://localhost:4001 \
+  //               --dart-define=USE_MOCK_DATA=true
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://api.mitimaiti.com',
+  );
+  static const String wsUrl = String.fromEnvironment(
+    'WS_URL',
+    defaultValue: 'wss://api.mitimaiti.com',
+  );
+  static const bool useMockData = bool.fromEnvironment(
+    'USE_MOCK_DATA',
+    defaultValue: false,
+  );
 
   // Auth
   static const String sendOtp = '/auth/otp/send';

@@ -58,6 +58,7 @@ class AuthViewModel: ObservableObject {
                     hasCompletedOnboarding = true
                 }
                 isAuthenticated = true
+                SocketChat.shared.connect(token: result.accessToken)
             } catch {
                 isLoading = false
                 self.error = error.localizedDescription
@@ -75,6 +76,7 @@ class AuthViewModel: ObservableObject {
         phone = ""
         otpCode = ""
         otpSent = false
+        SocketChat.shared.disconnect()
         Task {
             await api.clearTokens()
         }

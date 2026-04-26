@@ -1159,4 +1159,40 @@ router.get(
   })
 );
 
+// ─── POST /v1/me/fcm-token ──────────────────────────────────────────────────────
+// Register or update the user's FCM device token for push notifications.
+
+const fcmTokenSchema = z.object({
+  token: z.string().min(10).max(4096),
+  platform: z.enum(['ios', 'android', 'web']).optional(),
+});
+
+router.post(
+  '/fcm-token',
+  authenticate,
+  validate(fcmTokenSchema),
+  asyncHandler(async (req: Request, res: Response) => {
+    const user = (req as AuthenticatedRequest).user;
+    const { token, platform } = req.body;
+
+    const { error } = await supabase
+      .from('user_fcm_tokens')
+      .upsert(
+        {
+          user_id: user.id,
+          fcm_token: token,
+          platform: platform || null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' }
+      );
+
+    if (error) {
+      throw new AppError(500, 'Failed to register FCM token', 'FCM_REGISTER_FAILED');
+    }
+
+    res.json({ success: true });
+  })
+);
+
 export default router;

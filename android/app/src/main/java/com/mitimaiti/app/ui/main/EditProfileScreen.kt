@@ -143,7 +143,14 @@ fun EditProfileScreen(
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
-        uri?.let { viewModel.addPhoto(it) }
+        uri?.let { picked ->
+            if (com.mitimaiti.app.services.ApiConfig.useMockData) {
+                viewModel.addPhoto(picked)
+            } else {
+                val bytes = com.mitimaiti.app.utils.ImageCompression.compressForUpload(context, picked)
+                if (bytes != null) viewModel.uploadPhotoBytes(bytes)
+            }
+        }
     }
 
     // Primary photo picker sheet

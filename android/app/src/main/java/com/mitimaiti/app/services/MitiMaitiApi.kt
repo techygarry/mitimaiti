@@ -1,5 +1,6 @@
 package com.mitimaiti.app.services
 
+import okhttp3.MultipartBody
 import retrofit2.Response
 import retrofit2.http.*
 
@@ -49,6 +50,16 @@ interface MitiMaitiApi {
     @POST("me/verify")
     suspend fun requestVerification(): Response<Map<String, Any>>
 
+    @Multipart
+    @POST("me/media")
+    suspend fun uploadPhoto(@Part file: MultipartBody.Part): Response<Map<String, Any>>
+
+    @DELETE("me/media/{id}")
+    suspend fun deletePhoto(@Path("id") id: String): Response<Map<String, Any>>
+
+    @POST("me/fcm-token")
+    suspend fun registerFcmToken(@Body body: Map<String, String>): Response<Map<String, Any>>
+
     // ──────────────────── DISCOVERY (/v1/feed) ────────────────────
 
     @GET("feed")
@@ -91,10 +102,11 @@ interface MitiMaitiApi {
         @Body body: Map<String, String>
     ): Response<Map<String, Any>>
 
+    @Multipart
     @POST("chat/{matchId}/media")
     suspend fun sendMedia(
         @Path("matchId") matchId: String,
-        @Body body: Map<String, String>
+        @Part media: MultipartBody.Part
     ): Response<Map<String, Any>>
 
     @POST("chat/{matchId}/extend")

@@ -1,17 +1,22 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+import '../../config/api_config.dart';
+import '../../services/api_service.dart';
 import '../../theme.dart';
 
-class ChatScreen extends StatefulWidget {
+class ChatScreen extends ConsumerStatefulWidget {
   final String matchId;
   const ChatScreen({super.key, required this.matchId});
 
   @override
-  State<ChatScreen> createState() => _ChatScreenState();
+  ConsumerState<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends ConsumerState<ChatScreen> {
+  final _picker = ImagePicker();
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
   final List<_MockMessage> _messages = [];
@@ -40,6 +45,34 @@ class _ChatScreenState extends State<ChatScreen> {
   bool get _isUrgent {
     if (_deadline == null) return false;
     return _deadline!.difference(DateTime.now()).inHours < 4;
+  }
+
+  Future<void> _sendPhoto() async {
+    final image = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1200,
+      imageQuality: 80,
+    );
+    if (image == null) return;
+
+    setState(() {
+      _messages.add(_MockMessage(text: '[Photo]', isMe: true, time: DateTime.now()));
+    });
+
+    if (ApiConfig.useMockData) return;
+    try {
+      final api = ref.read(apiServiceProvider);
+      await api.uploadFile<Map<String, dynamic>>(
+        '/v1/chat/${widget.matchId}/media',
+        image.path,
+        fieldName: 'media',
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Photo upload failed')),
+      );
+    }
   }
 
   void _sendMessage() {
@@ -163,7 +196,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 )
               : Row(
                   children: [
-                    IconButton(icon: const Icon(Icons.photo_camera_outlined), onPressed: () {}, tooltip: 'Send photo'),
+                    IconButton(icon: const Icon(Icons.photo_camera_outlined), onPressed: _sendPhoto, tooltip: 'Send photo'),
                     IconButton(icon: const Icon(Icons.mic_outlined), onPressed: () {}, tooltip: 'Voice note'),
                     Expanded(
                       child: TextField(

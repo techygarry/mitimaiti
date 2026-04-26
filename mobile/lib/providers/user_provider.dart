@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../config/api_config.dart';
 import '../models/user.dart';
+import '../services/api_service.dart';
 import '../services/storage_service.dart';
 
 class UserState {
@@ -20,8 +22,40 @@ class UserState {
 
 class UserNotifier extends StateNotifier<UserState> {
   final StorageService _storage;
+  final ApiService _api;
 
-  UserNotifier(this._storage) : super(const UserState());
+  UserNotifier(this._storage, this._api) : super(const UserState());
+
+  Future<bool> uploadPhoto(String filePath) async {
+    if (state.user == null) return false;
+    if (ApiConfig.useMockData) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      final order = state.user!.photos.length;
+      final newPhoto = Photo(
+        id: 'mock-${DateTime.now().millisecondsSinceEpoch}',
+        url: 'https://i.pravatar.cc/600?u=${DateTime.now().millisecondsSinceEpoch}',
+        order: order,
+      );
+      state = state.copyWith(user: state.user!.copyWith(photos: [...state.user!.photos, newPhoto]));
+      return true;
+    }
+    try {
+      final response = await _api.uploadFile<Map<String, dynamic>>('/v1/me/media', filePath);
+      final media = (response.data?['data'] as Map<String, dynamic>?)?['media'] as Map<String, dynamic>?;
+      if (media == null) return false;
+      final photo = Photo(
+        id: media['id'] as String,
+        url: (media['url_original'] ?? media['url']) as String,
+        order: media['sort_order'] as int? ?? state.user!.photos.length,
+        isVerified: false,
+      );
+      state = state.copyWith(user: state.user!.copyWith(photos: [...state.user!.photos, photo]));
+      return true;
+    } catch (_) {
+      state = state.copyWith(error: 'Photo upload failed');
+      return false;
+    }
+  }
 
   Future<void> loadProfile() async {
     state = state.copyWith(isLoading: true);
@@ -63,6 +97,53 @@ class UserNotifier extends StateNotifier<UserState> {
     }
   }
 
+  Future<bool> answerDailyPrompt(String answer) async {
+    if (ApiConfig.useMockData) {
+      await Future.delayed(const Duration(milliseconds: 400));
+      return true;
+    }
+    try {
+      await _api.post('/v1/action/prompt', data: {'answer': answer});
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Register FCM device token with backend.
+  ///
+  /// To enable real push notifications:
+  ///   1. Add `firebase_core` and `firebase_messaging` to pubspec.yaml.
+  ///   2. Run `flutterfire configure` to generate firebase_options.dart.
+  ///   3. After auth, call:
+  ///        final token = await FirebaseMessaging.instance.getToken();
+  ///        if (token != null) ref.read(userProvider.notifier).registerFcmToken(token);
+  Future<bool> registerFcmToken(String token, {String platform = 'android'}) async {
+    if (ApiConfig.useMockData) {
+      await Future.delayed(const Duration(milliseconds: 200));
+      return true;
+    }
+    try {
+      await _api.post('/v1/me/fcm-token', data: {'token': token, 'platform': platform});
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> joinFamily(String code, String roleTag) async {
+    if (ApiConfig.useMockData) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      return true;
+    }
+    try {
+      await _api.post('/v1/family/join', data: {'code': code, 'roleTag': roleTag});
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> updateProfile(Map<String, dynamic> updates) async {
     if (state.user == null) return;
     state = state.copyWith(isLoading: true);
@@ -89,5 +170,6 @@ class UserNotifier extends StateNotifier<UserState> {
 
 final userProvider = StateNotifierProvider<UserNotifier, UserState>((ref) {
   final storage = ref.read(storageServiceProvider);
-  return UserNotifier(storage);
+  final api = ref.read(apiServiceProvider);
+  return UserNotifier(storage, api);
 });

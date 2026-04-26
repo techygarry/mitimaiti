@@ -74,6 +74,16 @@ class ProfileViewModel : ViewModel() {
     fun removePhoto(index: Int) { PhotoRepository.removePhoto(index) }
     fun setPrimaryPhoto(index: Int) { PhotoRepository.setPrimaryPhoto(index) }
 
+    fun uploadPhotoBytes(bytes: ByteArray, mimeType: String = "image/jpeg") {
+        viewModelScope.launch {
+            APIService.uploadPhoto(bytes, mimeType).onSuccess { photo ->
+                PhotoRepository.addPhoto(Uri.parse(photo.url))
+            }.onFailure {
+                _error.value = "Photo upload failed"
+            }
+        }
+    }
+
     val profileStats = ProfileStats(views = 142, likes = 38, matches = 12)
 
     /**

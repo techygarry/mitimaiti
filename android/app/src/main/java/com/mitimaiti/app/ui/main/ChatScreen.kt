@@ -275,6 +275,7 @@ fun ChatScreen(
                     messageText = messageText,
                     onTextChange = { viewModel.updateMessageText(it) },
                     onSend = { viewModel.sendMessage() },
+                    onSendPhoto = { bytes -> viewModel.sendChatPhoto(bytes) },
                     disabled = viewModel.inputDisabled,
                     placeholder = if (viewModel.isLockedForMe) "Waiting for reply..." else if (viewModel.awaitingFirstMessage) "Send the first message!" else "Type a message...",
                     isLocked = viewModel.isLockedForMe
@@ -639,11 +640,20 @@ private fun ChatInputBar(
     messageText: String,
     onTextChange: (String) -> Unit,
     onSend: () -> Unit,
+    onSendPhoto: (ByteArray) -> Unit = {},
     disabled: Boolean,
     placeholder: String,
     isLocked: Boolean
 ) {
     val colors = LocalAdaptiveColors.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val photoPicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        val bytes = com.mitimaiti.app.utils.ImageCompression.compressForUpload(context, uri)
+        if (bytes != null) onSendPhoto(bytes)
+    }
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = colors.surface,
@@ -654,7 +664,16 @@ private fun ChatInputBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Camera button
-            IconButton(onClick = { }, enabled = !disabled) {
+            IconButton(
+                onClick = {
+                    photoPicker.launch(
+                        androidx.activity.result.PickVisualMediaRequest(
+                            androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly
+                        )
+                    )
+                },
+                enabled = !disabled
+            ) {
                 Icon(Icons.Default.CameraAlt, "Photo", tint = if (disabled) colors.textMuted.copy(alpha = 0.3f) else AppColors.Rose)
             }
 

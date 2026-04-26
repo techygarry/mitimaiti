@@ -453,6 +453,27 @@ class NotificationManager: ObservableObject {
         scheduleWeeklyDigest()
     }
 
+    // MARK: - FCM token registration
+    //
+    // To enable real push notifications:
+    //   1. Add Firebase iOS SDK (firebase-ios-sdk) to project.yml packages, then:
+    //        import FirebaseMessaging
+    //   2. Configure GoogleService-Info.plist in the app bundle.
+    //   3. In your AppDelegate or @main app, call:
+    //        Messaging.messaging().token { token, _ in
+    //            if let token { Task { await NotificationManager.shared.registerFcmToken(token) } }
+    //        }
+    //
+    // This method is wired today; only the token source needs Firebase.
+
+    func registerFcmToken(_ token: String) async {
+        do {
+            try await APIService.shared.registerFcmToken(token, platform: "ios")
+        } catch {
+            print("[NotificationManager] FCM token registration failed: \(error)")
+        }
+    }
+
     // MARK: - Seed Data
 
     private func loadSeedNotifications() {

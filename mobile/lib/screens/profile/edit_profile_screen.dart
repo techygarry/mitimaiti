@@ -1,12 +1,42 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+import '../../providers/user_provider.dart';
 import '../../theme.dart';
 
-class EditProfileScreen extends StatelessWidget {
+class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key});
 
   @override
+  ConsumerState<EditProfileScreen> createState() => _EditProfileScreenState();
+}
+
+class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
+  final _picker = ImagePicker();
+  bool _uploading = false;
+
+  Future<void> _pickAndUpload() async {
+    if (_uploading) return;
+    final image = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1200,
+      imageQuality: 80,
+    );
+    if (image == null) return;
+    setState(() => _uploading = true);
+    final ok = await ref.read(userProvider.notifier).uploadPhoto(image.path);
+    if (!mounted) return;
+    setState(() => _uploading = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(ok ? 'Photo uploaded' : 'Upload failed')),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final photos = ref.watch(userProvider).user?.photos ?? const [];
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.pop()),
@@ -24,14 +54,31 @@ class EditProfileScreen extends StatelessWidget {
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3, crossAxisSpacing: 8, mainAxisSpacing: 8, childAspectRatio: 0.75),
             itemCount: 6,
-            itemBuilder: (_, i) => Container(
-              decoration: BoxDecoration(
-                color: MitiMaitiTheme.background,
-                border: Border.all(color: MitiMaitiTheme.border),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Center(child: Icon(Icons.add_photo_alternate_outlined, color: MitiMaitiTheme.textSecondary)),
-            ),
+            itemBuilder: (_, i) {
+              final hasPhoto = i < photos.length;
+              return GestureDetector(
+                onTap: hasPhoto ? null : _pickAndUpload,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: MitiMaitiTheme.background,
+                    border: Border.all(color: MitiMaitiTheme.border),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: hasPhoto
+                      ? CachedNetworkImage(
+                          imageUrl: photos[i].url,
+                          fit: BoxFit.cover,
+                          errorWidget: (_, __, ___) => Container(color: MitiMaitiTheme.border),
+                        )
+                      : Center(
+                          child: _uploading && i == photos.length
+                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                              : Icon(Icons.add_photo_alternate_outlined, color: MitiMaitiTheme.textSecondary),
+                        ),
+                ),
+              );
+            },
           ),
           const SizedBox(height: 32),
 

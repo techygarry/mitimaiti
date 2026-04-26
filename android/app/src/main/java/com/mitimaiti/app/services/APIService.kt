@@ -2,6 +2,9 @@ package com.mitimaiti.app.services
 
 import com.mitimaiti.app.models.*
 import kotlinx.coroutines.delay
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.time.LocalDate
 
 /**
@@ -107,6 +110,65 @@ object APIService {
         } catch (e: Exception) { Result.failure(APIError.NetworkError) }
     }
 
+    suspend fun uploadPhoto(bytes: ByteArray, mimeType: String = "image/jpeg"): Result<UserPhoto> {
+        if (ApiConfig.useMockData) {
+            delay(800)
+            return Result.success(UserPhoto(
+                url = "https://i.pravatar.cc/600?u=${java.util.UUID.randomUUID()}",
+                isPrimary = false,
+                sortOrder = 0
+            ))
+        }
+        return try {
+            val body = bytes.toRequestBody(mimeType.toMediaTypeOrNull())
+            val part = MultipartBody.Part.createFormData("file", "photo.jpg", body)
+            val response = api.uploadPhoto(part)
+            if (response.isSuccessful) {
+                val media = (response.body()?.get("media") as? Map<*, *>) ?: return Result.failure(APIError.ServerError)
+                Result.success(UserPhoto(
+                    id = media["id"] as? String ?: java.util.UUID.randomUUID().toString(),
+                    url = media["url_original"] as? String ?: "",
+                    urlThumb = media["url_thumb"] as? String,
+                    urlMedium = media["url_medium"] as? String,
+                    isPrimary = media["is_primary"] as? Boolean ?: false,
+                    sortOrder = (media["sort_order"] as? Number)?.toInt() ?: 0
+                ))
+            } else Result.failure(APIError.ServerError)
+        } catch (e: Exception) { Result.failure(APIError.NetworkError) }
+    }
+
+    suspend fun deletePhoto(id: String): Result<Boolean> {
+        if (ApiConfig.useMockData) { delay(300); return Result.success(true) }
+        return try {
+            val response = api.deletePhoto(id)
+            if (response.isSuccessful) Result.success(true) else Result.failure(APIError.ServerError)
+        } catch (e: Exception) { Result.failure(APIError.NetworkError) }
+    }
+
+    suspend fun answerPrompt(answer: String): Result<Boolean> {
+        if (ApiConfig.useMockData) { delay(400); return Result.success(true) }
+        return try {
+            val response = api.answerPrompt(mapOf("answer" to answer))
+            if (response.isSuccessful) Result.success(true) else Result.failure(APIError.ServerError)
+        } catch (e: Exception) { Result.failure(APIError.NetworkError) }
+    }
+
+    suspend fun joinFamily(code: String, roleTag: String): Result<Boolean> {
+        if (ApiConfig.useMockData) { delay(500); return Result.success(true) }
+        return try {
+            val response = api.joinFamily(mapOf("code" to code, "roleTag" to roleTag))
+            if (response.isSuccessful) Result.success(true) else Result.failure(APIError.ServerError)
+        } catch (e: Exception) { Result.failure(APIError.NetworkError) }
+    }
+
+    suspend fun registerFcmToken(token: String, platform: String = "android"): Result<Boolean> {
+        if (ApiConfig.useMockData) { delay(200); return Result.success(true) }
+        return try {
+            val response = api.registerFcmToken(mapOf("token" to token, "platform" to platform))
+            if (response.isSuccessful) Result.success(true) else Result.failure(APIError.ServerError)
+        } catch (e: Exception) { Result.failure(APIError.NetworkError) }
+    }
+
     // ──────────────────── FEED ────────────────────
 
     suspend fun fetchFeed(cursor: String? = null): Result<List<FeedCard>> {
@@ -198,6 +260,24 @@ object APIService {
             if (response.isSuccessful) {
                 val body = response.body()
                 Result.success(parseMessage(body?.get("message") as? Map<*, *>))
+            } else Result.failure(APIError.ServerError)
+        } catch (e: Exception) { Result.failure(APIError.NetworkError) }
+    }
+
+    suspend fun sendChatMedia(matchId: String, bytes: ByteArray, mimeType: String = "image/jpeg"): Result<Message> {
+        if (ApiConfig.useMockData) {
+            delay(600)
+            return Result.success(Message(matchId = matchId, senderId = "current-user-id",
+                content = "https://i.pravatar.cc/600?u=${java.util.UUID.randomUUID()}",
+                msgType = MessageType.PHOTO, status = MessageStatus.SENT))
+        }
+        return try {
+            val body = bytes.toRequestBody(mimeType.toMediaTypeOrNull())
+            val part = MultipartBody.Part.createFormData("media", "chat.jpg", body)
+            val response = api.sendMedia(matchId, part)
+            if (response.isSuccessful) {
+                val message = response.body()?.get("message") as? Map<*, *>
+                Result.success(parseMessage(message))
             } else Result.failure(APIError.ServerError)
         } catch (e: Exception) { Result.failure(APIError.NetworkError) }
     }

@@ -164,6 +164,41 @@ class ChatViewModel: ObservableObject {
         }
     }
 
+    func sendPhoto(imageData: Data) {
+        guard let matchId = match?.id else { return }
+        if isLockedForMe {
+            error = "Please wait for \(match?.otherUser.displayName ?? "them") to reply to your first message."
+            return
+        }
+        let tempMsg = Message(matchId: matchId, senderId: currentUserId,
+                              content: "Uploading...", msgType: .photo, status: .sending)
+        messages.append(tempMsg)
+        let isFirstMessage = !match!.hasFirstMessage
+        isSending = true
+
+        Task {
+            do {
+                let sent = try await api.sendChatMedia(matchId: matchId, imageData: imageData)
+                if let idx = messages.firstIndex(where: { $0.id == tempMsg.id }) {
+                    messages[idx] = sent
+                }
+                MessageRepository.shared.setMessages(matchId: matchId, msgs: messages)
+                isSending = false
+                if isFirstMessage {
+                    match?.firstMsgBy = currentUserId
+                    match?.firstMsgLocked = true
+                    match?.firstMsgAt = Date()
+                }
+            } catch {
+                self.error = error.localizedDescription
+                if let idx = messages.firstIndex(where: { $0.id == tempMsg.id }) {
+                    messages.remove(at: idx)
+                }
+                isSending = false
+            }
+        }
+    }
+
     func sendIcebreaker(_ question: String) {
         guard let matchId = match?.id else { return }
 

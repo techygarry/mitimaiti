@@ -17,6 +17,13 @@ struct MitiMaitiApp: App {
                     .environmentObject(themeManager)
                     .preferredColorScheme(themeManager.colorScheme)
                     .withAdaptiveColors()
+                    .task {
+                        await APIService.shared.bootstrap()
+                        if let token = await APIService.shared.currentAccessToken() {
+                            authVM.isAuthenticated = true
+                            SocketChat.shared.connect(token: token)
+                        }
+                    }
 
                 ToastOverlay()
             }

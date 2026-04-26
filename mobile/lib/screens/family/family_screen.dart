@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../providers/user_provider.dart';
 import '../../theme.dart';
 import '../../widgets/empty_state.dart';
 
-class FamilyScreen extends StatefulWidget {
+class FamilyScreen extends ConsumerStatefulWidget {
   const FamilyScreen({super.key});
   @override
-  State<FamilyScreen> createState() => _FamilyScreenState();
+  ConsumerState<FamilyScreen> createState() => _FamilyScreenState();
 }
 
-class _FamilyScreenState extends State<FamilyScreen> with SingleTickerProviderStateMixin {
+class _FamilyScreenState extends ConsumerState<FamilyScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final List<_MockMember> _members = [];
   final List<_MockSuggestion> _suggestions = [];
@@ -18,6 +20,56 @@ class _FamilyScreenState extends State<FamilyScreen> with SingleTickerProviderSt
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+  }
+
+  void _showJoinDialog() {
+    final codeCtrl = TextEditingController();
+    String role = 'parent';
+    bool joining = false;
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('Join a Family'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Enter the invite code', style: TextStyle(fontSize: 13, color: MitiMaitiTheme.textSecondary)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: codeCtrl,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(hintText: 'MM-XXXXXX', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              const Text('Your role', style: TextStyle(fontSize: 13, color: MitiMaitiTheme.textSecondary)),
+              const SizedBox(height: 4),
+              Wrap(spacing: 6, children: [
+                for (final r in ['parent', 'sibling', 'friend'])
+                  ChoiceChip(label: Text(r[0].toUpperCase() + r.substring(1)), selected: role == r, onSelected: (_) => setState(() => role = r)),
+              ]),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: joining ? null : () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: codeCtrl.text.isEmpty || joining ? null : () async {
+                setState(() => joining = true);
+                final ok = await ref.read(userProvider.notifier).joinFamily(codeCtrl.text, role);
+                if (!ctx.mounted) return;
+                Navigator.pop(ctx);
+                final messenger = ScaffoldMessenger.maybeOf(ctx);
+                messenger?.showSnackBar(
+                  SnackBar(content: Text(ok ? 'Joined family' : 'Invalid or expired code')),
+                );
+              },
+              child: Text(joining ? 'Joining...' : 'Join'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _generateInvite() {
@@ -99,7 +151,7 @@ class _FamilyScreenState extends State<FamilyScreen> with SingleTickerProviderSt
                 itemBuilder: (_, i) => _SuggestionCard(suggestion: _suggestions[i]),
               ),
           // Invite tab
-          _InviteTab(onGenerate: _generateInvite, memberCount: _members.length),
+          _InviteTab(onGenerate: _generateInvite, onJoin: _showJoinDialog, memberCount: _members.length),
         ],
       ),
     );
@@ -208,8 +260,9 @@ class _SuggestionCard extends StatelessWidget {
 
 class _InviteTab extends StatelessWidget {
   final VoidCallback onGenerate;
+  final VoidCallback onJoin;
   final int memberCount;
-  const _InviteTab({required this.onGenerate, required this.memberCount});
+  const _InviteTab({required this.onGenerate, required this.onJoin, required this.memberCount});
 
   @override
   Widget build(BuildContext context) {
@@ -236,6 +289,15 @@ class _InviteTab extends StatelessWidget {
             child: ElevatedButton(
               onPressed: memberCount < 3 ? onGenerate : null,
               child: const Text('Generate Invite Code'),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity, height: 56,
+            child: OutlinedButton.icon(
+              onPressed: onJoin,
+              icon: const Icon(Icons.qr_code_scanner),
+              label: const Text('Have a code? Join a family'),
             ),
           ),
           const SizedBox(height: 16),

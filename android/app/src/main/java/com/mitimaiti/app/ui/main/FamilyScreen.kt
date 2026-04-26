@@ -187,6 +187,85 @@ fun FamilyScreen(viewModel: FamilyViewModel = viewModel()) {
                     }
                 }
 
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // ── Join family by code ─────────────────────────────────────
+                var showJoinDialog by remember { mutableStateOf(false) }
+                var joinCode by remember { mutableStateOf("") }
+                var joinRole by remember { mutableStateOf("parent") }
+                var joining by remember { mutableStateOf(false) }
+
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    shape = RoundedCornerShape(AppTheme.radiusMd),
+                    color = colors.surface,
+                    shadowElevation = 1.dp
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showJoinDialog = true }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.QrCodeScanner, null, tint = Color(0xFF3478F6), modifier = Modifier.size(24.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Have a code?", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = colors.textPrimary)
+                            Text("Enter an invite code to join a family", fontSize = 12.sp, color = colors.textSecondary)
+                        }
+                        Text("Enter", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF3478F6))
+                    }
+                }
+
+                if (showJoinDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showJoinDialog = false },
+                        title = { Text("Join a Family") },
+                        text = {
+                            Column {
+                                Text("Enter the invite code", fontSize = 13.sp, color = colors.textSecondary)
+                                Spacer(Modifier.height(8.dp))
+                                OutlinedTextField(
+                                    value = joinCode,
+                                    onValueChange = { joinCode = it.uppercase() },
+                                    placeholder = { Text("MM-XXXXXX") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                Text("Your role", fontSize = 13.sp, color = colors.textSecondary)
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    listOf("parent", "sibling", "friend").forEach { role ->
+                                        FilterChip(
+                                            selected = joinRole == role,
+                                            onClick = { joinRole = role },
+                                            label = { Text(role.replaceFirstChar { it.uppercase() }) }
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            Button(
+                                enabled = joinCode.isNotBlank() && !joining,
+                                onClick = {
+                                    joining = true
+                                    viewModel.joinFamily(joinCode, joinRole) { ok ->
+                                        joining = false
+                                        if (ok) { showJoinDialog = false; joinCode = "" }
+                                    }
+                                }
+                            ) { Text(if (joining) "Joining..." else "Join") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showJoinDialog = false }) { Text("Cancel") }
+                        }
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // ── Tab bar (pill style) ─────────────────────────────────────

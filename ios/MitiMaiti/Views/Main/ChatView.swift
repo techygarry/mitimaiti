@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 struct ChatView: View {
     let match: Match
@@ -917,6 +918,7 @@ private struct ChatInputBar: View {
     @ObservedObject var chatVM: ChatViewModel
     var isInputFocused: FocusState<Bool>.Binding
     @Environment(\.adaptiveColors) private var colors
+    @State private var chatPhotoItem: PhotosPickerItem?
 
     var body: some View {
         if chatVM.inputDisabled {
@@ -996,6 +998,8 @@ private struct ChatInputBar: View {
                     )
             )
 
+            photoAttachButton
+
             if chatVM.messageText.isEmpty {
                 Button {} label: {
                     Image(systemName: "mic.fill")
@@ -1018,6 +1022,24 @@ private struct ChatInputBar: View {
                 .frame(width: 30, height: 30)
                 .background(AppTheme.roseGradient)
                 .clipShape(Circle())
+        }
+    }
+
+    private var photoAttachButton: some View {
+        PhotosPicker(selection: $chatPhotoItem, matching: .images) {
+            Image(systemName: "photo")
+                .font(.system(size: 20))
+                .foregroundColor(colors.textMuted)
+        }
+        .onChange(of: chatPhotoItem) { newItem in
+            Task {
+                if let data = try? await newItem?.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data),
+                   let compressed = image.compressedForUpload() ?? image.jpegData(compressionQuality: 0.8) {
+                    chatVM.sendPhoto(imageData: compressed)
+                }
+                chatPhotoItem = nil
+            }
         }
     }
 }

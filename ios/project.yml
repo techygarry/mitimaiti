@@ -18,6 +18,10 @@ settings:
     ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: "AccentColor"
     DEVELOPMENT_TEAM: "FLF59NSA8T"
     CODE_SIGN_STYLE: "Automatic"
+packages:
+  SocketIO:
+    url: https://github.com/socketio/socket.io-client-swift
+    from: 16.1.0
 targets:
   MitiMaiti:
     type: application
@@ -26,6 +30,9 @@ targets:
       - path: MitiMaiti
         excludes:
           - "**/.DS_Store"
+    dependencies:
+      - package: SocketIO
+        product: SocketIO
     settings:
       base:
         INFOPLIST_KEY_UILaunchScreen_Generation: true

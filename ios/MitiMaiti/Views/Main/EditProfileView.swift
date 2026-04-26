@@ -753,14 +753,24 @@ struct EditProfileView: View {
                     if let data = try? await item.loadTransferable(type: Data.self),
                        let uiImage = UIImage(data: data) {
                         let sortOrder = profileVM.user.photos.count
-                        let newPhoto = UserPhoto(
-                            url: "local_photo_\(UUID().uuidString)",
-                            isPrimary: profileVM.user.photos.isEmpty,
-                            sortOrder: sortOrder
-                        )
-                        profileVM.user.photos.append(newPhoto)
-                        // Persist to store using the photo's sortOrder as the index
+                        let compressed = uiImage.compressedForUpload() ?? data
                         UserImageStore.shared.save(uiImage, at: sortOrder)
+
+                        if AppConfig.useMockData {
+                            let newPhoto = UserPhoto(
+                                url: "local_photo_\(UUID().uuidString)",
+                                isPrimary: profileVM.user.photos.isEmpty,
+                                sortOrder: sortOrder
+                            )
+                            profileVM.user.photos.append(newPhoto)
+                        } else {
+                            do {
+                                let uploaded = try await APIService.shared.uploadPhoto(imageData: compressed)
+                                profileVM.user.photos.append(uploaded)
+                            } catch {
+                                ToastManager.shared.show("Upload failed: \(error.localizedDescription)")
+                            }
+                        }
                     }
                 }
                 selectedPhotoItems = []
