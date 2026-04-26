@@ -239,7 +239,7 @@ struct ChatView: View {
     // MARK: - Message List
 
     private var messageListSection: some View {
-        ChatMessageList(chatVM: chatVM, match: match)
+        ChatMessageList(chatVM: chatVM, match: match, viewerImageUrl: $viewerImageUrl, actionSheetMessage: $actionSheetMessage)
     }
 
     // MARK: - Icebreaker
@@ -491,6 +491,8 @@ private struct ChatLockBanner: View {
 private struct ChatMessageList: View {
     @ObservedObject var chatVM: ChatViewModel
     let match: Match
+    @Binding var viewerImageUrl: String?
+    @Binding var actionSheetMessage: Message?
     @Environment(\.adaptiveColors) private var colors
     @State private var showScrollToBottom = false
 
@@ -818,7 +820,7 @@ private struct BumbleMessageBubble: View {
                 .padding(.vertical, 2)
                 .background(
                     Capsule()
-                        .fill(colors.surface)
+                        .fill(colors.cardDark)
                         .overlay(Capsule().stroke(colors.border, lineWidth: 0.5))
                         .shadow(color: .black.opacity(0.08), radius: 2, x: 0, y: 1)
                 )
@@ -1836,7 +1838,7 @@ private struct MessageActionSheet: View {
 
             Spacer(minLength: 0)
         }
-        .presentationBackground(colors.surface)
+        .presentationBackground(colors.cardDark)
     }
 }
 

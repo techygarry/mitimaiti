@@ -264,6 +264,7 @@ struct ProfileView: View {
     private func intentColor(_ intent: Intent) -> Color {
         switch intent {
         case .casual: return AppTheme.info
+        case .serious: return AppTheme.gold
         case .open: return Color.purple
         case .marriage: return AppTheme.rose
         }
@@ -437,7 +438,7 @@ struct ProfileView: View {
         .padding(.vertical, 12)
         .background(
             RoundedRectangle(cornerRadius: AppTheme.radiusMD)
-                .fill(colors.surface)
+                .fill(colors.cardDark)
                 .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 2)
         )
     }

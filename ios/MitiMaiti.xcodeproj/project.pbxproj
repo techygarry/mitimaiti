@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		04662ABE081C14CF59290D0E /* UserProfileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 147E2572E77262BD15CC51BB /* UserProfileStore.swift */; };
 		0D80CF65E909D35DF39AF105 /* IceBreakerPrompts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C6D6F8A481677FD2F901907 /* IceBreakerPrompts.swift */; };
 		16E23B943B21C4F82FA071A6 /* FamilyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 817B15F387BBDBBBBD3A9204 /* FamilyView.swift */; };
 		1FD7A979ABF2C24F71DD2FF9 /* MockData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C0D74432BA96FB82E4058CB /* MockData.swift */; };
@@ -62,6 +63,7 @@
 		062CA050992BC1F6C3B39501 /* User.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = User.swift; sourceTree = "<group>"; };
 		0F0CF066DC5B615536937DF2 /* ImageCompression.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCompression.swift; sourceTree = "<group>"; };
 		10667B045864C59FCFEF4859 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
+		147E2572E77262BD15CC51BB /* UserProfileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileStore.swift; sourceTree = "<group>"; };
 		154D586DDB6B441D18F95979 /* GlassCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassCard.swift; sourceTree = "<group>"; };
 		1730F30F16F904D1FE142FE6 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
 		174F4A5A4F51A001C55F9550 /* OnboardingContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingContainerView.swift; sourceTree = "<group>"; };
@@ -262,6 +264,7 @@
 				21DAA33A2088A879B539FBF5 /* ProfileResponse.swift */,
 				66F00DA56064F7CA9AE9C772 /* SocketManager.swift */,
 				FE06DD7DB3D7C9003303ED65 /* TokenStore.swift */,
+				147E2572E77262BD15CC51BB /* UserProfileStore.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -411,6 +414,7 @@
 				73D434E7723BBD06DF90C964 /* TokenStore.swift in Sources */,
 				80AD18840A91696A4CDC05FE /* User.swift in Sources */,
 				58A2A93ED487052FC791076C /* UserImageStore.swift in Sources */,
+				04662ABE081C14CF59290D0E /* UserProfileStore.swift in Sources */,
 				600E43C1290E967091088F9B /* WelcomeView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -496,6 +500,9 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "MitiMaiti uses your camera so you can take live photos to send in chat.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "MitiMaiti uses your microphone so you can record voice messages in chat.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "MitiMaiti uses your photo library so you can pick photos to send in chat.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleLightContent;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
@@ -580,6 +587,9 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "MitiMaiti uses your camera so you can take live photos to send in chat.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "MitiMaiti uses your microphone so you can record voice messages in chat.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "MitiMaiti uses your photo library so you can pick photos to send in chat.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleLightContent;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
