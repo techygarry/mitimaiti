@@ -1,6 +1,8 @@
 import Foundation
 
 struct Message: Identifiable, Codable, Hashable {
+    static let allowedReactions: [String] = ["❤️", "😂", "😮", "😢", "😡", "👍"]
+
     let id: String
     let matchId: String
     let senderId: String
@@ -9,6 +11,8 @@ struct Message: Identifiable, Codable, Hashable {
     var msgType: MessageType
     var status: MessageStatus
     let createdAt: Date
+    var reaction: String?
+    var durationSeconds: Int
 
     var isFromMe: Bool {
         senderId == "current-user-id"
@@ -22,7 +26,9 @@ struct Message: Identifiable, Codable, Hashable {
         mediaUrl: String? = nil,
         msgType: MessageType = .text,
         status: MessageStatus = .sent,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        reaction: String? = nil,
+        durationSeconds: Int = 0
     ) {
         self.id = id
         self.matchId = matchId
@@ -32,6 +38,8 @@ struct Message: Identifiable, Codable, Hashable {
         self.msgType = msgType
         self.status = status
         self.createdAt = createdAt
+        self.reaction = reaction
+        self.durationSeconds = durationSeconds
     }
 }
 

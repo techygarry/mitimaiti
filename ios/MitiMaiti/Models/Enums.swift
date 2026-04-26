@@ -32,11 +32,12 @@ enum ShowMe: String, Codable, CaseIterable, Identifiable {
 }
 
 enum Intent: String, Codable, CaseIterable, Identifiable {
-    case casual, open, marriage
+    case casual, serious, open, marriage
     var id: String { rawValue }
     var display: String {
         switch self {
         case .casual: return "Something Casual"
+        case .serious: return "Something Serious"
         case .open: return "Open to Anything"
         case .marriage: return "Marriage"
         }
@@ -44,6 +45,7 @@ enum Intent: String, Codable, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .casual: return "cup.and.saucer.fill"
+        case .serious: return "heart.fill"
         case .open: return "sparkles"
         case .marriage: return "heart.circle.fill"
         }
@@ -51,6 +53,7 @@ enum Intent: String, Codable, CaseIterable, Identifiable {
     var color: String {
         switch self {
         case .casual: return "blue"
+        case .serious: return "pink"
         case .open: return "purple"
         case .marriage: return "pink"
         }
@@ -147,9 +150,9 @@ enum OnboardingStep: Int, CaseIterable {
         switch self {
         case .name: return "What's your full name?"
         case .birthday: return "When's your birthday?"
-        case .gender: return "I am a..."
+        case .gender: return "How do you identify?"
         case .photos: return "Add your best photos"
-        case .intent: return "I'm looking for..."
+        case .intent: return "What are you looking for?"
         case .showMe: return "Show me..."
         case .location: return "Where are you?"
         case .ready: return "You're all set!"
@@ -165,7 +168,7 @@ enum OnboardingStep: Int, CaseIterable {
         case .intent: return "What brings you to MitiMaiti?"
         case .showMe: return "Who would you like to meet?"
         case .location: return "Find matches near you"
-        case .ready: return "Welcome to the Sindhi community!"
+        case .ready: return "Welcome to the MitiMaiti community!"
         }
     }
 }

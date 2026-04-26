@@ -54,6 +54,7 @@ export default function LocationPage() {
     if (!selectedCity) return;
     if (typeof window !== 'undefined') {
       sessionStorage.setItem('onboarding_city', selectedCity);
+      localStorage.setItem('onboarding_city', selectedCity);
     }
     router.push('/onboarding/ready');
   };

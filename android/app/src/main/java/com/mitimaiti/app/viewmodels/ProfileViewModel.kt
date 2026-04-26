@@ -6,9 +6,13 @@ import androidx.lifecycle.viewModelScope
 import com.mitimaiti.app.models.*
 import com.mitimaiti.app.services.APIService
 import com.mitimaiti.app.services.PhotoRepository
+import com.mitimaiti.app.services.UserPrefs
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 data class ProfileStats(val views: Int = 0, val likes: Int = 0, val matches: Int = 0)
@@ -87,18 +91,14 @@ class ProfileViewModel : ViewModel() {
     val profileStats = ProfileStats(views = 142, likes = 38, matches = 12)
 
     /**
-     * Calculates profile completeness based on filled fields.
-     * Total fields: 28 (photos + bio + 8 basics + 7 sindhi + 5 lifestyle + 4 culture + 5 personality - 2 overlapping)
+     * Snapshot calculator — used to seed the reactive StateFlow below.
      */
-    val computedCompleteness: Int get() {
+    private fun calculateCompleteness(): Int {
         var filled = 0
         val total = 28
 
-        // Photos (1 point if any uploaded)
         if (PhotoRepository.photos.value.isNotEmpty()) filled++
-        // Bio
         if (editBio.value.isNotBlank()) filled++
-        // Basics (8)
         if (editHeight.value != null) filled++
         if (editEducation.value.isNotBlank()) filled++
         if (editOccupation.value.isNotBlank()) filled++
@@ -107,10 +107,8 @@ class ProfileViewModel : ViewModel() {
         if (editSmoking.value.isNotBlank()) filled++
         if (editDrinking.value.isNotBlank()) filled++
         if (editExercise.value.isNotBlank()) filled++
-        // Lifestyle (3)
         if (editWantKids.value.isNotBlank()) filled++
         if (editSettlingTimeline.value.isNotBlank()) filled++
-        // Sindhi Identity (7)
         if (editFluency.value != null) filled++
         if (editDialect.value.isNotBlank()) filled++
         if (editGeneration.value.isNotBlank()) filled++
@@ -118,12 +116,10 @@ class ProfileViewModel : ViewModel() {
         if (editFamilyOriginCity.value.isNotBlank()) filled++
         if (editCommunitySubGroup.value.isNotBlank()) filled++
         if (editMotherTongue.value.isNotBlank()) filled++
-        // Culture (4)
         if (editFamilyValues.value != null) filled++
         if (editFoodPreference.value != null) filled++
         if (editFestivals.value.isNotEmpty()) filled++
         if (editCuisinePreferences.value.isNotEmpty()) filled++
-        // Personality (5)
         if (editInterests.value.isNotEmpty()) filled++
         if (editMusicPreferences.value.isNotEmpty()) filled++
         if (editMovieGenres.value.isNotEmpty()) filled++
@@ -133,11 +129,40 @@ class ProfileViewModel : ViewModel() {
         return ((filled.toFloat() / total) * 100).toInt()
     }
 
+    /**
+     * Reactive profile completeness — recomputes whenever any underlying
+     * edit field (or the photo list) changes, so the UI always shows the
+     * real percentage. Exposed as a StateFlow so Compose recomposes.
+     */
+    val completenessFlow: StateFlow<Int> = combine(
+        listOf<kotlinx.coroutines.flow.Flow<Any?>>(
+            PhotoRepository.photos, editBio, editHeight, editEducation, editOccupation,
+            editCompany, editReligion, editSmoking, editDrinking, editExercise,
+            editWantKids, editSettlingTimeline, editFluency, editDialect, editGeneration,
+            editGotra, editFamilyOriginCity, editCommunitySubGroup, editMotherTongue,
+            editFamilyValues, editFoodPreference, editFestivals, editCuisinePreferences,
+            editInterests, editMusicPreferences, editMovieGenres, editTravelStyle, editLanguages
+        )
+    ) { _ -> calculateCompleteness() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 0)
+
+    /** Kept for backward compat with any call sites that read the snapshot. */
+    val computedCompleteness: Int get() = completenessFlow.value
+
     fun loadProfile() {
         viewModelScope.launch {
             _isLoading.value = true
             APIService.fetchProfile()
-                .onSuccess { _user.value = it; populateEditFields(it) }
+                .onSuccess { fetched ->
+                    // Override the mock/server name with what the user typed
+                    // during onboarding, if we captured one.
+                    val storedName = UserPrefs.firstName.value
+                    val merged = if (storedName.isNotBlank()) {
+                        fetched.copy(displayName = storedName)
+                    } else fetched
+                    _user.value = merged
+                    populateEditFields(merged)
+                }
                 .onFailure { _error.value = "Failed to load profile" }
             _isLoading.value = false
         }

@@ -284,22 +284,17 @@ private struct BirthdayStepContent: View {
     }
 
     private var dayPickerField: some View {
-        Menu {
-            ForEach(days, id: \.self) { day in
-                Button("\(day)") {
-                    dayText = "\(day)"
+        TextField("Day", text: $dayText)
+            .keyboardType(.numberPad)
+            .font(.system(size: 17, weight: .medium))
+            .foregroundColor(dayText.isEmpty ? colors.textMuted : colors.textPrimary)
+            .multilineTextAlignment(.leading)
+            .onChange(of: dayText) { _, newValue in
+                let filtered = String(newValue.filter { $0.isNumber }.prefix(2))
+                if filtered != newValue { dayText = filtered }
+                if let day = Int(filtered), day >= 1, day <= 31 {
                     vm.birthDay = day
                 }
-            }
-        } label: {
-            HStack {
-                Text(dayText.isEmpty ? "Day" : dayText)
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundColor(dayText.isEmpty ? colors.textMuted : colors.textPrimary)
-                Spacer()
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 10))
-                    .foregroundColor(colors.textMuted)
             }
             .padding(.horizontal, 14)
             .frame(height: 52)
@@ -309,7 +304,6 @@ private struct BirthdayStepContent: View {
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(colors.border, lineWidth: 1)
             )
-        }
     }
 
     private var monthPickerField: some View {
@@ -382,22 +376,17 @@ private struct BirthdayStepContent: View {
     }
 
     private var yearPickerField: some View {
-        Menu {
-            ForEach(years, id: \.self) { year in
-                Button("\(year)") {
-                    yearText = "\(year)"
+        TextField("Year", text: $yearText)
+            .keyboardType(.numberPad)
+            .font(.system(size: 17, weight: .medium))
+            .foregroundColor(yearText.isEmpty ? colors.textMuted : colors.textPrimary)
+            .multilineTextAlignment(.leading)
+            .onChange(of: yearText) { _, newValue in
+                let filtered = String(newValue.filter { $0.isNumber }.prefix(4))
+                if filtered != newValue { yearText = filtered }
+                if let year = Int(filtered), year >= 1900, year <= Calendar.current.component(.year, from: Date()) {
                     vm.birthYear = year
                 }
-            }
-        } label: {
-            HStack {
-                Text(yearText.isEmpty ? "Year" : yearText)
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundColor(yearText.isEmpty ? colors.textMuted : colors.textPrimary)
-                Spacer()
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 10))
-                    .foregroundColor(colors.textMuted)
             }
             .padding(.horizontal, 14)
             .frame(height: 52)
@@ -407,7 +396,6 @@ private struct BirthdayStepContent: View {
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(colors.border, lineWidth: 1)
             )
-        }
     }
 
     private var ageIndicator: some View {
@@ -475,20 +463,19 @@ private struct GenderCard: View {
     let action: () -> Void
     @Environment(\.adaptiveColors) private var colors
 
-    private var iconName: String {
+    private var emoji: String {
         switch gender {
-        case .man: return "figure.stand"
-        case .woman: return "figure.stand.dress"
-        case .nonBinary: return "figure.2"
+        case .man: return "👨"
+        case .woman: return "👩"
+        case .nonBinary: return "🧑"
         }
     }
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 16) {
-                Image(systemName: iconName)
-                    .font(.system(size: 22))
-                    .foregroundColor(isSelected ? AppTheme.rose : colors.textMuted)
+                Text(emoji)
+                    .font(.system(size: 28))
                     .frame(width: 44, height: 44)
                     .background(
                         Circle()
@@ -685,7 +672,7 @@ private struct IntentStepContent: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            ForEach(Intent.allCases) { intent in
+            ForEach(Intent.allCases.filter { $0 != .marriage }) { intent in
                 IntentCard(intent: intent, isSelected: vm.selectedIntent == intent) {
                     withAnimation(.spring(response: 0.3)) {
                         vm.selectedIntent = intent
@@ -702,18 +689,20 @@ private struct IntentCard: View {
     let action: () -> Void
     @Environment(\.adaptiveColors) private var colors
 
-    private var iconName: String {
+    private var emoji: String {
         switch intent {
-        case .casual: return "cup.and.saucer.fill"
-        case .open: return "sparkles"
-        case .marriage: return "heart.circle.fill"
+        case .casual: return "☕"
+        case .serious: return "🌹"
+        case .open: return "✨"
+        case .marriage: return "💍"
         }
     }
 
     private var descriptionText: String {
         switch intent {
-        case .casual: return "Keep it light and fun"
-        case .open: return "See where it goes"
+        case .casual: return "Keep it light and see where things go"
+        case .serious: return "Ready for the real thing"
+        case .open: return "Let fate decide, open to all possibilities"
         case .marriage: return "Looking to settle down"
         }
     }
@@ -721,9 +710,8 @@ private struct IntentCard: View {
     var body: some View {
         Button(action: action) {
             HStack(alignment: .top, spacing: 16) {
-                Image(systemName: iconName)
-                    .font(.system(size: 24))
-                    .foregroundColor(isSelected ? AppTheme.rose : colors.textMuted)
+                Text(emoji)
+                    .font(.system(size: 28))
                     .frame(width: 44, height: 44)
                     .background(
                         Circle()
@@ -783,20 +771,19 @@ private struct ShowMeCard: View {
     let action: () -> Void
     @Environment(\.adaptiveColors) private var colors
 
-    private var iconName: String {
+    private var emoji: String {
         switch pref {
-        case .men: return "figure.stand"
-        case .women: return "figure.stand.dress"
-        case .everyone: return "figure.2"
+        case .men: return "👨"
+        case .women: return "👩"
+        case .everyone: return "🌈"
         }
     }
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 16) {
-                Image(systemName: iconName)
-                    .font(.system(size: 22))
-                    .foregroundColor(isSelected ? AppTheme.rose : colors.textMuted)
+                Text(emoji)
+                    .font(.system(size: 28))
                     .frame(width: 44, height: 44)
                     .background(
                         Circle()
@@ -1125,7 +1112,7 @@ private struct ReadyStepContent: View {
                     .font(.system(size: 26, weight: .bold))
                     .foregroundColor(colors.textPrimary)
 
-                Text("Welcome to the Sindhi community, \(vm.firstName)!")
+                Text("Welcome to the MitiMaiti community, \(vm.firstName)!")
                     .font(.system(size: 14))
                     .foregroundColor(colors.textSecondary)
                     .multilineTextAlignment(.center)
@@ -1151,7 +1138,7 @@ private struct ReadyStepContent: View {
                     HStack(spacing: 8) {
                         Image(systemName: "sparkles")
                             .font(.system(size: 16, weight: .semibold))
-                        Text("Go to Discover")
+                        Text("✨ Go to Discover")
                             .font(.system(size: 17, weight: .semibold))
                     }
                     .foregroundColor(.white)
@@ -1315,10 +1302,10 @@ private struct ReadyStepContent: View {
                 .background(Circle().fill(AppTheme.gold.opacity(0.15)))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Complete your Sindhi identity")
+                Text(vm.isNonSindhi ? "Complete your Profile" : "Complete your Sindhi Identity")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(colors.textPrimary)
-                Text("Add fluency, gotra, festivals for better cultural matching")
+                Text(vm.isNonSindhi ? "Add more details for better matching" : "Add fluency, gotra, festivals for better cultural matching")
                     .font(.system(size: 12))
                     .foregroundColor(colors.textSecondary)
             }

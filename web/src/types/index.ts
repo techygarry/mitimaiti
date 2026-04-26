@@ -189,12 +189,19 @@ export interface Match {
 
 export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read';
 
+export type ReactionEmoji = '❤️' | '😂' | '😮' | '😢' | '😡' | '👍';
+export const REACTION_EMOJIS: ReactionEmoji[] = ['❤️', '😂', '😮', '😢', '😡', '👍'];
+
 export interface Message {
   id: string;
   match_id: string;
   sender_id: string;
   content: string;
   type: 'text' | 'image' | 'voice' | 'gif' | 'icebreaker';
+  imageUrl?: string;
+  audioUrl?: string;
+  durationSeconds?: number;
+  reaction?: ReactionEmoji;
   read: boolean;
   status?: MessageStatus;
   created_at: string;

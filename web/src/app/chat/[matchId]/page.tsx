@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import toast from 'react-hot-toast';
 import {
   ArrowLeft,
   Camera,
@@ -18,13 +19,19 @@ import {
   Flag,
   ShieldOff,
   UserX,
+  X,
+  Pencil,
+  Trash2,
+  MoreHorizontal,
+  Play,
+  Pause,
 } from 'lucide-react';
 import AppShell from '@/components/ui/AppShell';
 import Avatar from '@/components/ui/Avatar';
 import CountdownTimer from '@/components/ui/CountdownTimer';
 import { mockMatches, mockMessages } from '@/lib/mockData';
 import { getRandomIceBreakers, IceBreakerPrompt } from '@/lib/iceBreakerPrompts';
-import { Message } from '@/types';
+import { Message, REACTION_EMOJIS, ReactionEmoji } from '@/types';
 import { useMatches } from '@/context/MatchesContext';
 import { format, isToday, isYesterday } from 'date-fns';
 import { useTranslation } from '@/lib/i18n';
@@ -71,14 +78,31 @@ function MessageBubble({
   avatarSrc,
   avatarAlt,
   showAvatar,
+  onImageClick,
+  onEdit,
+  onDelete,
+  onReact,
 }: {
   message: Message;
   isMine: boolean;
   avatarSrc?: string;
   avatarAlt: string;
   showAvatar: boolean;
+  onImageClick?: (url: string) => void;
+  onEdit?: (msg: Message) => void;
+  onDelete?: (msg: Message) => void;
+  onReact?: (msg: Message, emoji: ReactionEmoji) => void;
 }) {
   const status = message.status ?? (message.read ? 'read' : 'delivered');
+  const isImage = message.type === 'image' && !!message.imageUrl;
+  const isVoice = message.type === 'voice' && !!message.audioUrl;
+  const isEdited = message.type === 'text' && message.content.includes('[edited]');
+  const displayContent = isEdited ? message.content.replace(/\s*\[edited\]\s*$/, '') : message.content;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const canEdit = isMine && message.type === 'text' && !!onEdit;
+  const canDelete = isMine && !!onDelete;
+  const canReact = !!onReact;
+  const showActions = canEdit || canDelete || canReact;
 
   return (
     <motion.div
@@ -96,21 +120,266 @@ function MessageBubble({
         </div>
       )}
 
-      <div
-        className={`max-w-[72%] px-4 py-2.5 rounded-2xl ${
-          isMine
-            ? 'bg-rose text-white rounded-br-sm'
-            : 'bg-gray-100 text-charcoal rounded-bl-sm'
-        }`}
-      >
-        <p className="text-sm leading-relaxed break-words">{message.content}</p>
-        <div className={`flex items-center gap-1 mt-0.5 ${isMine ? 'justify-end' : ''}`}>
-          <p className={`text-[10px] ${isMine ? 'text-white/55' : 'text-textLight'}`}>
-            {formatMessageTime(message.created_at)}
-          </p>
-          {isMine && <ReadReceipt status={status} />}
+      {isVoice ? (
+        <div className={`max-w-[72%] flex flex-col ${isMine ? 'items-end' : 'items-start'}`}>
+          <VoiceBubble
+            audioUrl={message.audioUrl!}
+            duration={message.durationSeconds ?? 0}
+            isMine={isMine}
+          />
+          <div className={`flex items-center gap-1 mt-1 px-1 ${isMine ? 'justify-end' : ''}`}>
+            <p className="text-[10px] text-textLight">{formatMessageTime(message.created_at)}</p>
+            {isMine && <ReadReceipt status={status} />}
+          </div>
         </div>
+      ) : isImage ? (
+        <div className={`max-w-[72%] flex flex-col ${isMine ? 'items-end' : 'items-start'}`}>
+          <button
+            type="button"
+            onClick={() => onImageClick?.(message.imageUrl!)}
+            className="block rounded-2xl overflow-hidden focus:outline-none focus:ring-2 focus:ring-rose"
+            aria-label="View photo"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={message.imageUrl}
+              alt="Photo message"
+              className="max-w-[240px] max-h-[320px] object-cover"
+            />
+          </button>
+          <div className={`flex items-center gap-1 mt-1 px-1 ${isMine ? 'justify-end' : ''}`}>
+            <p className="text-[10px] text-textLight">{formatMessageTime(message.created_at)}</p>
+            {isMine && <ReadReceipt status={status} />}
+          </div>
+        </div>
+      ) : (
+        <div className="relative group">
+          <div className="relative inline-block">
+            <div
+              className={`max-w-[72%] px-4 py-2.5 rounded-2xl ${
+                isMine
+                  ? 'bg-rose text-white rounded-br-sm'
+                  : 'bg-gray-100 text-charcoal rounded-bl-sm'
+              }`}
+              onContextMenu={(e) => {
+                if (!showActions) return;
+                e.preventDefault();
+                setMenuOpen((v) => !v);
+              }}
+            >
+              <p className="text-sm leading-relaxed break-words">{displayContent}</p>
+              <div className={`flex items-center gap-1 mt-0.5 ${isMine ? 'justify-end' : ''}`}>
+                {isEdited && (
+                  <span className={`text-[10px] italic ${isMine ? 'text-white/55' : 'text-textLight'}`}>
+                    edited
+                  </span>
+                )}
+                <p className={`text-[10px] ${isMine ? 'text-white/55' : 'text-textLight'}`}>
+                  {formatMessageTime(message.created_at)}
+                </p>
+                {isMine && <ReadReceipt status={status} />}
+              </div>
+            </div>
+            {message.reaction && (
+              <div
+                className={`absolute -bottom-2 ${isMine ? 'left-1' : 'right-1'} bg-white rounded-full shadow border border-gray-200 px-1.5 py-0.5 text-xs leading-none`}
+                aria-label={`Reaction ${message.reaction}`}
+              >
+                {message.reaction}
+              </div>
+            )}
+          </div>
+          {showActions && (
+            <button
+              type="button"
+              onClick={() => setMenuOpen((v) => !v)}
+              className={`absolute -top-1 ${isMine ? '-left-7' : '-right-7'} p-1 rounded-full bg-white shadow-sm border border-gray-200 opacity-0 group-hover:opacity-100 transition-opacity`}
+              aria-label="Message actions"
+            >
+              <MoreHorizontal className="w-3.5 h-3.5 text-textLight" />
+            </button>
+          )}
+          {menuOpen && showActions && (
+            <div
+              className={`absolute z-10 mt-1 ${isMine ? 'right-0' : 'left-10'} bg-white rounded-xl shadow-lg border border-gray-200 py-2 min-w-[180px]`}
+              onMouseLeave={() => setMenuOpen(false)}
+            >
+              {canReact && (
+                <div className="flex items-center justify-between px-2 pb-2 border-b border-gray-100 mb-1">
+                  {REACTION_EMOJIS.map((e) => (
+                    <button
+                      key={e}
+                      type="button"
+                      onClick={() => { setMenuOpen(false); onReact?.(message, e); }}
+                      className={`text-lg leading-none p-1 rounded-full hover:bg-gray-100 transition-colors ${
+                        message.reaction === e ? 'bg-rose-light/30' : ''
+                      }`}
+                      aria-label={`React ${e}`}
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => { setMenuOpen(false); onEdit?.(message); }}
+                  className="w-full text-left px-3 py-1.5 text-sm text-charcoal hover:bg-gray-50 flex items-center gap-2"
+                >
+                  <Pencil className="w-3.5 h-3.5" /> Edit
+                </button>
+              )}
+              {canDelete && (
+                <button
+                  type="button"
+                  onClick={() => { setMenuOpen(false); onDelete?.(message); }}
+                  className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Delete
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
+// ─── Voice message bubble (play/pause + stylized waveform + duration) ──────
+
+function formatDuration(s: number): string {
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${r.toString().padStart(2, '0')}`;
+}
+
+// Pre-computed bar heights for the stylized waveform — looks "audio-y" without
+// actually analysing the file. 20 bars between 30% and 100% height.
+const WAVEFORM_HEIGHTS = [
+  0.55, 0.78, 0.42, 0.92, 0.65, 0.38, 0.85, 0.58, 0.72, 0.46,
+  0.88, 0.51, 0.66, 0.81, 0.43, 0.74, 0.59, 0.95, 0.62, 0.49,
+];
+
+function VoiceBubble({
+  audioUrl,
+  duration,
+  isMine,
+}: {
+  audioUrl: string;
+  duration: number;
+  isMine: boolean;
+}) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [progress, setProgress] = useState(0); // 0-1
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const audio = new Audio(audioUrl);
+    audioRef.current = audio;
+    const onEnded = () => { setIsPlaying(false); setProgress(0); };
+    const onTime = () => {
+      const d = audio.duration && isFinite(audio.duration) ? audio.duration : duration;
+      setProgress(d > 0 ? audio.currentTime / d : 0);
+    };
+    audio.addEventListener('ended', onEnded);
+    audio.addEventListener('timeupdate', onTime);
+    return () => {
+      audio.pause();
+      audio.removeEventListener('ended', onEnded);
+      audio.removeEventListener('timeupdate', onTime);
+      audioRef.current = null;
+    };
+  }, [audioUrl, duration]);
+
+  const toggle = () => {
+    const a = audioRef.current;
+    if (!a) return;
+    if (isPlaying) {
+      a.pause();
+      setIsPlaying(false);
+    } else {
+      a.play().catch(() => setIsPlaying(false));
+      setIsPlaying(true);
+    }
+  };
+
+  const filledColor = isMine ? 'bg-white' : 'bg-rose';
+  const dimColor = isMine ? 'bg-white/40' : 'bg-gray-300';
+
+  return (
+    <div
+      className={`flex items-center gap-2 px-3 py-2 rounded-2xl ${
+        isMine ? 'bg-rose text-white rounded-br-sm' : 'bg-gray-100 text-charcoal rounded-bl-sm'
+      }`}
+    >
+      <button
+        type="button"
+        onClick={toggle}
+        className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+          isMine ? 'bg-white/20' : 'bg-rose text-white'
+        }`}
+        aria-label={isPlaying ? 'Pause' : 'Play voice message'}
+      >
+        {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 translate-x-[1px]" />}
+      </button>
+      <div className="flex items-center gap-[3px] h-6 min-w-[120px]">
+        {WAVEFORM_HEIGHTS.map((h, i) => {
+          const filled = i / WAVEFORM_HEIGHTS.length <= progress;
+          return (
+            <span
+              key={i}
+              className={`w-[3px] rounded-full transition-colors ${filled ? filledColor : dimColor}`}
+              style={{ height: `${h * 100}%` }}
+            />
+          );
+        })}
       </div>
+      <span className={`text-[11px] tabular-nums shrink-0 ${isMine ? 'text-white/80' : 'text-textLight'}`}>
+        {formatDuration(duration)}
+      </span>
+    </div>
+  );
+}
+
+// ─── Fullscreen image viewer ─────────────────────────────────────────────────
+
+function ImageViewer({ src, onClose }: { src: string; onClose: () => void }) {
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Photo viewer"
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+        aria-label="Close"
+      >
+        <X className="w-5 h-5" />
+      </button>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt="Photo"
+        className="max-w-full max-h-full object-contain"
+        onClick={(e) => e.stopPropagation()}
+      />
     </motion.div>
   );
 }
@@ -402,6 +671,18 @@ export default function ChatPage() {
   const [showUnlockToast, setShowUnlockToast] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [overlay, setOverlay] = useState<OverlayState>('none');
+  const [viewerImage, setViewerImage] = useState<string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Voice recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingStartRef = useRef<number>(0);
+  const recordingCancelledRef = useRef<boolean>(false);
   const [iceBreakers, setIceBreakers] = useState<IceBreakerPrompt[]>(() =>
     getRandomIceBreakers(3)
   );
@@ -422,6 +703,20 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
+  // 1-hour expiry warning — fires once per match per session
+  useEffect(() => {
+    if (!match.expires_at) return;
+    const remainingMs = new Date(match.expires_at).getTime() - Date.now();
+    const ONE_HOUR = 60 * 60 * 1000;
+    if (remainingMs > 0 && remainingMs <= ONE_HOUR) {
+      const warnedKey = `chat_1h_warned_${matchId}`;
+      if (typeof window !== 'undefined' && !sessionStorage.getItem(warnedKey)) {
+        sessionStorage.setItem(warnedKey, '1');
+        toast('⏳ Less than 1 hour left to chat!', { duration: 5000 });
+      }
+    }
+  }, [match.expires_at, matchId]);
+
   // Close menu when clicking outside
   const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -437,7 +732,21 @@ export default function ChatPage() {
 
   const sendMessage = useCallback(
     (text: string) => {
-      if (!text.trim() || isLocked) return;
+      if (!text.trim()) return;
+
+      // Edit mode — replace existing message instead of sending a new one
+      if (editingMessageId) {
+        const trimmed = text.trim();
+        const withMarker = trimmed.includes('[edited]') ? trimmed : `${trimmed} [edited]`;
+        setMessages((prev) =>
+          prev.map((m) => (m.id === editingMessageId ? { ...m, content: withMarker } : m))
+        );
+        setEditingMessageId(null);
+        setInput('');
+        return;
+      }
+
+      if (isLocked) return;
 
       const newMessage: Message = {
         id: `msg-${Date.now()}`,
@@ -509,14 +818,251 @@ export default function ChatPage() {
 
   const handleSend = useCallback(() => sendMessage(input), [input, sendMessage]);
 
+  const startEdit = useCallback((msg: Message) => {
+    if (msg.type !== 'text') return;
+    setEditingMessageId(msg.id);
+    setInput(msg.content.replace(/\s*\[edited\]\s*$/, ''));
+    inputRef.current?.focus();
+  }, []);
+
+  const cancelEdit = useCallback(() => {
+    setEditingMessageId(null);
+    setInput('');
+  }, []);
+
+  const deleteMessage = useCallback((msg: Message) => {
+    setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+    if (editingMessageId === msg.id) {
+      setEditingMessageId(null);
+      setInput('');
+    }
+  }, [editingMessageId]);
+
+  const sendVoice = useCallback(
+    (blob: Blob, seconds: number) => {
+      if (isLocked) return;
+      const url = URL.createObjectURL(blob);
+      const newMessage: Message = {
+        id: `msg-${Date.now()}`,
+        match_id: matchId,
+        sender_id: 'me',
+        content: '',
+        type: 'voice',
+        audioUrl: url,
+        durationSeconds: seconds,
+        read: false,
+        status: 'sent',
+        created_at: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, newMessage]);
+
+      const hasPriorOutgoing = messages.some((m) => m.sender_id === 'me');
+      const isFirstOutgoing = !hasPriorOutgoing;
+      if (isNewChat) setIsLocked(true);
+
+      setTimeout(() => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.sender_id === 'me' && m.status === 'sent' ? { ...m, status: 'delivered' } : m
+          )
+        );
+      }, 1000);
+
+      setIsTyping(true);
+      setTimeout(() => {
+        setIsTyping(false);
+        const reply: Message = {
+          id: `msg-reply-${Date.now()}`,
+          match_id: matchId,
+          sender_id: match.user.id,
+          content: 'Loved hearing your voice!',
+          type: 'text',
+          read: false,
+          created_at: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, reply]);
+        setMessages((prev) =>
+          prev.map((m) => (m.sender_id === 'me' ? { ...m, read: true, status: 'read' } : m))
+        );
+        setIsLocked(false);
+        if (isNewChat || isFirstOutgoing) {
+          setShowUnlockToast(true);
+          setTimeout(() => setShowUnlockToast(false), 3000);
+        }
+        const timerStillActive = new Date(match.expires_at).getTime() > Date.now();
+        if (isFirstOutgoing && timerStillActive) graduateMatch(matchId);
+      }, 2000 + Math.random() * 2000);
+    },
+    [matchId, match.user.id, match.expires_at, isLocked, messages, isNewChat, graduateMatch]
+  );
+
+  const startRecording = useCallback(async () => {
+    if (isLocked || isRecording) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeOptions = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/aac'];
+      const supported = mimeOptions.find((m) =>
+        typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m)
+      );
+      const recorder = new MediaRecorder(
+        stream,
+        supported ? { mimeType: supported } : undefined
+      );
+      audioChunksRef.current = [];
+      recordingCancelledRef.current = false;
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const seconds = Math.max(1, Math.round((Date.now() - recordingStartRef.current) / 1000));
+        if (recordingCancelledRef.current) return;
+        if (seconds < 1) {
+          toast('Hold longer to record', { icon: 'ℹ️' });
+          return;
+        }
+        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+        sendVoice(blob, seconds);
+      };
+      mediaRecorderRef.current = recorder;
+      recordingStartRef.current = Date.now();
+      setIsRecording(true);
+      setRecordingSeconds(0);
+      recorder.start();
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds(Math.floor((Date.now() - recordingStartRef.current) / 1000));
+      }, 250);
+    } catch {
+      toast.error('Microphone access denied');
+      setIsRecording(false);
+    }
+  }, [isLocked, isRecording, sendVoice]);
+
+  const stopRecording = useCallback((cancel = false) => {
+    recordingCancelledRef.current = cancel;
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    setIsRecording(false);
+    setRecordingSeconds(0);
+  }, []);
+
+  const reactToMessage = useCallback((msg: Message, emoji: ReactionEmoji) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msg.id
+          ? { ...m, reaction: m.reaction === emoji ? undefined : emoji }
+          : m
+      )
+    );
+  }, []);
+
+  const MAX_IMAGE_SIZE = 15 * 1024 * 1024; // 15MB — matches backend multer cap
+
+  const sendImage = useCallback(
+    (file: File) => {
+      if (isLocked) return;
+      if (!file.type.startsWith('image/')) {
+        toast.error('Only image files are supported');
+        return;
+      }
+      if (file.size > MAX_IMAGE_SIZE) {
+        toast.error('Image must be under 15MB');
+        return;
+      }
+
+      const url = URL.createObjectURL(file);
+
+      const newMessage: Message = {
+        id: `msg-${Date.now()}`,
+        match_id: matchId,
+        sender_id: 'me',
+        content: '',
+        type: 'image',
+        imageUrl: url,
+        read: false,
+        status: 'sent',
+        created_at: new Date().toISOString(),
+      };
+
+      setMessages((prev) => [...prev, newMessage]);
+
+      const hasPriorOutgoing = messages.some((m) => m.sender_id === 'me');
+      const isFirstOutgoing = !hasPriorOutgoing;
+
+      if (isNewChat) setIsLocked(true);
+
+      setTimeout(() => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.sender_id === 'me' && m.status === 'sent'
+              ? { ...m, status: 'delivered' }
+              : m
+          )
+        );
+      }, 1000);
+
+      setIsTyping(true);
+      setTimeout(() => {
+        setIsTyping(false);
+
+        const reply: Message = {
+          id: `msg-reply-${Date.now()}`,
+          match_id: matchId,
+          sender_id: match.user.id,
+          content: 'Wow, great photo!',
+          type: 'text',
+          read: false,
+          created_at: new Date().toISOString(),
+        };
+
+        setMessages((prev) => [...prev, reply]);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.sender_id === 'me' ? { ...m, read: true, status: 'read' } : m
+          )
+        );
+
+        setIsLocked(false);
+
+        if (isNewChat || isFirstOutgoing) {
+          setShowUnlockToast(true);
+          setTimeout(() => setShowUnlockToast(false), 3000);
+        }
+
+        const timerStillActive = new Date(match.expires_at).getTime() > Date.now();
+        if (isFirstOutgoing && timerStillActive) {
+          graduateMatch(matchId);
+        }
+      }, 2000 + Math.random() * 2000);
+    },
+    [matchId, match.user.id, match.expires_at, isLocked, messages, isNewChat, graduateMatch, MAX_IMAGE_SIZE]
+  );
+
+  const handleFileSelected = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (file) sendImage(file);
+    },
+    [sendImage]
+  );
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         handleSend();
+      } else if (e.key === 'Escape' && editingMessageId) {
+        e.preventDefault();
+        cancelEdit();
       }
     },
-    [handleSend]
+    [handleSend, editingMessageId, cancelEdit]
   );
 
   const shuffleIceBreakers = useCallback(() => {
@@ -574,12 +1120,14 @@ export default function ChatPage() {
           {/* Call icons */}
           <div className="flex items-center gap-1">
             <button
+              onClick={() => toast('📞 Voice calls coming soon', { duration: 2500 })}
               className="p-2 rounded-full hover:bg-gray-100 transition-colors touch-target"
               aria-label="Voice call"
             >
               <Phone className="w-[18px] h-[18px] text-charcoal" />
             </button>
             <button
+              onClick={() => toast('📹 Video calls coming soon', { duration: 2500 })}
               className="p-2 rounded-full hover:bg-gray-100 transition-colors touch-target"
               aria-label="Video call"
             >
@@ -712,6 +1260,10 @@ export default function ChatPage() {
                 avatarSrc={matchAvatarSrc}
                 avatarAlt={matchName}
                 showAvatar={avatarVisibleSet.has(msg.id)}
+                onImageClick={setViewerImage}
+                onEdit={startEdit}
+                onDelete={deleteMessage}
+                onReact={reactToMessage}
               />
             ))}
           </AnimatePresence>
@@ -734,7 +1286,37 @@ export default function ChatPage() {
 
         {/* ── Input bar ── */}
         <div className="shrink-0 border-t border-gray-100 bg-white px-3 py-3">
-          {isLocked ? (
+          {editingMessageId && (
+            <div className="flex items-center justify-between mb-2 px-3 py-2 bg-rose/5 border border-rose/20 rounded-lg">
+              <div className="flex items-center gap-2 text-xs">
+                <Pencil className="w-3.5 h-3.5 text-rose" />
+                <span className="text-charcoal">Editing message</span>
+              </div>
+              <button
+                type="button"
+                onClick={cancelEdit}
+                className="text-xs text-rose font-medium hover:underline"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+          {isRecording && (
+            <div className="flex items-center justify-between mb-2 px-3 py-2 bg-rose text-white rounded-lg">
+              <div className="flex items-center gap-2 text-xs">
+                <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                <span>Recording… {formatDuration(recordingSeconds)}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => stopRecording(true)}
+                className="text-xs font-medium underline"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+          {isLocked && !editingMessageId ? (
             <div className="flex items-center justify-center py-3 bg-gray-50 rounded-full">
               <p className="text-sm text-textLight font-medium">
                 {t('chat.waitingForReply')}…
@@ -743,9 +1325,18 @@ export default function ChatPage() {
           ) : (
             <div className="flex items-center gap-2">
               {/* Camera */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileSelected}
+                className="hidden"
+                aria-hidden="true"
+              />
               <button
                 className="p-2.5 rounded-xl hover:bg-gray-100 transition-colors touch-target shrink-0"
                 aria-label="Send photo"
+                onClick={() => fileInputRef.current?.click()}
               >
                 <Camera className="w-5 h-5 text-textLight" />
               </button>
@@ -794,10 +1385,16 @@ export default function ChatPage() {
                     animate={{ scale: 1, opacity: 1 }}
                     exit={{ scale: 0.7, opacity: 0 }}
                     transition={{ duration: 0.12 }}
-                    className="p-2.5 rounded-xl hover:bg-gray-100 transition-colors touch-target shrink-0"
-                    aria-label="Record voice note"
+                    onPointerDown={(e) => { e.preventDefault(); startRecording(); }}
+                    onPointerUp={() => stopRecording(false)}
+                    onPointerLeave={() => { if (isRecording) stopRecording(false); }}
+                    onPointerCancel={() => stopRecording(true)}
+                    className={`p-2.5 rounded-xl transition-colors touch-target shrink-0 select-none ${
+                      isRecording ? 'bg-rose text-white' : 'hover:bg-gray-100'
+                    }`}
+                    aria-label="Hold to record voice note"
                   >
-                    <Mic className="w-5 h-5 text-textLight" />
+                    <Mic className={`w-5 h-5 ${isRecording ? 'text-white' : 'text-textLight'}`} />
                   </motion.button>
                 )}
               </AnimatePresence>
@@ -836,6 +1433,10 @@ export default function ChatPage() {
             onSubmit={(_reason) => { setOverlay('none'); }}
             onCancel={() => setOverlay('none')}
           />
+        )}
+
+        {viewerImage && (
+          <ImageViewer src={viewerImage} onClose={() => setViewerImage(null)} />
         )}
       </AnimatePresence>
     </AppShell>

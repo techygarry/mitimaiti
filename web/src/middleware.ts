@@ -20,6 +20,12 @@ function isPublic(pathname: string): boolean {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // DEV-ONLY: skip auth in local dev so the mock-driven UI is testable without a backend.
+  // No effect in production (NODE_ENV is 'production' there).
+  if (process.env.NODE_ENV === 'development') {
+    return updateSession(request);
+  }
+
   // Let public & static routes through (still refresh session if cookie exists)
   if (isPublic(pathname)) {
     return updateSession(request);

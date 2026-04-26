@@ -154,7 +154,14 @@ export function isTokenExpired(): boolean {
 
 // ─── API Calls ───────────────────────────────────────────────────────────────
 
+// DEV-ONLY mock: when there's no backend, accept any phone/code so the UI is testable end-to-end.
+const DEV_AUTH_MOCK = process.env.NODE_ENV === 'development';
+
 export async function sendOtp(phone: string): Promise<{ success: boolean; error?: string; code?: string }> {
+  if (DEV_AUTH_MOCK) {
+    console.info('[DEV] sendOtp mock — use any 6-digit code to verify');
+    return { success: true };
+  }
   try {
     const res = await fetch(`${API_URL}/auth/login`, {
       method: 'POST',
@@ -182,6 +189,30 @@ export async function verifyOtp(
   phone: string,
   token: string
 ): Promise<{ success: boolean; user?: AuthUser; session?: AuthSession; error?: string; code?: string }> {
+  if (DEV_AUTH_MOCK) {
+    if (!/^\d{6}$/.test(token)) {
+      return { success: false, error: 'Enter a 6-digit code (any digits in dev)' };
+    }
+    const user: AuthUser = {
+      id: 'dev-user',
+      authId: 'dev-auth',
+      phone,
+      isVerified: true,
+      profileCompleteness: 100,
+      isNew: false,
+    };
+    const session: AuthSession = {
+      accessToken: 'dev-token',
+      refreshToken: 'dev-refresh',
+      expiresAt: Math.floor(Date.now() / 1000) + 60 * 60 * 24,
+    };
+    setTokens(session);
+    setStoredUser(user);
+    if (typeof document !== 'undefined') {
+      document.cookie = `mm_authenticated=1; path=/; max-age=${60 * 60 * 24}`;
+    }
+    return { success: true, user, session };
+  }
   try {
     const res = await fetch(`${API_URL}/auth/verify`, {
       method: 'POST',

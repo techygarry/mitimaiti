@@ -60,6 +60,8 @@ export default function BirthdayPage() {
     if (typeof window !== 'undefined') {
       sessionStorage.setItem('onboarding_dob', dob);
       sessionStorage.setItem('onboarding_age', String(age));
+      localStorage.setItem('onboarding_dob', dob);
+      localStorage.setItem('onboarding_age', String(age));
     }
     router.push('/onboarding/gender');
   };

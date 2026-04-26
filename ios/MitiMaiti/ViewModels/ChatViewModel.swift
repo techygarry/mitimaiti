@@ -117,6 +117,11 @@ class ChatViewModel: ObservableObject {
     // MARK: - Send Message
 
     func sendMessage() {
+        // If we're editing, route to saveEdit instead
+        if editingMessageId != nil {
+            saveEdit()
+            return
+        }
         let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, let matchId = match?.id else { return }
 
@@ -164,6 +169,116 @@ class ChatViewModel: ObservableObject {
         }
     }
 
+    @Published var editingMessageId: String? = nil
+
+    func startEdit(_ message: Message) {
+        guard message.msgType == .text else { return }
+        editingMessageId = message.id
+        var text = message.content
+        if text.hasSuffix(" [edited]") {
+            text = String(text.dropLast(" [edited]".count))
+        } else if text.hasSuffix("[edited]") {
+            text = String(text.dropLast("[edited]".count))
+        }
+        messageText = text.trimmingCharacters(in: .whitespaces)
+    }
+
+    func cancelEdit() {
+        editingMessageId = nil
+        messageText = ""
+    }
+
+    func saveEdit() {
+        guard let id = editingMessageId, let matchId = match?.id else { return }
+        let trimmed = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let withMarker = trimmed.contains("[edited]") ? trimmed : "\(trimmed) [edited]"
+        if let idx = messages.firstIndex(where: { $0.id == id }) {
+            messages[idx].content = withMarker
+            MessageRepository.shared.setMessages(matchId: matchId, msgs: messages)
+        }
+        editingMessageId = nil
+        messageText = ""
+    }
+
+    func toggleReaction(_ message: Message, emoji: String) {
+        guard Message.allowedReactions.contains(emoji) else { return }
+        guard let matchId = match?.id else { return }
+        if let idx = messages.firstIndex(where: { $0.id == message.id }) {
+            messages[idx].reaction = (messages[idx].reaction == emoji) ? nil : emoji
+            MessageRepository.shared.setMessages(matchId: matchId, msgs: messages)
+        }
+    }
+
+    func deleteMessage(_ message: Message) {
+        guard let matchId = match?.id else { return }
+        messages.removeAll { $0.id == message.id }
+        MessageRepository.shared.setMessages(matchId: matchId, msgs: messages)
+        if editingMessageId == message.id {
+            cancelEdit()
+        }
+    }
+
+    func sendVoice(localUrl: String, durationSeconds: Int) {
+        guard let matchId = match?.id else { return }
+        if isLockedForMe {
+            error = "Please wait for \(match?.otherUser.displayName ?? "them") to reply to your first message."
+            return
+        }
+
+        let isFirstMessage = !match!.hasFirstMessage
+
+        let msg = Message(
+            matchId: matchId,
+            senderId: currentUserId,
+            content: "",
+            mediaUrl: localUrl,
+            msgType: .voice,
+            status: .sent,
+            durationSeconds: durationSeconds
+        )
+        messages.append(msg)
+        MessageRepository.shared.setMessages(matchId: matchId, msgs: messages)
+
+        if isFirstMessage {
+            match?.firstMsgBy = currentUserId
+            match?.firstMsgLocked = true
+            match?.firstMsgAt = Date()
+        }
+
+        simulateReply(matchId: matchId)
+    }
+
+    func sendImage(localUrl: String) {
+        guard let matchId = match?.id else { return }
+        if isLockedForMe {
+            error = "Please wait for \(match?.otherUser.displayName ?? "them") to reply to your first message."
+            return
+        }
+
+        let isFirstMessage = !match!.hasFirstMessage
+
+        let msg = Message(
+            matchId: matchId,
+            senderId: currentUserId,
+            content: "",
+            mediaUrl: localUrl,
+            msgType: .photo,
+            status: .sent
+        )
+        messages.append(msg)
+        MessageRepository.shared.setMessages(matchId: matchId, msgs: messages)
+
+        if isFirstMessage {
+            match?.firstMsgBy = currentUserId
+            match?.firstMsgLocked = true
+            match?.firstMsgAt = Date()
+        }
+
+        simulateReply(matchId: matchId)
+    }
+
+    /// Real-backend photo upload (added on the Mac side via APIService.sendChatMedia).
     func sendPhoto(imageData: Data) {
         guard let matchId = match?.id else { return }
         if isLockedForMe {

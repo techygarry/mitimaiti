@@ -13,8 +13,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: 'MitiMaiti - Where Sindhi Hearts Meet',
-  description: 'The modern matrimony and dating platform for the global Sindhi community.',
-  keywords: ['Sindhi', 'matrimony', 'dating', 'community', 'marriage', 'MitiMaiti'],
+  description: 'Date Sindhis. Skip the rishta. The dating app for Sindhis worldwide — Mumbai, Dubai, Hong Kong, Singapore, NYC.',
+  keywords: ['Sindhi', 'Sindhi dating', 'dating', 'community', 'MitiMaiti'],
   authors: [{ name: 'MitiMaiti' }],
 };
 

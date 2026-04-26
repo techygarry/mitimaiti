@@ -4,7 +4,9 @@ import PhotosUI
 @MainActor
 class OnboardingViewModel: ObservableObject {
     @Published var currentStep: OnboardingStep = .name
-    @Published var firstName = ""
+    @Published var firstName = UserProfileStore.shared.firstName {
+        didSet { UserProfileStore.shared.firstName = firstName }
+    }
     @Published var isNonSindhi = false
     @Published var birthDay = 15
     @Published var birthMonth = 6

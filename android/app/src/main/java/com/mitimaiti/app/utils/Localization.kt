@@ -256,7 +256,7 @@ class LocalizationManager(context: Context) {
                 "onboarding.city" to "City",
                 "onboarding.stateProvince" to "State / Province",
                 "onboarding.country" to "Country",
-                "onboarding.welcomeToCommunity" to "Welcome to the Sindhi community,",
+                "onboarding.welcomeToCommunity" to "Welcome to the MitiMaiti community,",
                 "onboarding.startDiscovering" to "Start Discovering",
                 // Welcome
                 "welcome.title" to "MitiMaiti",

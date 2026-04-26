@@ -38,4 +38,7 @@ targets:
         INFOPLIST_KEY_UILaunchScreen_Generation: true
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
         INFOPLIST_KEY_UIStatusBarStyle: "UIStatusBarStyleLightContent"
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "MitiMaiti uses your microphone so you can record voice messages in chat."
+        INFOPLIST_KEY_NSCameraUsageDescription: "MitiMaiti uses your camera so you can take live photos to send in chat."
+        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "MitiMaiti uses your photo library so you can pick photos to send in chat."
         GENERATE_INFOPLIST_FILE: true

@@ -12,16 +12,28 @@ struct FamilyView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .top) {
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: AppTheme.spacingLG) {
-                        headerSection
-                        inviteCard
-                        joinFamilyCard
-                        tabBar
-                        contentArea
-                        Spacer().frame(height: 100)
+                // When a family member is selected, show the permissions
+                // screen full-screen (matches Android + the design mock).
+                // Otherwise show the normal Family tab content.
+                if let memberId = familyVM.selectedMemberId,
+                   let member = familyVM.members.first(where: { $0.id == memberId }) {
+                    ScrollView(showsIndicators: false) {
+                        permissionDetailView(member: member)
+                            .padding(.horizontal, AppTheme.spacingMD)
+                            .padding(.bottom, 100)
                     }
-                    .padding(.horizontal, AppTheme.spacingMD)
+                } else {
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: AppTheme.spacingLG) {
+                            headerSection
+                            inviteCard
+                            joinFamilyCard
+                            tabBar
+                            contentArea
+                            Spacer().frame(height: 100)
+                        }
+                        .padding(.horizontal, AppTheme.spacingMD)
+                    }
                 }
 
                 // Toast overlay
@@ -32,6 +44,7 @@ struct FamilyView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.3), value: familyVM.toastMessage)
+            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: familyVM.selectedMemberId)
             .appBackground()
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $familyVM.showInviteModal) {

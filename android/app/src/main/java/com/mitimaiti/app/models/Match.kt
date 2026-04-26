@@ -10,8 +10,14 @@ data class Message(
     val mediaUrl: String? = null,
     val msgType: MessageType = MessageType.TEXT,
     val status: MessageStatus = MessageStatus.SENT,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val reaction: String? = null,
+    val durationSeconds: Int = 0
 ) {
+    companion object {
+        val ALLOWED_REACTIONS = listOf("❤️", "😂", "😮", "😢", "😡", "👍")
+    }
+
     val isFromMe: Boolean
         get() = senderId == "current-user-id"
 }

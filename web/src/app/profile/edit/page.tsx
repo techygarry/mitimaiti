@@ -62,6 +62,18 @@ function SelectField({
   );
 }
 
+// Map from tab-state field → localStorage key (used by useProfileCompleteness)
+const BASICS_STORAGE: Record<string, string> = {
+  height: 'profile_height',
+  education: 'profile_education',
+  work_title: 'profile_work',
+  company: 'profile_company',
+  drinking: 'profile_drinking',
+  smoking: 'profile_smoking',
+  wants_kids: 'profile_wants_kids',
+  settling: 'profile_settling',
+};
+
 function BasicsTab() {
   const { t } = useTranslation();
   const [basics, setBasics] = useState({
@@ -76,8 +88,26 @@ function BasicsTab() {
     exercise: '',
   });
 
+  // Hydrate from localStorage on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setBasics((prev) => {
+      const next = { ...prev };
+      for (const [field, key] of Object.entries(BASICS_STORAGE)) {
+        const val = localStorage.getItem(key);
+        if (val !== null) (next as Record<string, string>)[field] = val;
+      }
+      return next;
+    });
+  }, []);
+
   const update = (key: string, value: string) => {
     setBasics((prev) => ({ ...prev, [key]: value }));
+    const storageKey = BASICS_STORAGE[key];
+    if (storageKey) {
+      if (value) localStorage.setItem(storageKey, value);
+      else localStorage.removeItem(storageKey);
+    }
   };
 
   return (
@@ -166,6 +196,15 @@ function BasicsTab() {
   );
 }
 
+const SINDHI_STORAGE: Record<string, string> = {
+  fluency: 'profile_sindhi_fluency',
+  religion: 'profile_religion',
+  gotra: 'profile_gotra',
+  generation: 'profile_generation',
+  dietary: 'profile_dietary',
+  family_involvement: 'profile_family_involvement',
+};
+
 function SindhiTab() {
   const { t } = useTranslation();
   const [sindhi, setSindhi] = useState({
@@ -177,8 +216,25 @@ function SindhiTab() {
     family_involvement: '',
   });
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setSindhi((prev) => {
+      const next = { ...prev };
+      for (const [field, key] of Object.entries(SINDHI_STORAGE)) {
+        const val = localStorage.getItem(key);
+        if (val !== null) (next as Record<string, string>)[field] = val;
+      }
+      return next;
+    });
+  }, []);
+
   const update = (key: string, value: string) => {
     setSindhi((prev) => ({ ...prev, [key]: value }));
+    const storageKey = SINDHI_STORAGE[key];
+    if (storageKey) {
+      if (value) localStorage.setItem(storageKey, value);
+      else localStorage.removeItem(storageKey);
+    }
   };
 
   return (
@@ -327,6 +383,53 @@ function PersonalityTab() {
   const [addingPrompt, setAddingPrompt] = useState(false);
   const [selectedPrompt, setSelectedPrompt] = useState('');
   const [promptAnswer, setPromptAnswer] = useState('');
+
+  // Hydrate from localStorage on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const storedBio = localStorage.getItem('profile_bio');
+    if (storedBio) setBio(storedBio);
+    try {
+      const storedInterests = localStorage.getItem('profile_interests');
+      if (storedInterests) {
+        const parsed = JSON.parse(storedInterests);
+        if (Array.isArray(parsed)) setSelectedInterests(parsed);
+      }
+      const storedPrompts = localStorage.getItem('profile_prompts');
+      if (storedPrompts) {
+        const parsed = JSON.parse(storedPrompts);
+        if (Array.isArray(parsed)) setPrompts(parsed);
+      }
+    } catch {
+      // malformed data — ignore
+    }
+  }, []);
+
+  // Persist bio (debounced via onBlur; also mirror every keystroke so
+  // completeness reflects reality without requiring a blur)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (bio) localStorage.setItem('profile_bio', bio);
+    else localStorage.removeItem('profile_bio');
+  }, [bio]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (selectedInterests.length > 0) {
+      localStorage.setItem('profile_interests', JSON.stringify(selectedInterests));
+    } else {
+      localStorage.removeItem('profile_interests');
+    }
+  }, [selectedInterests]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (prompts.length > 0) {
+      localStorage.setItem('profile_prompts', JSON.stringify(prompts));
+    } else {
+      localStorage.removeItem('profile_prompts');
+    }
+  }, [prompts]);
 
   const toggleInterest = (interest: string) => {
     setSelectedInterests((prev) =>

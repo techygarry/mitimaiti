@@ -101,6 +101,11 @@ class ChatViewModel : ViewModel() {
     }
 
     fun sendMessage() {
+        // If we're editing, route to saveEdit instead of sending a new message
+        if (_editingMessageId.value != null) {
+            saveEdit()
+            return
+        }
         val text = _messageText.value.trim()
         if (text.isEmpty() || isLockedForMe) return
         val currentMatch = _match.value ?: return
@@ -138,6 +143,120 @@ class ChatViewModel : ViewModel() {
     fun sendIcebreaker(question: String) {
         _messageText.value = question
         sendMessage()
+    }
+
+    private val _editingMessageId = MutableStateFlow<String?>(null)
+    val editingMessageId: StateFlow<String?> = _editingMessageId.asStateFlow()
+
+    fun startEdit(message: Message) {
+        if (message.msgType != MessageType.TEXT) return
+        _editingMessageId.value = message.id
+        _messageText.value = message.content.removeSuffix(" [edited]").trimEnd()
+    }
+
+    fun cancelEdit() {
+        _editingMessageId.value = null
+        _messageText.value = ""
+    }
+
+    fun saveEdit() {
+        val id = _editingMessageId.value ?: return
+        val newText = _messageText.value.trim()
+        if (newText.isEmpty()) return
+        val withMarker = if (newText.endsWith("[edited]")) newText else "$newText [edited]"
+        _messages.value = _messages.value.map { m ->
+            if (m.id == id) m.copy(content = withMarker) else m
+        }
+        // persist
+        _match.value?.id?.let { mid ->
+            MessageRepository.setMessages(mid, _messages.value)
+        }
+        _editingMessageId.value = null
+        _messageText.value = ""
+    }
+
+    fun toggleReaction(message: Message, emoji: String) {
+        if (!Message.ALLOWED_REACTIONS.contains(emoji)) return
+        val mid = _match.value?.id ?: return
+        _messages.value = _messages.value.map { m ->
+            if (m.id == message.id) {
+                m.copy(reaction = if (m.reaction == emoji) null else emoji)
+            } else m
+        }
+        MessageRepository.setMessages(mid, _messages.value)
+    }
+
+    fun deleteMessage(message: Message) {
+        _messages.value = _messages.value.filterNot { it.id == message.id }
+        _match.value?.id?.let { mid ->
+            MessageRepository.setMessages(mid, _messages.value)
+        }
+        if (_editingMessageId.value == message.id) {
+            cancelEdit()
+        }
+    }
+
+    fun sendVoice(mediaUrl: String, durationSeconds: Int) {
+        if (isLockedForMe) return
+        val currentMatch = _match.value ?: return
+
+        viewModelScope.launch {
+            _isSending.value = true
+
+            val newMsg = Message(
+                matchId = currentMatch.id,
+                senderId = "current-user-id",
+                content = "",
+                mediaUrl = mediaUrl,
+                msgType = MessageType.VOICE,
+                status = MessageStatus.SENT,
+                durationSeconds = durationSeconds
+            )
+            _messages.value = _messages.value + newMsg
+            MessageRepository.addMessage(currentMatch.id, newMsg)
+
+            if (currentMatch.firstMsgBy == null) {
+                _match.value = currentMatch.copy(
+                    firstMsgBy = "current-user-id",
+                    firstMsgLocked = true,
+                    firstMsgAt = System.currentTimeMillis()
+                )
+            }
+
+            _isSending.value = false
+            simulateReply(currentMatch.id)
+        }
+    }
+
+    fun sendImage(mediaUrl: String) {
+        if (isLockedForMe) return
+        val currentMatch = _match.value ?: return
+
+        viewModelScope.launch {
+            _isSending.value = true
+
+            val newMsg = Message(
+                matchId = currentMatch.id,
+                senderId = "current-user-id",
+                content = "",
+                mediaUrl = mediaUrl,
+                msgType = MessageType.PHOTO,
+                status = MessageStatus.SENT
+            )
+            _messages.value = _messages.value + newMsg
+            MessageRepository.addMessage(currentMatch.id, newMsg)
+
+            if (currentMatch.firstMsgBy == null) {
+                _match.value = currentMatch.copy(
+                    firstMsgBy = "current-user-id",
+                    firstMsgLocked = true,
+                    firstMsgAt = System.currentTimeMillis()
+                )
+            }
+
+            _isSending.value = false
+            simulateReply(currentMatch.id)
+        }
     }
 
     private fun receiveMessage(message: Message) {

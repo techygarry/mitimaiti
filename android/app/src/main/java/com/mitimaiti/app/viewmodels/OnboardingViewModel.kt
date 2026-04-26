@@ -2,20 +2,31 @@ package com.mitimaiti.app.viewmodels
 
 import android.net.Uri
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.mitimaiti.app.models.Gender
 import com.mitimaiti.app.models.Intent
 import com.mitimaiti.app.models.ShowMe
 import com.mitimaiti.app.services.PhotoRepository
+import com.mitimaiti.app.services.UserPrefs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 enum class OnboardingStep { NAME, BIRTHDAY, GENDER, PHOTOS, INTENT, SHOW_ME, LOCATION, READY }
 
 class OnboardingViewModel : ViewModel() {
     private val _currentStep = MutableStateFlow(OnboardingStep.NAME)
     val currentStep: StateFlow<OnboardingStep> = _currentStep.asStateFlow()
-    val firstName = MutableStateFlow(""); val isNonSindhi = MutableStateFlow(false)
+    val firstName = MutableStateFlow(UserPrefs.firstName.value); val isNonSindhi = MutableStateFlow(false)
+
+    init {
+        // Persist the name to the shared store whenever it changes, so
+        // ProfileViewModel can show the right name after onboarding.
+        viewModelScope.launch {
+            firstName.collect { UserPrefs.setFirstName(it) }
+        }
+    }
     val birthDay = MutableStateFlow(""); val birthMonth = MutableStateFlow(""); val birthYear = MutableStateFlow("")
     val selectedGender = MutableStateFlow<Gender?>(null)
     val selectedPhotos: StateFlow<List<Uri>> = PhotoRepository.photos

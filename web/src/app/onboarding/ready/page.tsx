@@ -32,20 +32,36 @@ export default function ReadyPage() {
   const [age, setAge] = useState('');
   const [city, setCity] = useState('');
   const [mainPhoto, setMainPhoto] = useState<string | null>(null);
+  const [completeness, setCompleteness] = useState(0);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setName(sessionStorage.getItem('onboarding_name') || localStorage.getItem('onboarding_name') || 'You');
-      setAge(sessionStorage.getItem('onboarding_age') || localStorage.getItem('onboarding_age') || '25');
-      setCity(sessionStorage.getItem('onboarding_city') || localStorage.getItem('onboarding_city') || 'Mumbai, India');
+      const read = (key: string) => sessionStorage.getItem(key) || localStorage.getItem(key) || '';
+      const nameVal = read('onboarding_name') || 'You';
+      const ageVal = read('onboarding_age') || '25';
+      const cityVal = read('onboarding_city') || 'Mumbai, India';
+      setName(nameVal);
+      setAge(ageVal);
+      setCity(cityVal);
+      let hasPhoto = false;
       try {
         const raw = localStorage.getItem('onboarding_photos');
         if (raw) {
           const photos: string[] = JSON.parse(raw);
           const first = photos.find((p) => p !== '');
           setMainPhoto(first ?? null);
+          hasPhoto = !!first;
         }
       } catch {}
+
+      let score = 0;
+      if (read('onboarding_name')) score += 0.20;
+      if (read('onboarding_gender')) score += 0.15;
+      if (read('onboarding_intent')) score += 0.15;
+      if (read('onboarding_showme')) score += 0.10;
+      if (read('onboarding_city')) score += 0.15;
+      if (hasPhoto) score += 0.25;
+      setCompleteness(Math.round(Math.min(score, 1) * 100));
     }
   }, []);
 
@@ -127,9 +143,9 @@ export default function ReadyPage() {
                   <span className="text-sm font-medium text-textLight">
                     {t('onboarding.profileCompleteness')}
                   </span>
-                  <span className="text-sm font-bold text-rose">35%</span>
+                  <span className="text-sm font-bold text-rose">{completeness}%</span>
                 </div>
-                <ProgressBar progress={35} variant="rose" size="md" />
+                <ProgressBar progress={completeness} variant="rose" size="md" />
               </div>
 
               <p className="text-xs text-textLight mt-3 text-center">

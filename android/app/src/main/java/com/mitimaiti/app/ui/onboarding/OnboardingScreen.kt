@@ -26,7 +26,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -40,6 +42,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import coil.compose.AsyncImage
 import com.mitimaiti.app.models.Gender
 import com.mitimaiti.app.models.Intent
@@ -215,15 +219,29 @@ fun OnboardingScreen(onComplete: () -> Unit, onNavigateToEditProfile: () -> Unit
                             location = selectedCity,
                             onLocationChange = { viewModel.selectedCity.value = it }
                         )
-                        OnboardingStep.READY -> ReadyStep(
-                            name = firstName,
-                            age = age,
-                            city = selectedCity,
-                            onCompleteSindhi = {
-                                onComplete()
-                                onNavigateToEditProfile()
+                        OnboardingStep.READY -> {
+                            val profileCompleteness = remember(firstName, selectedGender, selectedIntent, selectedShowMe, selectedCity, selectedPhotos) {
+                                var s = 0.0
+                                if (firstName.isNotBlank()) s += 0.20
+                                if (selectedGender != null) s += 0.15
+                                if (selectedIntent != null) s += 0.15
+                                if (selectedShowMe != null) s += 0.10
+                                if (selectedCity.isNotBlank()) s += 0.15
+                                if (selectedPhotos.isNotEmpty()) s += 0.25
+                                (s.coerceIn(0.0, 1.0) * 100).toInt()
                             }
-                        )
+                            ReadyStep(
+                                name = firstName,
+                                age = age,
+                                city = selectedCity,
+                                isNonSindhi = isNonSindhi,
+                                profileCompleteness = profileCompleteness,
+                                onCompleteSindhi = {
+                                    onComplete()
+                                    onNavigateToEditProfile()
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -667,7 +685,7 @@ private fun IntentStep(selected: Intent?, onSelect: (Intent) -> Unit) {
         )
         Spacer(modifier = Modifier.height(32.dp))
 
-        Intent.entries.forEach { intent ->
+        Intent.entries.filter { it != Intent.MARRIAGE }.forEach { intent ->
             val isSelected = intent == selected
             Surface(
                 onClick = { onSelect(intent) },
@@ -960,10 +978,10 @@ private fun getCityAndCountryFromLocation(context: Context, lat: Double, lng: Do
 }
 
 @Composable
-private fun ReadyStep(name: String, age: Int?, city: String, onCompleteSindhi: () -> Unit) {
+private fun ReadyStep(name: String, age: Int?, city: String, isNonSindhi: Boolean, profileCompleteness: Int, onCompleteSindhi: () -> Unit) {
     val colors = LocalAdaptiveColors.current
-    val profileCompleteness = 35 // Base completeness after onboarding
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1152,13 +1170,13 @@ private fun ReadyStep(name: String, age: Int?, city: String, onCompleteSindhi: (
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "Complete your Sindhi Identity",
+                        if (isNonSindhi) "Complete your Profile" else "Complete your Sindhi Identity",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = colors.textPrimary
                     )
                     Text(
-                        "Add fluency, gotra, festivals for better cultural matching",
+                        if (isNonSindhi) "Add more details for better matching" else "Add fluency, gotra, festivals for better cultural matching",
                         fontSize = 12.sp,
                         color = colors.textSecondary
                     )
@@ -1171,4 +1189,59 @@ private fun ReadyStep(name: String, age: Int?, city: String, onCompleteSindhi: (
             }
         }
     }
+        ConfettiOverlay()
+    }
+}
+
+@Composable
+private fun ConfettiOverlay() {
+    val palette = listOf(
+        Color(0xFFB5336A), Color(0xFFD4A853), Color(0xFFE8A0BE),
+        Color(0xFF8A1A4A), Color(0xFFFF6B9D), Color(0xFFFFD700)
+    )
+    Box(modifier = Modifier.fillMaxSize()) {
+        repeat(30) { i ->
+            ConfettiParticle(
+                color = palette[i % palette.size],
+                isCircle = i % 2 == 0,
+                seed = i
+            )
+        }
+    }
+}
+
+@Composable
+private fun ConfettiParticle(color: Color, isCircle: Boolean, seed: Int) {
+    val rng = remember(seed) { java.util.Random(seed.toLong() * 1009L + 31L) }
+    val targetX = remember(seed) { (rng.nextFloat() * 280f) - 140f }
+    val targetY = remember(seed) { 200f + rng.nextFloat() * 200f }
+    val targetRotation = remember(seed) { (rng.nextFloat() * 720f) - 360f }
+    val width = remember(seed) { if (isCircle) (6f + rng.nextFloat() * 4f) else (4f + rng.nextFloat() * 4f) }
+    val height = remember(seed) { if (isCircle) width else (8f + rng.nextFloat() * 6f) }
+    val delayMs = remember(seed) { (rng.nextFloat() * 600f).toInt() }
+
+    val xOffset = remember { Animatable(0f) }
+    val yOffset = remember { Animatable(-60f) }
+    val rotation = remember { Animatable(0f) }
+    val opacity = remember { Animatable(1f) }
+
+    LaunchedEffect(Unit) {
+        launch { xOffset.animateTo(targetX, tween(2000, delayMillis = delayMs, easing = EaseOut)) }
+        launch { yOffset.animateTo(targetY, tween(2000, delayMillis = delayMs, easing = EaseOut)) }
+        launch { rotation.animateTo(targetRotation, tween(2000, delayMillis = delayMs, easing = EaseOut)) }
+        launch {
+            delay((delayMs + 1200).toLong())
+            opacity.animateTo(0f, tween(800, easing = EaseIn))
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .offset(x = xOffset.value.dp, y = yOffset.value.dp)
+            .rotate(rotation.value)
+            .alpha(opacity.value)
+            .size(width.dp, height.dp)
+            .clip(if (isCircle) CircleShape else RoundedCornerShape(1.dp))
+            .background(color)
+    )
 }

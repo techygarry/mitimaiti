@@ -2,7 +2,14 @@ import SwiftUI
 
 @MainActor
 class ProfileViewModel: ObservableObject {
-    @Published var user: User = MockData.currentUser
+    @Published var user: User = {
+        var u = MockData.currentUser
+        // If the user set their name during onboarding, use it as the
+        // profile name instead of the mock default.
+        let storedName = UserProfileStore.shared.firstName
+        if !storedName.isEmpty { u.displayName = storedName }
+        return u
+    }()
     @Published var isLoading = false
     @Published var error: String?
     @Published var isSaving = false
@@ -32,11 +39,46 @@ class ProfileViewModel: ObservableObject {
         ]
     }
 
+    /// Computed profile completeness — reflects what's actually filled on the
+    /// ProfileViewModel + the user's stored photos/prompts, rather than a
+    /// static value on the User model. Recomputes whenever any @Published
+    /// edit field changes (ObservableObject triggers view refresh).
+    var computedCompleteness: Int {
+        var filled = 0
+        let total = 15 // photos + bio + 8 basics + prompts + 4 sindhi/identity
+
+        // Photos
+        if !user.photos.isEmpty { filled += 1 }
+        // Prompts
+        if !user.prompts.isEmpty { filled += 1 }
+        // Bio
+        if !editBio.trimmingCharacters(in: .whitespaces).isEmpty { filled += 1 }
+        // Basics (8)
+        if !editHeight.trimmingCharacters(in: .whitespaces).isEmpty { filled += 1 }
+        if !editEducation.trimmingCharacters(in: .whitespaces).isEmpty { filled += 1 }
+        if !editOccupation.trimmingCharacters(in: .whitespaces).isEmpty { filled += 1 }
+        if !editCompany.trimmingCharacters(in: .whitespaces).isEmpty { filled += 1 }
+        if !editReligion.trimmingCharacters(in: .whitespaces).isEmpty { filled += 1 }
+        if !editSmoking.trimmingCharacters(in: .whitespaces).isEmpty { filled += 1 }
+        if !editDrinking.trimmingCharacters(in: .whitespaces).isEmpty { filled += 1 }
+        if !editExercise.trimmingCharacters(in: .whitespaces).isEmpty { filled += 1 }
+        // Sindhi / Family identity (4)
+        if user.sindhiFluency != nil { filled += 1 }
+        if user.familyValues != nil { filled += 1 }
+        if user.foodPreference != nil { filled += 1 }
+        if !(user.gotra ?? "").isEmpty { filled += 1 }
+
+        return Int((Double(filled) / Double(total)) * 100.0)
+    }
+
     func loadProfile() {
         isLoading = true
         Task {
             do {
-                user = try await api.fetchProfile()
+                var fetched = try await api.fetchProfile()
+                let storedName = UserProfileStore.shared.firstName
+                if !storedName.isEmpty { fetched.displayName = storedName }
+                user = fetched
                 populateEditFields()
                 isLoading = false
             } catch {

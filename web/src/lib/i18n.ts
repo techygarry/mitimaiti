@@ -412,6 +412,8 @@ export const translations = {
     // Onboarding intent
     'onboarding.somethingCasual': 'Something Casual',
     'onboarding.casualDesc': 'Keep it light and see where things go',
+    'onboarding.somethingSerious': 'Something Serious',
+    'onboarding.seriousDesc': 'Ready for the real thing',
     'onboarding.openToAnything': 'Open to Anything',
     'onboarding.openDesc': 'Let fate decide, open to all possibilities',
     'onboarding.marriageLabel': 'Marriage',
@@ -912,6 +914,8 @@ export const translations = {
     // Onboarding intent
     'onboarding.somethingCasual': 'कुछ हल्का-फुल्का',
     'onboarding.casualDesc': 'हल्का रखें और देखें क्या होता है',
+    'onboarding.somethingSerious': 'कुछ गंभीर',
+    'onboarding.seriousDesc': 'सच्चे रिश्ते के लिए तैयार',
     'onboarding.openToAnything': 'किसी भी चीज़ के लिए तैयार',
     'onboarding.openDesc': 'भाग्य को तय करने दें, सभी संभावनाओं के लिए खुले',
     'onboarding.marriageLabel': 'विवाह',
@@ -1412,6 +1416,8 @@ export const translations = {
     // Onboarding intent
     'onboarding.somethingCasual': 'ڪجھ ھلڪو ڦلڪو',
     'onboarding.casualDesc': 'ھلڪو رکو ۽ ڏسو ڇا ٿيندو',
+    'onboarding.somethingSerious': 'ڪجھ سنجيدو',
+    'onboarding.seriousDesc': 'سچي تعلق لاءِ تيار',
     'onboarding.openToAnything': 'ڪنھن بہ شيءِ لاءِ تيار',
     'onboarding.openDesc': 'قسمت کي فيصلو ڪرڻ ڏيو، سڀني امڪانن لاءِ کُليل',
     'onboarding.marriageLabel': 'شادي',

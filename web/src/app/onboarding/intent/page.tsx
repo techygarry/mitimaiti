@@ -13,14 +13,15 @@ export default function IntentPage() {
 
   const intentOptions = [
     { value: 'casual', label: t('onboarding.somethingCasual'), emoji: '☕', description: t('onboarding.casualDesc') },
+    { value: 'serious', label: t('onboarding.somethingSerious'), emoji: '🌹', description: t('onboarding.seriousDesc') },
     { value: 'open', label: t('onboarding.openToAnything'), emoji: '✨', description: t('onboarding.openDesc') },
-    { value: 'marriage', label: t('onboarding.marriageLabel'), emoji: '💍', description: t('onboarding.marriageDesc') },
   ];
 
   const handleContinue = () => {
     if (!selected) return;
     if (typeof window !== 'undefined') {
       sessionStorage.setItem('onboarding_intent', selected);
+      localStorage.setItem('onboarding_intent', selected);
     }
     router.push('/onboarding/showme');
   };

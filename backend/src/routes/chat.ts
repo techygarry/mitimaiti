@@ -37,6 +37,39 @@ const upload = multer({
   },
 });
 
+// ─── Multer config for voice clips (audio) ──────────────────────────────────
+
+const audioUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 15 * 1024 * 1024, // 15 MB matches images; ~5 min of compressed audio
+    files: 1,
+  },
+  fileFilter: (_req, file, cb) => {
+    const allowed = [
+      'audio/m4a',
+      'audio/mp4',
+      'audio/x-m4a',
+      'audio/aac',
+      'audio/mpeg',
+      'audio/webm',
+      'audio/ogg',
+      'audio/wav',
+    ];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(
+        new AppError(
+          400,
+          'Unsupported audio type. Use m4a, aac, mp3, webm, ogg, or wav.',
+          'INVALID_AUDIO_TYPE'
+        )
+      );
+    }
+  },
+});
+
 // ─── Sightengine config ──────────────────────────────────────────────────────
 
 const SIGHTENGINE_API_USER = process.env.SIGHTENGINE_API_USER;
@@ -441,6 +474,126 @@ router.post(
   })
 );
 
+// ─── POST /v1/chat/:matchId/audio ───────────────────────────────────────────
+// Upload a voice message. Stores audio in Supabase Storage chat-media bucket
+// and inserts a message row with msg_type='voice', media_url, and the duration
+// in seconds (passed as form field 'duration').
+
+router.post(
+  '/:matchId/audio',
+  authenticate,
+  rateLimit({ maxRequests: 30, windowSeconds: 60, keyPrefix: 'rl_chat_audio' }),
+  audioUpload.single('audio'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const user = (req as AuthenticatedRequest).user;
+    const { matchId } = req.params;
+    const file = req.file;
+
+    if (!file) {
+      throw new AppError(400, 'No audio file uploaded', 'NO_FILE');
+    }
+
+    const { match, otherId } = await verifyMatchAccess(matchId, user.id);
+
+    if (match.is_dissolved || match.status === 'dissolved') {
+      throw new AppError(403, 'This match has been dissolved', 'MATCH_DISSOLVED');
+    }
+    if (match.expires_at && new Date(match.expires_at) < new Date()) {
+      throw new AppError(403, 'This match has expired', 'MATCH_EXPIRED');
+    }
+
+    // Parse duration (seconds, integer-ish). Treat malformed values as 0.
+    const rawDuration = req.body?.duration;
+    let durationSeconds = 0;
+    if (rawDuration != null) {
+      const parsed = Number(rawDuration);
+      if (Number.isFinite(parsed) && parsed >= 0) {
+        durationSeconds = Math.min(Math.round(parsed), 300); // cap at 5 min
+      }
+    }
+
+    const extMap: Record<string, string> = {
+      'audio/m4a': 'm4a',
+      'audio/mp4': 'm4a',
+      'audio/x-m4a': 'm4a',
+      'audio/aac': 'aac',
+      'audio/mpeg': 'mp3',
+      'audio/webm': 'webm',
+      'audio/ogg': 'ogg',
+      'audio/wav': 'wav',
+    };
+    const ext = extMap[file.mimetype] || 'm4a';
+
+    const mediaId = uuidv4();
+    const path = `chat/${matchId}/${mediaId}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('chat-media')
+      .upload(path, file.buffer, {
+        contentType: file.mimetype,
+        upsert: true,
+      });
+
+    if (uploadError) {
+      throw new AppError(500, 'Failed to upload audio', 'UPLOAD_FAILED');
+    }
+
+    const { data: urlData } = supabase.storage
+      .from('chat-media')
+      .getPublicUrl(path);
+
+    const { data: message, error: msgError } = await supabase
+      .from('messages')
+      .insert({
+        match_id: matchId,
+        sender_id: user.id,
+        content: durationSeconds > 0 ? `${durationSeconds}` : null,
+        msg_type: 'voice',
+        media_url: urlData.publicUrl,
+        media_type: 'audio',
+        is_read: false,
+      })
+      .select()
+      .single();
+
+    if (msgError) {
+      throw new AppError(500, 'Failed to save voice message', 'MESSAGE_SAVE_FAILED');
+    }
+
+    // Best-effort push notification
+    try {
+      const otherInChat = await redis.get(`in_chat:${otherId}:${matchId}`);
+      if (!otherInChat) {
+        const { sendTemplateNotification } = await import('../services/notifications');
+        const { data: myBasic } = await supabase
+          .from('basic_profiles')
+          .select('display_name')
+          .eq('user_id', user.id)
+          .single();
+
+        await sendTemplateNotification('new_message', otherId, {
+          name: myBasic?.display_name || 'Someone',
+          matchId,
+        });
+      }
+    } catch {
+      // non-critical
+    }
+
+    res.status(201).json({
+      success: true,
+      data: {
+        messageId: message.id,
+        msgType: 'voice',
+        mediaUrl: urlData.publicUrl,
+        mediaType: 'audio',
+        durationSeconds,
+        createdAt: message.created_at,
+      },
+    });
+  })
+);
+
 // ─── POST /v1/chat/:matchId/messages ────────────────────────────────────────
 // Send a text message via REST API (iOS uses this alongside Socket.io).
 // Enforces Respect-First: first sender must wait for reply before sending again.
@@ -714,6 +867,190 @@ router.post(
         countdownRemaining: computeCountdown(newExpiry.toISOString()),
         extendedOnce: true,
       },
+    });
+  })
+);
+
+// ─── POST /v1/chat/:matchId/messages/:messageId/reaction ────────────────────
+// Add or replace the current user's reaction on a message. Stored in Redis
+// (no Supabase schema change). One emoji per user per message.
+
+const ALLOWED_REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👍'];
+
+router.post(
+  '/:matchId/messages/:messageId/reaction',
+  authenticate,
+  rateLimit({ maxRequests: 60, windowSeconds: 60, keyPrefix: 'rl_chat_react' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const user = (req as AuthenticatedRequest).user;
+    const { matchId, messageId } = req.params;
+    const { emoji } = req.body;
+
+    if (!emoji || typeof emoji !== 'string') {
+      throw new AppError(400, 'Emoji is required', 'EMPTY_EMOJI');
+    }
+    if (!ALLOWED_REACTIONS.includes(emoji)) {
+      throw new AppError(400, 'Reaction emoji not allowed', 'INVALID_EMOJI');
+    }
+
+    await verifyMatchAccess(matchId, user.id);
+
+    // Confirm the message belongs to this match
+    const { data: msg, error: fetchError } = await supabase
+      .from('messages')
+      .select('id')
+      .eq('id', messageId)
+      .eq('match_id', matchId)
+      .single();
+    if (fetchError || !msg) {
+      throw new AppError(404, 'Message not found', 'MESSAGE_NOT_FOUND');
+    }
+
+    const key = `reactions:${messageId}`;
+    await redis.hset(key, user.id, emoji);
+    // Reactions live as long as the match — give a generous TTL just to avoid
+    // unbounded growth if a match is dissolved without cleanup.
+    await redis.expire(key, 60 * 60 * 24 * 30); // 30 days
+
+    const all = await redis.hgetall(key);
+
+    res.status(201).json({
+      success: true,
+      data: { messageId, reactions: all },
+    });
+  })
+);
+
+router.delete(
+  '/:matchId/messages/:messageId/reaction',
+  authenticate,
+  rateLimit({ maxRequests: 60, windowSeconds: 60, keyPrefix: 'rl_chat_react' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const user = (req as AuthenticatedRequest).user;
+    const { matchId, messageId } = req.params;
+
+    await verifyMatchAccess(matchId, user.id);
+
+    const key = `reactions:${messageId}`;
+    await redis.hdel(key, user.id);
+    const all = await redis.hgetall(key);
+
+    res.json({
+      success: true,
+      data: { messageId, reactions: all },
+    });
+  })
+);
+
+// ─── PATCH /v1/chat/:matchId/messages/:messageId ────────────────────────────
+// Edit a text message. Sender-only. Appends "[edited]" marker so clients can
+// surface the "edited" tag without needing a new DB column.
+
+router.patch(
+  '/:matchId/messages/:messageId',
+  authenticate,
+  rateLimit({ maxRequests: 30, windowSeconds: 60, keyPrefix: 'rl_chat_edit' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const user = (req as AuthenticatedRequest).user;
+    const { matchId, messageId } = req.params;
+    const { content } = req.body;
+
+    if (!content || typeof content !== 'string' || !content.trim()) {
+      throw new AppError(400, 'Message content is required', 'EMPTY_MESSAGE');
+    }
+
+    await verifyMatchAccess(matchId, user.id);
+
+    // Fetch message and verify sender
+    const { data: existing, error: fetchError } = await supabase
+      .from('messages')
+      .select('id, sender_id, msg_type, content')
+      .eq('id', messageId)
+      .eq('match_id', matchId)
+      .single();
+
+    if (fetchError || !existing) {
+      throw new AppError(404, 'Message not found', 'MESSAGE_NOT_FOUND');
+    }
+    if (existing.sender_id !== user.id) {
+      throw new AppError(403, 'You can only edit your own messages', 'NOT_SENDER');
+    }
+    if (existing.msg_type !== 'text') {
+      throw new AppError(400, 'Only text messages can be edited', 'UNEDITABLE_TYPE');
+    }
+
+    const trimmed = content.trim();
+    const editedContent = trimmed.includes('[edited]') ? trimmed : `${trimmed} [edited]`;
+
+    const { data: updated, error: updateError } = await supabase
+      .from('messages')
+      .update({ content: editedContent })
+      .eq('id', messageId)
+      .select()
+      .single();
+
+    if (updateError) {
+      throw new AppError(500, 'Failed to edit message', 'MESSAGE_EDIT_FAILED');
+    }
+
+    res.json({
+      success: true,
+      data: {
+        message: {
+          id: updated.id,
+          match_id: matchId,
+          sender_id: user.id,
+          content: updated.content,
+          media_url: updated.media_url,
+          msg_type: updated.msg_type,
+          edited: true,
+          created_at: updated.sent_at,
+        },
+      },
+    });
+  })
+);
+
+// ─── DELETE /v1/chat/:matchId/messages/:messageId ───────────────────────────
+// Delete a message. Sender-only. Hard delete.
+
+router.delete(
+  '/:matchId/messages/:messageId',
+  authenticate,
+  rateLimit({ maxRequests: 30, windowSeconds: 60, keyPrefix: 'rl_chat_delete' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const user = (req as AuthenticatedRequest).user;
+    const { matchId, messageId } = req.params;
+
+    await verifyMatchAccess(matchId, user.id);
+
+    // Fetch message and verify sender
+    const { data: existing, error: fetchError } = await supabase
+      .from('messages')
+      .select('id, sender_id')
+      .eq('id', messageId)
+      .eq('match_id', matchId)
+      .single();
+
+    if (fetchError || !existing) {
+      throw new AppError(404, 'Message not found', 'MESSAGE_NOT_FOUND');
+    }
+    if (existing.sender_id !== user.id) {
+      throw new AppError(403, 'You can only delete your own messages', 'NOT_SENDER');
+    }
+
+    const { error: deleteError } = await supabase
+      .from('messages')
+      .delete()
+      .eq('id', messageId);
+
+    if (deleteError) {
+      throw new AppError(500, 'Failed to delete message', 'MESSAGE_DELETE_FAILED');
+    }
+
+    res.json({
+      success: true,
+      data: { messageId, deleted: true },
     });
   })
 );

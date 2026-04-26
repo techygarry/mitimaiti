@@ -268,7 +268,7 @@ class LocalizationManager: ObservableObject {
             "onboarding.city": "City",
             "onboarding.stateProvince": "State / Province",
             "onboarding.country": "Country",
-            "onboarding.welcomeToCommunity": "Welcome to the Sindhi community,",
+            "onboarding.welcomeToCommunity": "Welcome to the MitiMaiti community,",
             "onboarding.startDiscovering": "Start Discovering",
             // Welcome
             "welcome.title": "MitiMaiti",
@@ -518,7 +518,7 @@ class LocalizationManager: ObservableObject {
             "onboarding.city": "शहर",
             "onboarding.stateProvince": "राज्य / प्रांत",
             "onboarding.country": "देश",
-            "onboarding.welcomeToCommunity": "सिंधी समुदाय में आपका स्वागत है,",
+            "onboarding.welcomeToCommunity": "MitiMaiti समुदाय में आपका स्वागत है,",
             "onboarding.startDiscovering": "खोज शुरू करें",
             // Welcome
             "welcome.title": "मिटीमैटी",
@@ -768,7 +768,7 @@ class LocalizationManager: ObservableObject {
             "onboarding.city": "شهر",
             "onboarding.stateProvince": "صوبو / رياست",
             "onboarding.country": "ملڪ",
-            "onboarding.welcomeToCommunity": "سنڌي برادري ۾ ڀلي ڪري آيا،",
+            "onboarding.welcomeToCommunity": "MitiMaiti برادري ۾ ڀلي ڪري آيا،",
             "onboarding.startDiscovering": "ڳولا شروع ڪريو",
             // Welcome
             "welcome.title": "مِٽِي مَئِٽِي",

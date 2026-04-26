@@ -370,7 +370,7 @@ struct ProfileView: View {
 
                         Spacer()
 
-                        Text("\(profileVM.user.profileCompleteness)%")
+                        Text("\(profileVM.computedCompleteness)%")
                             .font(.system(size: 15, weight: .bold))
                             .foregroundColor(AppTheme.rose)
                     }
@@ -407,31 +407,39 @@ struct ProfileView: View {
     // MARK: - Stats Row
 
     private var statsRow: some View {
-        ContentCard {
-            HStack(spacing: 0) {
-                ForEach(Array(profileVM.profileStats.enumerated()), id: \.offset) { index, stat in
-                    if index > 0 {
-                        Divider()
-                            .frame(height: 48)
-                            .background(colors.border)
-                    }
-                    VStack(spacing: AppTheme.spacingSM) {
-                        Image(systemName: stat.0)
-                            .font(.system(size: 18))
-                            .foregroundColor(AppTheme.rose)
-                        Text(stat.1)
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundColor(colors.textPrimary)
-                        Text(stat.2)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(colors.textMuted)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, AppTheme.spacingMD)
-                }
-            }
-            .padding(.horizontal, AppTheme.spacingSM)
+        // Three separate cards, each with a circular icon badge on top,
+        // a big number and a small label — mirrors the web design.
+        HStack(spacing: AppTheme.spacingSM) {
+            statCard(icon: "eye.fill", value: profileVM.profileStats[0].1, label: profileVM.profileStats[0].2, accent: AppTheme.rose)
+            statCard(icon: "heart.fill", value: profileVM.profileStats[1].1, label: profileVM.profileStats[1].2, accent: AppTheme.rose)
+            statCard(icon: "bubble.left.fill", value: profileVM.profileStats[2].1, label: profileVM.profileStats[2].2, accent: .blue)
         }
+    }
+
+    private func statCard(icon: String, value: String, label: String, accent: Color) -> some View {
+        VStack(spacing: 6) {
+            ZStack {
+                Circle()
+                    .fill(accent.opacity(0.10))
+                    .frame(width: 32, height: 32)
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(accent)
+            }
+            Text(value)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(colors.textPrimary)
+            Text(label)
+                .font(.system(size: 10, weight: .regular))
+                .foregroundColor(colors.textMuted)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: AppTheme.radiusMD)
+                .fill(colors.surface)
+                .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 2)
+        )
     }
 
     // MARK: - Bio Section

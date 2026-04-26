@@ -46,6 +46,7 @@ fun ProfileScreen(
     val user by viewModel.user.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val repoPhotos by PhotoRepository.photos.collectAsState()
+    val completeness by viewModel.completenessFlow.collectAsState()
     var showPhotoPicker by remember { mutableStateOf(false) }
 
     if (isLoading || user == null) {
@@ -233,7 +234,7 @@ fun ProfileScreen(
                         color = colors.textPrimary
                     )
                     Text(
-                        "${viewModel.computedCompleteness}%",
+                        "${completeness}%",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = AppColors.Rose
@@ -241,7 +242,7 @@ fun ProfileScreen(
                 }
                 Spacer(modifier = Modifier.height(10.dp))
                 LinearProgressIndicator(
-                    progress = { viewModel.computedCompleteness / 100f },
+                    progress = { completeness / 100f },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(8.dp)
@@ -261,25 +262,37 @@ fun ProfileScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Stats row
-        Surface(
+        // Stats row — three separate cards with circular icon badges (matches web design)
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
-            shape = RoundedCornerShape(AppTheme.radiusMd),
-            color = colors.surface,
-            shadowElevation = 2.dp
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 16.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                StatItem(Icons.Default.Visibility, "Views", viewModel.profileStats.views.toString())
-                StatItem(Icons.Default.FavoriteBorder, "Likes", viewModel.profileStats.likes.toString())
-                StatItem(Icons.Default.ChatBubbleOutline, "Matches", viewModel.profileStats.matches.toString())
-            }
+            StatCard(
+                icon = Icons.Default.Visibility,
+                value = viewModel.profileStats.views.toString(),
+                label = "Views",
+                accent = AppColors.Rose,
+                modifier = Modifier.weight(1f),
+                colors = colors
+            )
+            StatCard(
+                icon = Icons.Default.FavoriteBorder,
+                value = viewModel.profileStats.likes.toString(),
+                label = "Likes",
+                accent = AppColors.Rose,
+                modifier = Modifier.weight(1f),
+                colors = colors
+            )
+            StatCard(
+                icon = Icons.Default.ChatBubbleOutline,
+                value = viewModel.profileStats.matches.toString(),
+                label = "Matches",
+                accent = Color(0xFF3B82F6), // blue-500 for Matches (matches web)
+                modifier = Modifier.weight(1f),
+                colors = colors
+            )
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -350,21 +363,48 @@ fun ProfileScreen(
 }
 
 @Composable
-private fun StatItem(icon: ImageVector, label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(icon, null, tint = AppColors.Rose, modifier = Modifier.size(20.dp))
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            value,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            color = LocalAdaptiveColors.current.textPrimary
-        )
-        Text(
-            label,
-            fontSize = 12.sp,
-            color = AppColors.Rose
-        )
+private fun StatCard(
+    icon: ImageVector,
+    value: String,
+    label: String,
+    accent: Color,
+    modifier: Modifier = Modifier,
+    colors: com.mitimaiti.app.ui.theme.AdaptiveColors
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(AppTheme.radiusMd),
+        color = colors.surface,
+        shadowElevation = 2.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(accent.copy(alpha = 0.10f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, null, tint = accent, modifier = Modifier.size(16.dp))
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                value,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = colors.textPrimary
+            )
+            Text(
+                label,
+                fontSize = 10.sp,
+                color = colors.textMuted
+            )
+        }
     }
 }
 

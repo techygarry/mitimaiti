@@ -1,5 +1,7 @@
 import SwiftUI
 import PhotosUI
+import AVFoundation
+import UIKit
 
 struct ChatView: View {
     let match: Match
@@ -18,10 +20,46 @@ struct ChatView: View {
     @State private var showBlockAlert   = false
     @State private var showReportSheet  = false
 
+    // Image viewer + picker
+    @State private var viewerImageUrl: String? = nil
+    @State private var photoErrorMessage: String? = nil
+    @State private var showAttachmentChooser = false
+    @State private var showCameraSheet = false
+    @State private var showGalleryPicker = false
+
+    // 1h expiry warning (in-line toast)
+    @State private var showExpiryWarning = false
+
+    // Long-press action sheet (reactions + edit/delete)
+    @State private var actionSheetMessage: Message? = nil
+
+    // Voice recording
+    @StateObject private var voiceRecorder = VoiceRecorder()
+
     var body: some View {
         VStack(spacing: 0) {
             // Slide-in unlock toast at the very top
             unlockToastView
+
+            // Expiry warning banner
+            if showExpiryWarning {
+                HStack(spacing: 8) {
+                    Image(systemName: "hourglass")
+                        .font(.system(size: 12))
+                    Text("Less than 1 hour left to chat!")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(
+                    Capsule()
+                        .fill(AppTheme.warning)
+                        .shadow(color: AppTheme.warning.opacity(0.4), radius: 10, x: 0, y: 4)
+                )
+                .padding(.vertical, 6)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
 
             // Lock banner (only when I sent ice-breaker and am waiting)
             chatBannerSection
@@ -86,6 +124,81 @@ struct ChatView: View {
         .sheet(isPresented: $showReportSheet) {
             ReportSheet(userName: match.otherUser.displayName, isPresented: $showReportSheet)
         }
+        // Attachment chooser: Camera or Gallery
+        .confirmationDialog("Send a photo", isPresented: $showAttachmentChooser, titleVisibility: .visible) {
+            Button("Take a live photo") {
+                showCameraSheet = true
+            }
+            Button("Choose from gallery") {
+                showGalleryPicker = true
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .sheet(isPresented: $showCameraSheet) {
+            CameraGalleryPicker(sourceType: .camera) { url in
+                handlePickedImage(url)
+            }
+            .ignoresSafeArea()
+        }
+        .sheet(isPresented: $showGalleryPicker) {
+            CameraGalleryPicker(sourceType: .photoLibrary) { url in
+                handlePickedImage(url)
+            }
+            .ignoresSafeArea()
+        }
+        // Image size error alert
+        .alert("Photo error", isPresented: Binding(
+            get: { photoErrorMessage != nil },
+            set: { if !$0 { photoErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(photoErrorMessage ?? "")
+        }
+        // Fullscreen image viewer
+        .fullScreenCover(isPresented: Binding(
+            get: { viewerImageUrl != nil },
+            set: { if !$0 { viewerImageUrl = nil } }
+        )) {
+            ChatImageViewer(urlString: viewerImageUrl ?? "") {
+                viewerImageUrl = nil
+            }
+        }
+        // Long-press action sheet (reactions + edit/delete)
+        .sheet(item: $actionSheetMessage) { msg in
+            MessageActionSheet(
+                message: msg,
+                onReact: { emoji in
+                    chatVM.toggleReaction(msg, emoji: emoji)
+                    actionSheetMessage = nil
+                },
+                onEdit: {
+                    chatVM.startEdit(msg)
+                    actionSheetMessage = nil
+                },
+                onDelete: {
+                    chatVM.deleteMessage(msg)
+                    actionSheetMessage = nil
+                },
+                onCancel: { actionSheetMessage = nil }
+            )
+            .presentationDetents([.height(msg.isFromMe ? 200 : 110)])
+            .presentationDragIndicator(.visible)
+        }
+        // 1-hour expiry warning — fires once per match per session
+        .task(id: match.id) {
+            guard let expiresAt = match.expiresAt else { return }
+            let remaining = expiresAt.timeIntervalSinceNow
+            if remaining > 0 && remaining <= 60 * 60 {
+                let key = "chat_1h_warned_\(match.id)"
+                if !ChatExpiryWarnings.shared.shown.contains(key) {
+                    ChatExpiryWarnings.shared.shown.insert(key)
+                    showExpiryWarning = true
+                    try? await Task.sleep(nanoseconds: 5_000_000_000)
+                    showExpiryWarning = false
+                }
+            }
+        }
     }
 
     // MARK: - Unlock Toast
@@ -141,7 +254,69 @@ struct ChatView: View {
     // MARK: - Input Bar
 
     private var inputBarSection: some View {
-        ChatInputBar(chatVM: chatVM, isInputFocused: $isInputFocused)
+        VStack(spacing: 0) {
+            if voiceRecorder.isRecording {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 8, height: 8)
+                        .opacity(0.85)
+                    Text("Recording… \(formatRecordingTime(voiceRecorder.seconds))")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                    Spacer()
+                    Button("Cancel") { voiceRecorder.cancel() }
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.white)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(AppTheme.rose)
+            }
+            if chatVM.editingMessageId != nil {
+                HStack(spacing: 8) {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 12))
+                        .foregroundColor(AppTheme.rose)
+                    Text("Editing message")
+                        .font(.system(size: 12))
+                        .foregroundColor(colors.textPrimary)
+                    Spacer()
+                    Button("Cancel") { chatVM.cancelEdit() }
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(AppTheme.rose)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(AppTheme.rose.opacity(0.06))
+            }
+            ChatInputBar(
+                chatVM: chatVM,
+                isInputFocused: $isInputFocused,
+                onAttachmentTap: { showAttachmentChooser = true },
+                recorder: voiceRecorder,
+                onVoiceFinished: { url, duration in
+                    chatVM.sendVoice(localUrl: url.absoluteString, durationSeconds: duration)
+                }
+            )
+        }
+    }
+
+    private func formatRecordingTime(_ s: Int) -> String {
+        let m = s / 60
+        let r = s % 60
+        return String(format: "%d:%02d", m, r)
+    }
+
+    private func handlePickedImage(_ url: URL) {
+        let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+        let size = (attrs?[.size] as? NSNumber)?.intValue ?? 0
+        if size > 15 * 1024 * 1024 {
+            photoErrorMessage = "Image must be under 15MB"
+            try? FileManager.default.removeItem(at: url)
+            return
+        }
+        chatVM.sendImage(localUrl: url.absoluteString)
     }
 }
 
@@ -205,11 +380,14 @@ private struct ChatTrailingButtons: View {
     @Binding var showBlockAlert: Bool
     @Binding var showReportSheet: Bool
     @Environment(\.adaptiveColors) private var colors
+    @State private var comingSoonMessage: String? = nil
 
     var body: some View {
         HStack(spacing: 14) {
             // Video call
-            Button {} label: {
+            Button {
+                comingSoonMessage = "📹 Video calls coming soon"
+            } label: {
                 Image(systemName: "video.fill")
                     .font(.system(size: 17))
                     .foregroundColor(callsUnlocked ? colors.textPrimary : colors.textMuted.opacity(0.35))
@@ -217,7 +395,9 @@ private struct ChatTrailingButtons: View {
             .disabled(!callsUnlocked)
 
             // Voice call
-            Button {} label: {
+            Button {
+                comingSoonMessage = "📞 Voice calls coming soon"
+            } label: {
                 Image(systemName: "phone.fill")
                     .font(.system(size: 16))
                     .foregroundColor(callsUnlocked ? colors.textPrimary : colors.textMuted.opacity(0.35))
@@ -249,6 +429,14 @@ private struct ChatTrailingButtons: View {
                     .foregroundColor(colors.textPrimary)
                     .frame(width: 28, height: 28)
             }
+        }
+        .alert("Coming soon", isPresented: Binding(
+            get: { comingSoonMessage != nil },
+            set: { if !$0 { comingSoonMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(comingSoonMessage ?? "")
         }
     }
 }
@@ -326,7 +514,9 @@ private struct ChatMessageList: View {
                             BumbleMessageBubble(
                                 message: msg,
                                 otherUserName: otherUserName,
-                                otherUserAvatarURL: otherUserAvatarURL
+                                otherUserAvatarURL: otherUserAvatarURL,
+                                onImageTap: { url in viewerImageUrl = url },
+                                onLongPress: { m in actionSheetMessage = m }
                             )
                             .id(msg.id)
                         }
@@ -500,10 +690,26 @@ private struct BumbleMessageBubble: View {
     let message: Message
     let otherUserName: String
     let otherUserAvatarURL: String?
+    var onImageTap: (String) -> Void = { _ in }
+    var onLongPress: (Message) -> Void = { _ in }
 
     @Environment(\.adaptiveColors) private var colors
     @Environment(\.colorScheme) private var colorScheme
     @State private var appeared = false
+
+    private var isEdited: Bool {
+        message.msgType == .text && message.content.contains("[edited]")
+    }
+
+    private var displayContent: String {
+        if isEdited {
+            var s = message.content
+            if s.hasSuffix(" [edited]") { s = String(s.dropLast(" [edited]".count)) }
+            else if s.hasSuffix("[edited]") { s = String(s.dropLast("[edited]".count)) }
+            return s.trimmingCharacters(in: .whitespaces)
+        }
+        return message.content
+    }
 
     private let bubbleRadius: CGFloat = 18
     private let tailRadius: CGFloat  = 4
@@ -541,16 +747,28 @@ private struct BumbleMessageBubble: View {
         VStack(alignment: .trailing, spacing: 4) {
             icebreakerLabel
 
-            if message.msgType != .system {
-                Text(message.content)
-                    .font(.system(size: 15))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 11)
-                    .background(sentBubble)
-                    .shadow(color: AppTheme.rose.opacity(0.2), radius: 8, x: 0, y: 3)
-            } else {
-                systemText
+            ZStack(alignment: .bottomLeading) {
+                Group {
+                    if isPhoto {
+                        photoBubble
+                    } else if isVoice {
+                        voiceBubble
+                    } else if message.msgType != .system {
+                        Text(displayContent)
+                            .font(.system(size: 15))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 11)
+                            .background(sentBubble)
+                            .shadow(color: AppTheme.rose.opacity(0.2), radius: 8, x: 0, y: 3)
+                    } else {
+                        systemText
+                    }
+                }
+                .onLongPressGesture(minimumDuration: 0.35) { onLongPress(message) }
+
+                reactionChip
+                    .offset(x: -6, y: 8)
             }
 
             timestampRow
@@ -563,20 +781,98 @@ private struct BumbleMessageBubble: View {
         VStack(alignment: .leading, spacing: 4) {
             icebreakerLabel
 
-            if message.msgType != .system {
-                Text(message.content)
-                    .font(.system(size: 15))
-                    .foregroundColor(colors.textPrimary)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 11)
-                    .background(receivedBubble)
-                    .shadow(color: colors.cardShadowColor.opacity(0.5), radius: 5, x: 0, y: 2)
-            } else {
-                systemText
+            ZStack(alignment: .bottomTrailing) {
+                Group {
+                    if isPhoto {
+                        photoBubble
+                    } else if isVoice {
+                        voiceBubble
+                    } else if message.msgType != .system {
+                        Text(displayContent)
+                            .font(.system(size: 15))
+                            .foregroundColor(colors.textPrimary)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 11)
+                            .background(receivedBubble)
+                            .shadow(color: colors.cardShadowColor.opacity(0.5), radius: 5, x: 0, y: 2)
+                    } else {
+                        systemText
+                    }
+                }
+                .onLongPressGesture(minimumDuration: 0.35) { onLongPress(message) }
+
+                reactionChip
+                    .offset(x: 6, y: 8)
             }
 
             timestampRow
         }
+    }
+
+    @ViewBuilder
+    private var reactionChip: some View {
+        if let r = message.reaction {
+            Text(r)
+                .font(.system(size: 12))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    Capsule()
+                        .fill(colors.surface)
+                        .overlay(Capsule().stroke(colors.border, lineWidth: 0.5))
+                        .shadow(color: .black.opacity(0.08), radius: 2, x: 0, y: 1)
+                )
+        }
+    }
+
+    private var isPhoto: Bool {
+        message.msgType == .photo && (message.mediaUrl?.isEmpty == false)
+    }
+
+    private var isVoice: Bool {
+        message.msgType == .voice && (message.mediaUrl?.isEmpty == false)
+    }
+
+    @ViewBuilder
+    private var voiceBubble: some View {
+        VoicePlaybackBubble(
+            audioUrl: message.mediaUrl ?? "",
+            durationSeconds: message.durationSeconds,
+            isFromMe: message.isFromMe
+        )
+        .background(
+            RoundedRectangle(cornerRadius: 18)
+                .fill(message.isFromMe ? AnyShapeStyle(AppTheme.roseGradient) : AnyShapeStyle(colors.surfaceMedium))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+    }
+
+    private var photoBubble: some View {
+        Button {
+            if let url = message.mediaUrl { onImageTap(url) }
+        } label: {
+            AsyncImage(url: URL(string: message.mediaUrl ?? "")) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                case .failure:
+                    Image(systemName: "photo")
+                        .font(.system(size: 32))
+                        .foregroundColor(colors.textMuted)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(colors.surfaceMedium)
+                default:
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(colors.surfaceMedium)
+                }
+            }
+            .frame(maxWidth: 240, maxHeight: 320)
+            .clipShape(RoundedRectangle(cornerRadius: 18))
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: Bubble shapes
@@ -621,6 +917,12 @@ private struct BumbleMessageBubble: View {
 
     private var timestampRow: some View {
         HStack(spacing: 4) {
+            if isEdited {
+                Text("edited")
+                    .font(.system(size: 10))
+                    .italic()
+                    .foregroundColor(colors.textMuted)
+            }
             Text(message.createdAt.messageTime)
                 .font(.system(size: 10))
                 .foregroundColor(colors.textMuted)
@@ -917,6 +1219,9 @@ private struct IcebreakerButtonStyle: ButtonStyle {
 private struct ChatInputBar: View {
     @ObservedObject var chatVM: ChatViewModel
     var isInputFocused: FocusState<Bool>.Binding
+    var onAttachmentTap: () -> Void
+    @ObservedObject var recorder: VoiceRecorder
+    var onVoiceFinished: (URL, Int) -> Void
     @Environment(\.adaptiveColors) private var colors
     @State private var chatPhotoItem: PhotosPickerItem?
 
@@ -968,11 +1273,12 @@ private struct ChatInputBar: View {
 
     private var activeContent: some View {
         HStack(spacing: 10) {
-            Button {} label: {
+            Button(action: onAttachmentTap) {
                 Image(systemName: "camera.fill")
                     .font(.system(size: 20))
                     .foregroundColor(colors.textMuted)
             }
+            .disabled(chatVM.isLockedForMe)
 
             HStack {
                 TextField(chatVM.inputPlaceholder, text: $chatVM.messageText, axis: .vertical)
@@ -1001,11 +1307,26 @@ private struct ChatInputBar: View {
             photoAttachButton
 
             if chatVM.messageText.isEmpty {
-                Button {} label: {
-                    Image(systemName: "mic.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(colors.textMuted)
-                }
+                MicHoldButton(
+                    isRecording: recorder.isRecording,
+                    onStart: {
+                        Task {
+                            let ok = await recorder.startRecording()
+                            if !ok {
+                                // permission/setup failure handled silently for now
+                            }
+                        }
+                    },
+                    onStop: { cancel in
+                        if cancel {
+                            recorder.cancel()
+                            return
+                        }
+                        if let result = recorder.stopRecording() {
+                            onVoiceFinished(result.url, result.duration)
+                        }
+                    }
+                )
             } else {
                 sendButton
             }
@@ -1172,6 +1493,404 @@ private struct ReportSheet: View {
                 .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.rose))
                 .padding(.horizontal, 20)
                 .padding(.bottom, 24)
+        }
+    }
+}
+
+// MARK: - Camera + Gallery picker (UIImagePickerController wrapper)
+
+struct CameraGalleryPicker: UIViewControllerRepresentable {
+    let sourceType: UIImagePickerController.SourceType
+    let onPicked: (URL) -> Void
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = sourceType
+        picker.delegate = context.coordinator
+        picker.allowsEditing = false
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator(onPicked: onPicked) }
+
+    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let onPicked: (URL) -> Void
+        init(onPicked: @escaping (URL) -> Void) { self.onPicked = onPicked }
+
+        func imagePickerController(
+            _ picker: UIImagePickerController,
+            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+        ) {
+            picker.dismiss(animated: true)
+            guard let image = info[.originalImage] as? UIImage,
+                  let data = image.jpegData(compressionQuality: 0.85) else { return }
+            let tempUrl = FileManager.default.temporaryDirectory
+                .appendingPathComponent("\(UUID().uuidString).jpg")
+            do {
+                try data.write(to: tempUrl)
+                onPicked(tempUrl)
+            } catch {
+                // ignore — could surface an error if needed
+            }
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            picker.dismiss(animated: true)
+        }
+    }
+}
+
+// MARK: - Voice Recorder
+
+@MainActor
+final class VoiceRecorder: ObservableObject {
+    @Published var isRecording = false
+    @Published var seconds = 0
+
+    private var recorder: AVAudioRecorder?
+    private var timer: Timer?
+    private var startedAt: Date?
+    private var fileURL: URL?
+
+    func startRecording() async -> Bool {
+        let granted = await AVAudioApplication.requestRecordPermission()
+        guard granted else { return false }
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            return false
+        }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("voice_\(UUID().uuidString).m4a")
+        let settings: [String: Any] = [
+            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+            AVSampleRateKey: 44_100,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderBitRateKey: 64_000,
+            AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue
+        ]
+        do {
+            let r = try AVAudioRecorder(url: url, settings: settings)
+            r.record()
+            recorder = r
+            fileURL = url
+            startedAt = Date()
+            isRecording = true
+            seconds = 0
+            startTimer()
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func startTimer() {
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, let start = self.startedAt else { return }
+                self.seconds = Int(Date().timeIntervalSince(start))
+                if self.seconds >= 300 {
+                    _ = self.stopRecording()
+                }
+            }
+        }
+    }
+
+    @discardableResult
+    func stopRecording() -> (url: URL, duration: Int)? {
+        guard isRecording else { return nil }
+        recorder?.stop()
+        timer?.invalidate()
+        timer = nil
+        let duration = startedAt.map { Int(Date().timeIntervalSince($0)) } ?? 0
+        startedAt = nil
+        isRecording = false
+        seconds = 0
+        try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+        guard let url = fileURL, duration >= 1 else {
+            if let u = fileURL { try? FileManager.default.removeItem(at: u) }
+            fileURL = nil
+            return nil
+        }
+        let result = (url, duration)
+        fileURL = nil
+        recorder = nil
+        return result
+    }
+
+    func cancel() {
+        guard isRecording else { return }
+        recorder?.stop()
+        timer?.invalidate()
+        timer = nil
+        if let u = fileURL { try? FileManager.default.removeItem(at: u) }
+        fileURL = nil
+        recorder = nil
+        startedAt = nil
+        isRecording = false
+        seconds = 0
+        try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+    }
+}
+
+// MARK: - Mic hold-to-record button
+
+private struct MicHoldButton: View {
+    let isRecording: Bool
+    let onStart: () -> Void
+    let onStop: (Bool) -> Void
+    @Environment(\.adaptiveColors) private var colors
+    @State private var pressing = false
+
+    var body: some View {
+        Image(systemName: "mic.fill")
+            .font(.system(size: 20))
+            .foregroundColor(isRecording ? .white : colors.textMuted)
+            .frame(width: 44, height: 44)
+            .background(
+                Circle().fill(isRecording ? AppTheme.rose : Color.clear)
+            )
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        if !pressing {
+                            pressing = true
+                            onStart()
+                        }
+                    }
+                    .onEnded { value in
+                        let cancel = abs(value.translation.width) > 80 || value.translation.height < -80
+                        pressing = false
+                        onStop(cancel)
+                    }
+            )
+    }
+}
+
+// MARK: - Voice playback bubble (play/pause + stylized waveform + duration)
+
+private let voiceBarHeights: [Double] = [
+    0.55, 0.78, 0.42, 0.92, 0.65, 0.38, 0.85, 0.58, 0.72, 0.46,
+    0.88, 0.51, 0.66, 0.81, 0.43, 0.74, 0.59, 0.95, 0.62, 0.49
+]
+
+struct VoicePlaybackBubble: View {
+    let audioUrl: String
+    let durationSeconds: Int
+    let isFromMe: Bool
+
+    @State private var isPlaying = false
+    @State private var progress: Double = 0
+    @State private var player: AVAudioPlayer?
+    @State private var timer: Timer?
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button(action: toggle) {
+                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        Circle().fill(isFromMe ? Color.white.opacity(0.25) : AppTheme.rose)
+                    )
+            }
+            HStack(spacing: 2) {
+                ForEach(voiceBarHeights.indices, id: \.self) { i in
+                    let filled = Double(i) / Double(voiceBarHeights.count) <= progress
+                    Capsule()
+                        .fill(barColor(filled: filled))
+                        .frame(width: 3, height: 24 * voiceBarHeights[i])
+                }
+            }
+            Text(formatted)
+                .font(.system(size: 11))
+                .foregroundColor(isFromMe ? .white.opacity(0.85) : .gray)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(minWidth: 200)
+        .onDisappear {
+            player?.stop()
+            timer?.invalidate()
+            timer = nil
+        }
+    }
+
+    private func barColor(filled: Bool) -> Color {
+        if isFromMe {
+            return filled ? .white : .white.opacity(0.4)
+        } else {
+            return filled ? AppTheme.rose : Color(white: 0.8)
+        }
+    }
+
+    private var formatted: String {
+        let m = durationSeconds / 60
+        let s = durationSeconds % 60
+        return String(format: "%d:%02d", m, s)
+    }
+
+    private func toggle() {
+        if let p = player {
+            if p.isPlaying {
+                p.pause()
+                isPlaying = false
+            } else {
+                p.play()
+                isPlaying = true
+                startTimer()
+            }
+            return
+        }
+        let url = URL(string: audioUrl) ?? URL(fileURLWithPath: audioUrl)
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+            try AVAudioSession.sharedInstance().setActive(true)
+            let p = try AVAudioPlayer(contentsOf: url)
+            p.prepareToPlay()
+            p.play()
+            player = p
+            isPlaying = true
+            startTimer()
+        } catch {
+            // Silent fail; consider toast in future
+        }
+    }
+
+    private func startTimer() {
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
+            guard let p = player else { return }
+            if p.duration > 0 {
+                progress = p.currentTime / p.duration
+            }
+            if !p.isPlaying {
+                isPlaying = false
+                if p.currentTime >= p.duration {
+                    progress = 0
+                }
+                timer?.invalidate()
+                timer = nil
+            }
+        }
+    }
+}
+
+// MARK: - Message action sheet (reactions + edit/delete)
+
+private struct MessageActionSheet: View {
+    let message: Message
+    let onReact: (String) -> Void
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+    let onCancel: () -> Void
+    @Environment(\.adaptiveColors) private var colors
+
+    var body: some View {
+        VStack(spacing: 16) {
+            // Reactions row
+            HStack(spacing: 8) {
+                ForEach(Message.allowedReactions, id: \.self) { emoji in
+                    let selected = message.reaction == emoji
+                    Button { onReact(emoji) } label: {
+                        Text(emoji)
+                            .font(.system(size: 26))
+                            .frame(width: 44, height: 44)
+                            .background(
+                                Circle()
+                                    .fill(selected ? AppTheme.rose.opacity(0.15) : Color.clear)
+                            )
+                    }
+                }
+            }
+            .padding(.top, 8)
+
+            // Edit/delete actions (own messages only)
+            if message.isFromMe {
+                Divider()
+                if message.msgType == .text {
+                    Button {
+                        onEdit()
+                    } label: {
+                        Label("Edit", systemImage: "pencil")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 10)
+                    }
+                    .foregroundColor(colors.textPrimary)
+                }
+                Button(role: .destructive) {
+                    onDelete()
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 10)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .presentationBackground(colors.surface)
+    }
+}
+
+// MARK: - Expiry warning de-dup (process-wide)
+
+@MainActor
+final class ChatExpiryWarnings {
+    static let shared = ChatExpiryWarnings()
+    var shown: Set<String> = []
+    private init() {}
+}
+
+// MARK: - Fullscreen Image Viewer
+
+private struct ChatImageViewer: View {
+    let urlString: String
+    let onClose: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.92).ignoresSafeArea()
+                .onTapGesture { onClose() }
+
+            AsyncImage(url: URL(string: urlString)) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFit()
+                case .failure:
+                    Image(systemName: "photo")
+                        .font(.system(size: 48))
+                        .foregroundColor(.white.opacity(0.6))
+                default:
+                    ProgressView().tint(.white)
+                }
+            }
+
+            VStack {
+                HStack {
+                    Spacer()
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 36, height: 36)
+                            .background(Color.white.opacity(0.15))
+                            .clipShape(Circle())
+                    }
+                    .padding(.trailing, 16)
+                    .padding(.top, 16)
+                }
+                Spacer()
+            }
         }
     }
 }

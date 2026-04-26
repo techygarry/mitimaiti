@@ -66,7 +66,12 @@ fun FamilyScreen(viewModel: FamilyViewModel = viewModel()) {
 
     LaunchedEffect(Unit) { viewModel.loadFamily() }
 
-    val selectedMember = viewModel.selectedMember
+    // IMPORTANT: derive from collected state so Compose recomposes when
+    // selectedMemberId or members change. The viewModel.selectedMember
+    // property is a plain getter and is NOT a snapshot-aware read.
+    val selectedMember = remember(selectedMemberId, members) {
+        members.firstOrNull { it.id == selectedMemberId }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Permission detail view (full screen overlay)
