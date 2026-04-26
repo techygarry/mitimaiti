@@ -111,14 +111,15 @@ class _AuthInterceptor extends Interceptor {
         try {
           final response = await _dio.post(
             ApiConfig.refreshToken,
-            data: {'refresh_token': refreshToken},
+            data: {'refreshToken': refreshToken},
             options: Options(
               headers: {'Authorization': ''},
             ),
           );
 
-          final newAccessToken = response.data['access_token'] as String;
-          final newRefreshToken = response.data['refresh_token'] as String;
+          final data = response.data['data'] as Map<String, dynamic>;
+          final newAccessToken = data['accessToken'] as String;
+          final newRefreshToken = data['refreshToken'] as String;
           await _storage.saveTokens(newAccessToken, newRefreshToken);
 
           // Retry original request

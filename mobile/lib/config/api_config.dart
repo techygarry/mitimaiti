@@ -18,57 +18,48 @@ class ApiConfig {
     defaultValue: false,
   );
 
-  // Auth
-  static const String sendOtp = '/auth/otp/send';
-  static const String verifyOtp = '/auth/otp/verify';
-  static const String refreshToken = '/auth/token/refresh';
+  // Auth — backend mounts at /v1/auth
+  static const String sendOtp = '/v1/auth/login';
+  static const String verifyOtp = '/v1/auth/verify';
+  static const String refreshToken = '/v1/auth/refresh';
+  static const String deleteOrLogout = '/v1/auth/delete';
 
-  // Profile
-  static const String profile = '/users/me';
-  static const String updateProfile = '/users/me';
-  static const String uploadPhoto = '/users/me/photos';
-  static const String reorderPhotos = '/users/me/photos/reorder';
-  static const String deletePhoto = '/users/me/photos';
+  // Profile — backend mounts at /v1/me
+  static const String profile = '/v1/me';
+  static const String updateProfile = '/v1/me';
+  static const String uploadPhoto = '/v1/me/media';
+  static const String deletePhoto = '/v1/me/media'; // append /:id
+  static const String requestSelfieVerification = '/v1/me/verify';
+  static const String exportData = '/v1/me/export';
+  static const String fcmToken = '/v1/me/fcm-token';
 
-  // Discovery
-  static const String feed = '/discovery/feed';
-  static const String filters = '/discovery/filters';
-  static const String like = '/discovery/like';
-  static const String pass = '/discovery/pass';
-  static const String rewind = '/discovery/rewind';
+  // Discovery — backend mounts at /v1/feed
+  static const String feed = '/v1/feed';
+  static const String passport = '/v1/feed/passport';
 
-  // Scores
-  static const String culturalScore = '/scores/cultural';
-  static const String kundliScore = '/scores/kundli';
+  // Actions — backend mounts at /v1/action
+  static const String action = '/v1/action'; // body: { targetUserId, type: 'like'|'pass' }
+  static const String rewind = '/v1/action/rewind';
+  static const String answerPrompt = '/v1/action/prompt';
 
-  // Inbox
-  static const String likedYou = '/inbox/liked-you';
-  static const String matches = '/inbox/matches';
-  static const String unmatch = '/inbox/matches'; // DELETE
+  // Inbox — single endpoint returns both likes + matches
+  static const String inbox = '/v1/inbox';
 
-  // Chat
-  static const String messages = '/chat/messages';
-  static const String sendMessage = '/chat/messages';
-  static const String markRead = '/chat/messages/read';
+  // Chat paths intentionally omitted; managed elsewhere.
 
   // Family
-  static const String familyInvite = '/family/invite';
-  static const String familyMembers = '/family/members';
-  static const String familyPermissions = '/family/permissions';
-  static const String familySuggestions = '/family/suggestions';
+  static const String familyInvite = '/v1/family/invite';
+  static const String familyJoin = '/v1/family/join';
+  static const String family = '/v1/family'; // GET members; PATCH /:id for permissions
+  static const String familySuggest = '/v1/family/suggest';
+  static const String familyFeed = '/v1/family/feed';
+  static const String familySuggestions = '/v1/family/suggestions';
 
   // Safety
-  static const String report = '/safety/report';
-  static const String block = '/safety/block';
-  static const String accountHealth = '/safety/account-health';
-
-  // Settings
-  static const String settings = '/settings';
-  static const String deleteAccount = '/settings/account';
-  static const String exportData = '/settings/export';
-
-  // Notifications
-  static const String fcmToken = '/notifications/fcm-token';
+  static const String report = '/v1/safety/report';
+  static const String block = '/v1/safety/block';
+  static const String accountHealth = '/v1/safety/health';
+  static const String safetyAppeal = '/v1/safety/appeal';
 
   // Pagination
   static const int defaultPageSize = 20;

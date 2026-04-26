@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../config/api_config.dart';
 import 'api_service.dart';
 import 'storage_service.dart';
 
@@ -9,7 +10,6 @@ final authServiceProvider = Provider<AuthService>((ref) {
 });
 
 class AuthService {
-  // ignore: unused_field - will be used when real API is connected
   final ApiService _api;
   final StorageService _storage;
 
@@ -17,10 +17,12 @@ class AuthService {
 
   /// Send OTP to phone number
   Future<bool> sendOtp(String phone) async {
-    try {
-      // Mock: always succeed for now
+    if (ApiConfig.useMockData) {
       await Future.delayed(const Duration(seconds: 1));
-      // Real: await _api.post(ApiConfig.sendOtp, data: {'phone': phone});
+      return true;
+    }
+    try {
+      await _api.post(ApiConfig.sendOtp, data: {'phone': phone});
       return true;
     } catch (_) {
       return false;
@@ -29,34 +31,30 @@ class AuthService {
 
   /// Verify OTP and get tokens
   Future<bool> verifyOtp(String phone, String otp) async {
-    try {
-      // Mock: accept 123456 as valid OTP
+    if (ApiConfig.useMockData) {
       await Future.delayed(const Duration(seconds: 1));
-
-      if (otp == '123456') {
-        // Mock tokens
-        await _storage.saveTokens(
-          'mock_access_token_${DateTime.now().millisecondsSinceEpoch}',
-          'mock_refresh_token_${DateTime.now().millisecondsSinceEpoch}',
-        );
-        await _storage.savePhone(phone);
-        return true;
-      }
-
-      // Real API:
-      // final response = await _api.post(
-      //   ApiConfig.verifyOtp,
-      //   data: {'phone': phone, 'otp': otp},
-      // );
-      // final data = response.data as Map<String, dynamic>;
-      // await _storage.saveTokens(
-      //   data['access_token'] as String,
-      //   data['refresh_token'] as String,
-      // );
-      // await _storage.savePhone(phone);
-      // return true;
-
-      return false;
+      if (otp != '123456') return false;
+      await _storage.saveTokens(
+        'mock_access_token_${DateTime.now().millisecondsSinceEpoch}',
+        'mock_refresh_token_${DateTime.now().millisecondsSinceEpoch}',
+      );
+      await _storage.savePhone(phone);
+      return true;
+    }
+    try {
+      final response = await _api.post<Map<String, dynamic>>(
+        ApiConfig.verifyOtp,
+        data: {'phone': phone, 'token': otp},
+      );
+      final data = response.data?['data'] as Map<String, dynamic>?;
+      final session = data?['session'] as Map<String, dynamic>?;
+      if (session == null) return false;
+      await _storage.saveTokens(
+        session['accessToken'] as String,
+        session['refreshToken'] as String,
+      );
+      await _storage.savePhone(phone);
+      return true;
     } catch (_) {
       return false;
     }
