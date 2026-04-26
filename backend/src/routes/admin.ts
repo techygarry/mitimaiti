@@ -747,4 +747,229 @@ router.get(
   })
 );
 
+// ─── GET /v1/admin/user/search ───────────────────────────────────────────────
+// Search users by phone (substring) or display name (case-insensitive substring).
+
+router.get(
+  '/user/search',
+  asyncHandler(async (req: Request, res: Response) => {
+    const q = String(req.query.q ?? '').trim();
+    if (q.length < 2) {
+      throw new AppError(400, 'Query must be at least 2 characters', 'QUERY_TOO_SHORT');
+    }
+    const limit = Math.min(parseInt(String(req.query.limit ?? '20'), 10) || 20, 100);
+
+    const { data: usersByPhone } = await supabase
+      .from('users')
+      .select('id, phone, is_verified, is_banned, is_hidden, profile_completeness, created_at')
+      .ilike('phone', `%${q}%`)
+      .limit(limit);
+
+    const { data: basicsByName } = await supabase
+      .from('basic_profiles')
+      .select('user_id, display_name, city, country')
+      .ilike('display_name', `%${q}%`)
+      .limit(limit);
+
+    const userIds = new Set([
+      ...(usersByPhone ?? []).map((u: any) => u.id),
+      ...(basicsByName ?? []).map((b: any) => b.user_id),
+    ]);
+
+    const { data: merged } = await supabase
+      .from('users')
+      .select('id, phone, is_verified, is_banned, is_hidden, profile_completeness, created_at')
+      .in('id', Array.from(userIds))
+      .limit(limit);
+
+    const basicsMap = new Map(
+      (basicsByName ?? []).map((b: any) => [b.user_id, { displayName: b.display_name, city: b.city, country: b.country }])
+    );
+
+    const results = (merged ?? []).map((u: any) => ({
+      id: u.id,
+      phone: u.phone,
+      isVerified: u.is_verified,
+      isBanned: u.is_banned,
+      isHidden: u.is_hidden,
+      profileCompleteness: u.profile_completeness,
+      createdAt: u.created_at,
+      ...(basicsMap.get(u.id) || {}),
+    }));
+
+    res.json({ success: true, data: { users: results } });
+  })
+);
+
+// ─── GET /v1/admin/appeals ───────────────────────────────────────────────────
+
+router.get(
+  '/appeals',
+  asyncHandler(async (req: Request, res: Response) => {
+    const status = req.query.status ? String(req.query.status) : undefined;
+    const page = Math.max(parseInt(String(req.query.page ?? '1'), 10) || 1, 1);
+    const limit = Math.min(parseInt(String(req.query.limit ?? '20'), 10) || 20, 100);
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    let query = supabase
+      .from('appeals')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
+    if (status && ['pending', 'approved', 'denied'].includes(status)) {
+      query = query.eq('status', status);
+    }
+
+    const { data: appeals, count, error } = await query;
+    if (error) throw new AppError(500, 'Failed to fetch appeals', 'APPEALS_FETCH_FAILED');
+
+    res.json({
+      success: true,
+      data: { appeals: appeals ?? [], page, limit, total: count ?? 0 },
+    });
+  })
+);
+
+// ─── POST /v1/admin/appeals/review ───────────────────────────────────────────
+
+const reviewAppealSchema = z.object({
+  appealId: z.string().uuid('Invalid appeal ID'),
+  action: z.enum(['approve', 'deny']),
+  reason: z.string().min(1).max(1000),
+});
+
+router.post(
+  '/appeals/review',
+  validate(reviewAppealSchema),
+  asyncHandler(async (req: Request, res: Response) => {
+    const reviewer = (req as AuthenticatedRequest).user;
+    const { appealId, action, reason } = req.body;
+
+    const { data: appeal, error: fetchError } = await supabase
+      .from('appeals')
+      .select('*')
+      .eq('id', appealId)
+      .single();
+
+    if (fetchError || !appeal) {
+      throw new AppError(404, 'Appeal not found', 'APPEAL_NOT_FOUND');
+    }
+
+    if (appeal.status !== 'pending') {
+      throw new AppError(400, 'Appeal already reviewed', 'APPEAL_ALREADY_REVIEWED');
+    }
+
+    const newStatus = action === 'approve' ? 'approved' : 'denied';
+
+    const { error: updateError } = await supabase
+      .from('appeals')
+      .update({
+        status: newStatus,
+        reviewed_by: reviewer.id,
+        reviewer_note: reason,
+        reviewed_at: new Date().toISOString(),
+      })
+      .eq('id', appealId);
+
+    if (updateError) {
+      throw new AppError(500, 'Failed to update appeal', 'APPEAL_UPDATE_FAILED');
+    }
+
+    // Sync the strike's appeal_status
+    await supabase
+      .from('strikes')
+      .update({ appeal_status: newStatus })
+      .eq('id', appeal.strike_id);
+
+    res.json({ success: true, data: { appealId, status: newStatus } });
+  })
+);
+
+// ─── GET /v1/admin/daily-prompt ──────────────────────────────────────────────
+
+router.get(
+  '/daily-prompt',
+  asyncHandler(async (req: Request, res: Response) => {
+    const upcoming = req.query.upcoming === 'true';
+    const page = Math.max(parseInt(String(req.query.page ?? '1'), 10) || 1, 1);
+    const limit = Math.min(parseInt(String(req.query.limit ?? '20'), 10) || 20, 100);
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    let query = supabase
+      .from('daily_prompts')
+      .select('*', { count: 'exact' })
+      .order('date', { ascending: upcoming })
+      .range(from, to);
+
+    if (upcoming) {
+      const today = new Date().toISOString().split('T')[0];
+      query = query.gte('date', today);
+    }
+
+    const { data, count, error } = await query;
+    if (error) throw new AppError(500, 'Failed to fetch prompts', 'PROMPTS_FETCH_FAILED');
+
+    res.json({
+      success: true,
+      data: { prompts: data ?? [], page, limit, total: count ?? 0 },
+    });
+  })
+);
+
+// ─── PATCH /v1/admin/daily-prompt/:id ────────────────────────────────────────
+
+const updatePromptSchema = z.object({
+  question: z.string().min(5).max(200).optional(),
+  category: z.string().min(1).max(50).optional(),
+  is_active: z.boolean().optional(),
+});
+
+router.patch(
+  '/daily-prompt/:id',
+  validate(updatePromptSchema),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const updates = req.body;
+
+    if (Object.keys(updates).length === 0) {
+      throw new AppError(400, 'No fields to update', 'NO_UPDATES');
+    }
+
+    const { data, error } = await supabase
+      .from('daily_prompts')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error || !data) {
+      throw new AppError(404, 'Prompt not found or update failed', 'PROMPT_UPDATE_FAILED');
+    }
+
+    res.json({ success: true, data: { prompt: data } });
+  })
+);
+
+// ─── DELETE /v1/admin/daily-prompt/:id ───────────────────────────────────────
+
+router.delete(
+  '/daily-prompt/:id',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { error } = await supabase
+      .from('daily_prompts')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      throw new AppError(500, 'Failed to delete prompt', 'PROMPT_DELETE_FAILED');
+    }
+
+    res.json({ success: true });
+  })
+);
+
 export default router;

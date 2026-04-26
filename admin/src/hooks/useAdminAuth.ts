@@ -35,13 +35,14 @@ export function useAdminAuth() {
 
   const login = useCallback(async (phone: string, otp: string) => {
     const response = await adminApi.verifyOtp(phone, otp);
-    const { token, user: userData } = response.data.data;
+    const { user: userData, session } = response.data.data;
 
     if (userData.role !== 'admin' && userData.role !== 'super_admin') {
       throw new Error('Unauthorized: Admin access required');
     }
 
-    localStorage.setItem('admin_token', token);
+    localStorage.setItem('admin_token', session.accessToken);
+    localStorage.setItem('admin_refresh_token', session.refreshToken);
     localStorage.setItem('admin_user', JSON.stringify(userData));
     setUser(userData);
     setIsAuthenticated(true);
@@ -55,6 +56,7 @@ export function useAdminAuth() {
 
   const logout = useCallback(() => {
     localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_refresh_token');
     localStorage.removeItem('admin_user');
     setUser(null);
     setIsAuthenticated(false);

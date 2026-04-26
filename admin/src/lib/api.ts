@@ -40,10 +40,10 @@ export default api;
 export const adminApi = {
   // Auth
   requestOtp: (phone: string) =>
-    api.post('/auth/otp/request', { phone }),
+    api.post('/auth/login', { phone }),
 
   verifyOtp: (phone: string, code: string) =>
-    api.post('/auth/otp/verify', { phone, code }),
+    api.post('/auth/verify', { phone, token: code }),
 
   // Dashboard stats
   getStats: () =>
