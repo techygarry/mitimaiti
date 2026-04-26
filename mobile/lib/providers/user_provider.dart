@@ -59,6 +59,20 @@ class UserNotifier extends StateNotifier<UserState> {
 
   Future<void> loadProfile() async {
     state = state.copyWith(isLoading: true);
+    if (!ApiConfig.useMockData) {
+      try {
+        final response = await _api.get<Map<String, dynamic>>(ApiConfig.profile);
+        final data = response.data?['data'] as Map<String, dynamic>?;
+        final userJson = data?['user'] as Map<String, dynamic>?;
+        if (userJson != null) {
+          state = UserState(user: User.fromJson(userJson));
+          return;
+        }
+      } catch (_) {
+        state = state.copyWith(isLoading: false, error: 'Failed to load profile');
+        return;
+      }
+    }
     try {
       // Mock user data
       await Future.delayed(const Duration(milliseconds: 500));

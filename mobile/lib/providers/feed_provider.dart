@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../config/api_config.dart';
 import '../models/user.dart';
+import '../services/api_service.dart';
 import '../services/storage_service.dart';
 
 class FeedState {
@@ -50,20 +51,27 @@ class FeedState {
 
 class FeedNotifier extends StateNotifier<FeedState> {
   final StorageService _storage;
+  final ApiService _api;
+  String? _cursor;
 
-  FeedNotifier(this._storage) : super(const FeedState());
+  FeedNotifier(this._storage, this._api) : super(const FeedState());
 
   Future<void> loadFeed() async {
     state = state.copyWith(isLoading: true);
     try {
-      await Future.delayed(const Duration(seconds: 1));
-
-      final mockCards = _generateMockCards(20);
       final likesUsed = _storage.getDailyLikesUsed();
       final rewindsUsed = _storage.getDailyRewindsUsed();
 
+      List<FeedCard> cards;
+      if (ApiConfig.useMockData) {
+        await Future.delayed(const Duration(seconds: 1));
+        cards = _generateMockCards(20);
+      } else {
+        cards = await _fetchCards(cursor: null);
+      }
+
       state = FeedState(
-        cards: mockCards,
+        cards: cards,
         dailyLikesUsed: likesUsed,
         dailyRewindsUsed: rewindsUsed,
       );
@@ -76,8 +84,13 @@ class FeedNotifier extends StateNotifier<FeedState> {
     if (state.isLoadingMore) return;
     state = state.copyWith(isLoadingMore: true);
     try {
-      await Future.delayed(const Duration(seconds: 1));
-      final moreCards = _generateMockCards(20);
+      List<FeedCard> moreCards;
+      if (ApiConfig.useMockData) {
+        await Future.delayed(const Duration(seconds: 1));
+        moreCards = _generateMockCards(20);
+      } else {
+        moreCards = await _fetchCards(cursor: _cursor);
+      }
       state = state.copyWith(
         cards: [...state.cards, ...moreCards],
         isLoadingMore: false,
@@ -85,6 +98,23 @@ class FeedNotifier extends StateNotifier<FeedState> {
     } catch (_) {
       state = state.copyWith(isLoadingMore: false);
     }
+  }
+
+  Future<List<FeedCard>> _fetchCards({String? cursor}) async {
+    final response = await _api.get<Map<String, dynamic>>(
+      ApiConfig.feed,
+      queryParameters: {
+        if (cursor != null) 'cursor': cursor,
+        'limit': ApiConfig.defaultPageSize,
+      },
+    );
+    final data = response.data?['data'] as Map<String, dynamic>?;
+    final raw = (data?['cards'] as List?) ?? const [];
+    _cursor = data?['nextCursor'] as String?;
+    return raw
+        .whereType<Map<String, dynamic>>()
+        .map((j) => FeedCard.fromJson(j))
+        .toList();
   }
 
   Future<bool> likeUser(String userId) async {
@@ -95,7 +125,12 @@ class FeedNotifier extends StateNotifier<FeedState> {
       dailyLikesUsed: state.dailyLikesUsed + 1,
     );
 
-    // Pre-fetch more cards if below threshold
+    if (!ApiConfig.useMockData) {
+      try {
+        await _api.post(ApiConfig.action, data: {'targetUserId': userId, 'type': 'like'});
+      } catch (_) { /* leave card removed; backend will reconcile */ }
+    }
+
     if (state.cards.length <= ApiConfig.prefetchThreshold) {
       loadMore();
     }
@@ -106,6 +141,12 @@ class FeedNotifier extends StateNotifier<FeedState> {
     state = state.copyWith(
       cards: state.cards.where((c) => c.user.id != userId).toList(),
     );
+
+    if (!ApiConfig.useMockData) {
+      try {
+        await _api.post(ApiConfig.action, data: {'targetUserId': userId, 'type': 'pass'});
+      } catch (_) {}
+    }
 
     if (state.cards.length <= ApiConfig.prefetchThreshold) {
       loadMore();
@@ -118,6 +159,12 @@ class FeedNotifier extends StateNotifier<FeedState> {
     state = state.copyWith(
       dailyRewindsUsed: state.dailyRewindsUsed + 1,
     );
+
+    if (!ApiConfig.useMockData) {
+      try {
+        await _api.post(ApiConfig.rewind);
+      } catch (_) {}
+    }
     return true;
   }
 
@@ -271,5 +318,6 @@ class FeedNotifier extends StateNotifier<FeedState> {
 
 final feedProvider = StateNotifierProvider<FeedNotifier, FeedState>((ref) {
   final storage = ref.read(storageServiceProvider);
-  return FeedNotifier(storage);
+  final api = ref.read(apiServiceProvider);
+  return FeedNotifier(storage, api);
 });

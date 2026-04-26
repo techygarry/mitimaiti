@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:math';
+import '../config/api_config.dart';
 import '../models/family.dart';
 import '../models/user.dart';
+import '../services/api_service.dart';
 
 class FamilyState {
   final List<FamilyMember> members;
@@ -36,10 +38,34 @@ class FamilyState {
 }
 
 class FamilyNotifier extends StateNotifier<FamilyState> {
-  FamilyNotifier() : super(const FamilyState());
+  final ApiService _api;
+  FamilyNotifier(this._api) : super(const FamilyState());
 
   Future<void> loadFamily() async {
     state = state.copyWith(isLoading: true);
+    if (!ApiConfig.useMockData) {
+      try {
+        final results = await Future.wait([
+          _api.get<Map<String, dynamic>>(ApiConfig.family),
+          _api.get<Map<String, dynamic>>(ApiConfig.familySuggestions),
+        ]);
+        final membersData = results[0].data?['data'] as Map<String, dynamic>?;
+        final suggestionsData = results[1].data?['data'] as Map<String, dynamic>?;
+        final members = ((membersData?['members'] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(FamilyMember.fromJson)
+            .toList();
+        final suggestions = ((suggestionsData?['suggestions'] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(FamilySuggestion.fromJson)
+            .toList();
+        state = FamilyState(members: members, suggestions: suggestions);
+        return;
+      } catch (_) {
+        state = state.copyWith(isLoading: false, error: 'Failed to load family');
+        return;
+      }
+    }
     try {
       await Future.delayed(const Duration(seconds: 1));
 
@@ -114,6 +140,17 @@ class FamilyNotifier extends StateNotifier<FamilyState> {
   }
 
   Future<FamilyInvite> generateInviteCode() async {
+    if (!ApiConfig.useMockData) {
+      try {
+        final response = await _api.post<Map<String, dynamic>>(ApiConfig.familyInvite);
+        final inviteData = (response.data?['data'] as Map<String, dynamic>?)?['invite'] as Map<String, dynamic>?;
+        if (inviteData != null) {
+          final invite = FamilyInvite.fromJson(inviteData);
+          state = state.copyWith(currentInvite: invite);
+          return invite;
+        }
+      } catch (_) {/* fall through to mock */}
+    }
     await Future.delayed(const Duration(milliseconds: 500));
     final code = 'MM-${(Random().nextInt(9000) + 1000)}';
     final invite = FamilyInvite(
@@ -164,5 +201,5 @@ class FamilyNotifier extends StateNotifier<FamilyState> {
 }
 
 final familyProvider = StateNotifierProvider<FamilyNotifier, FamilyState>((ref) {
-  return FamilyNotifier();
+  return FamilyNotifier(ref.read(apiServiceProvider));
 });

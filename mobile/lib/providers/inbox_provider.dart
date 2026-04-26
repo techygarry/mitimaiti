@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../config/api_config.dart';
 import '../models/match.dart';
 import '../models/user.dart';
+import '../services/api_service.dart';
 
 class InboxState {
   final List<LikedYouCard> likedYou;
@@ -36,20 +38,31 @@ class InboxState {
 }
 
 class InboxNotifier extends StateNotifier<InboxState> {
-  InboxNotifier() : super(const InboxState());
+  final ApiService _api;
+  InboxNotifier(this._api) : super(const InboxState());
 
   Future<void> loadInbox() async {
     state = state.copyWith(isLoading: true);
     try {
-      await Future.delayed(const Duration(seconds: 1));
-
-      final mockLikedYou = _generateMockLikedYou();
-      final mockMatches = _generateMockMatches();
-
-      state = InboxState(
-        likedYou: mockLikedYou,
-        matches: mockMatches,
-      );
+      List<LikedYouCard> likedYou;
+      List<Match> matches;
+      if (ApiConfig.useMockData) {
+        await Future.delayed(const Duration(seconds: 1));
+        likedYou = _generateMockLikedYou();
+        matches = _generateMockMatches();
+      } else {
+        final response = await _api.get<Map<String, dynamic>>(ApiConfig.inbox);
+        final data = response.data?['data'] as Map<String, dynamic>?;
+        likedYou = ((data?['likes'] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(LikedYouCard.fromJson)
+            .toList();
+        matches = ((data?['matches'] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(Match.fromJson)
+            .toList();
+      }
+      state = InboxState(likedYou: likedYou, matches: matches);
     } catch (_) {
       state = state.copyWith(isLoading: false, error: 'Failed to load inbox');
     }
@@ -161,5 +174,5 @@ class InboxNotifier extends StateNotifier<InboxState> {
 }
 
 final inboxProvider = StateNotifierProvider<InboxNotifier, InboxState>((ref) {
-  return InboxNotifier();
+  return InboxNotifier(ref.read(apiServiceProvider));
 });
