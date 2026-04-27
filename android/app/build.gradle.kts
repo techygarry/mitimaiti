@@ -19,16 +19,16 @@ android {
 
     buildTypes {
         debug {
-            buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:4000/v1/\"")
-            buildConfigField("String", "SOCKET_URL", "\"http://10.0.2.2:4001\"")
-            buildConfigField("boolean", "USE_MOCK_DATA", "true")
+            buildConfigField("String", "BASE_URL", "\"https://mitimaiti-backend-tyxa.onrender.com/v1/\"")
+            buildConfigField("String", "SOCKET_URL", "\"https://mitimaiti-backend-tyxa.onrender.com\"")
+            buildConfigField("boolean", "USE_MOCK_DATA", "false")
         }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            buildConfigField("String", "BASE_URL", "\"https://api.mitimaiti.com/v1/\"")
-            buildConfigField("String", "SOCKET_URL", "\"https://ws.mitimaiti.com\"")
+            buildConfigField("String", "BASE_URL", "\"https://mitimaiti-backend-tyxa.onrender.com/v1/\"")
+            buildConfigField("String", "SOCKET_URL", "\"https://mitimaiti-backend-tyxa.onrender.com\"")
             buildConfigField("boolean", "USE_MOCK_DATA", "false")
         }
     }
