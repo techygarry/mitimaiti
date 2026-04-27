@@ -351,11 +351,13 @@ async function upsertProfileTable(
   userId: string,
   fields: Record<string, any>
 ): Promise<Record<string, any>> {
+  // These tables use user_id as PRIMARY KEY (no separate id column),
+  // so we must check existence via user_id, not id.
   const { data: existing } = await supabase
     .from(table)
-    .select('id')
+    .select('user_id')
     .eq('user_id', userId)
-    .single();
+    .maybeSingle();
 
   if (existing) {
     const { data, error } = await supabase
@@ -522,14 +524,56 @@ router.patch(
     const results: Record<string, any> = {};
 
     // Map sections to their database tables and execute updates in parallel
-    const updatePromises: Array<Promise<void>> = [];
+    const updatePromises: Array<PromiseLike<void>> = [];
 
+    // basics splits across two tables:
+    //   users table: display_name, date_of_birth, gender, bio, city, state, country
+    //   basic_profiles table: height_cm
     if (basics && Object.keys(basics).length > 0) {
-      updatePromises.push(
-        upsertProfileTable('basic_profiles', user.id, basics).then((data) => {
-          results.basics = data;
-        })
-      );
+      const USER_TABLE_KEYS = new Set([
+        'display_name',
+        'date_of_birth',
+        'gender',
+        'bio',
+        'city',
+        'state',
+        'country',
+      ]);
+      const usersUpdate: Record<string, any> = {};
+      const basicProfilesUpdate: Record<string, any> = {};
+      for (const [k, v] of Object.entries(basics)) {
+        if (USER_TABLE_KEYS.has(k)) usersUpdate[k] = v;
+        else basicProfilesUpdate[k] = v;
+      }
+      if (Object.keys(usersUpdate).length > 0) {
+        updatePromises.push(
+          supabase
+            .from('users')
+            .update(usersUpdate)
+            .eq('id', user.id)
+            .select()
+            .single()
+            .then(({ data, error }) => {
+              if (error) {
+                throw new AppError(
+                  500,
+                  `Failed to update users: ${error.message}`,
+                  'UPDATE_FAILED'
+                );
+              }
+              results.basics = { ...(results.basics || {}), ...data };
+            })
+        );
+      }
+      if (Object.keys(basicProfilesUpdate).length > 0) {
+        updatePromises.push(
+          upsertProfileTable('basic_profiles', user.id, basicProfilesUpdate).then(
+            (data) => {
+              results.basics = { ...(results.basics || {}), ...data };
+            }
+          )
+        );
+      }
     }
 
     if (sindhi && Object.keys(sindhi).length > 0) {
@@ -566,15 +610,45 @@ router.patch(
       );
     }
 
+    // userFields splits between users (intent) and basic_profiles (education,
+    // occupation, company, religion).
     if (userFields && Object.keys(userFields).length > 0) {
-      // User-level fields (intent, education, etc.) go to basic_profiles
-      updatePromises.push(
-        upsertProfileTable('basic_profiles', user.id, userFields).then(
-          (data) => {
-            results.user = data;
-          }
-        )
-      );
+      const USER_TABLE_KEYS = new Set(['intent']);
+      const usersUpdate: Record<string, any> = {};
+      const basicProfilesUpdate: Record<string, any> = {};
+      for (const [k, v] of Object.entries(userFields)) {
+        if (USER_TABLE_KEYS.has(k)) usersUpdate[k] = v;
+        else basicProfilesUpdate[k] = v;
+      }
+      if (Object.keys(usersUpdate).length > 0) {
+        updatePromises.push(
+          supabase
+            .from('users')
+            .update(usersUpdate)
+            .eq('id', user.id)
+            .select()
+            .single()
+            .then(({ data, error }) => {
+              if (error) {
+                throw new AppError(
+                  500,
+                  `Failed to update users (intent): ${error.message}`,
+                  'UPDATE_FAILED'
+                );
+              }
+              results.user = { ...(results.user || {}), ...data };
+            })
+        );
+      }
+      if (Object.keys(basicProfilesUpdate).length > 0) {
+        updatePromises.push(
+          upsertProfileTable('basic_profiles', user.id, basicProfilesUpdate).then(
+            (data) => {
+              results.user = { ...(results.user || {}), ...data };
+            }
+          )
+        );
+      }
     }
 
     await Promise.all(updatePromises);
