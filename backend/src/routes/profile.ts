@@ -527,8 +527,9 @@ router.patch(
     const updatePromises: Array<PromiseLike<void>> = [];
 
     // basics splits across two tables:
-    //   users table: display_name, date_of_birth, gender, bio, city, state, country
+    //   users table: display_name, date_of_birth (-> dob), gender, bio, city, state, country
     //   basic_profiles table: height_cm
+    // Some payload keys map to differently-named DB columns.
     if (basics && Object.keys(basics).length > 0) {
       const USER_TABLE_KEYS = new Set([
         'display_name',
@@ -539,11 +540,16 @@ router.patch(
         'state',
         'country',
       ]);
+      const USER_COLUMN_MAP: Record<string, string> = {
+        date_of_birth: 'dob',
+      };
       const usersUpdate: Record<string, any> = {};
       const basicProfilesUpdate: Record<string, any> = {};
       for (const [k, v] of Object.entries(basics)) {
-        if (USER_TABLE_KEYS.has(k)) usersUpdate[k] = v;
-        else basicProfilesUpdate[k] = v;
+        if (USER_TABLE_KEYS.has(k)) {
+          const col = USER_COLUMN_MAP[k] ?? k;
+          usersUpdate[col] = v;
+        } else basicProfilesUpdate[k] = v;
       }
       if (Object.keys(usersUpdate).length > 0) {
         updatePromises.push(
